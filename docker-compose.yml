@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  mapasys:
+    image: mapasys:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.mapasys.rule=Host(`mapasys.seudominio.com`)"
+        - "traefik.http.services.mapasys.loadbalancer.server.port=3000"
+        - "traefik.http.routers.mapasys.entrypoints=websecure"
+        - "traefik.http.routers.mapasys.tls=true"
+        - "traefik.http.routers.mapasys.tls.certresolver=letsencrypt"
+    networks:
+      - traefik-public
+
+networks:
+  traefik-public:
+    external: true

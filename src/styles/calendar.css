@@ -1,0 +1,132 @@
+/* Estilos básicos do calendário */
+.calendar-container {
+  margin-top: 1rem;
+  height: calc(100vh - 200px);
+}
+
+.fc {
+  height: 100%;
+  background-color: #fff;
+}
+
+/* Estilos do cabeçalho */
+.fc-header-toolbar {
+  padding: 1rem;
+  margin-bottom: 1rem !important;
+}
+
+.fc-toolbar-title {
+  font-size: 1.25rem !important;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+/* Estilos dos botões */
+.fc-button {
+  background-color: #4f46e5 !important;
+  border-color: #4f46e5 !important;
+  color: white !important;
+  padding: 0.5rem 1rem !important;
+  font-weight: 500 !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.2s !important;
+}
+
+.fc-button:hover {
+  background-color: #4338ca !important;
+  border-color: #4338ca !important;
+}
+
+.fc-button-active {
+  background-color: #3730a3 !important;
+  border-color: #3730a3 !important;
+}
+
+/* Estilos da grade */
+.fc-daygrid-day {
+  transition: background-color 0.2s;
+}
+
+.fc-daygrid-day:hover {
+  background-color: #f3f4f6;
+}
+
+.fc-daygrid-day.fc-day-today {
+  background-color: #eef2ff !important;
+}
+
+.fc-daygrid-day-number {
+  font-size: 0.875rem;
+  color: #4b5563;
+  padding: 0.5rem !important;
+}
+
+/* Estilos dos eventos */
+.fc-event {
+  background-color: #4f46e5 !important;
+  border-color: #4f46e5 !important;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.875rem !important;
+  border-radius: 0.25rem !important;
+  cursor: pointer !important;
+  transition: opacity 0.2s !important;
+}
+
+.fc-event:hover {
+  opacity: 0.9;
+}
+
+.fc-event-title {
+  font-weight: 500;
+}
+
+/* Estilos da visualização em lista */
+.fc-list-day-cushion {
+  background-color: #f9fafb !important;
+}
+
+.fc-list-event:hover td {
+  background-color: #eef2ff !important;
+}
+
+/* Responsividade */
+@media (max-width: 640px) {
+  .calendar-container {
+    height: calc(100vh - 150px);
+  }
+
+  .fc-header-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .fc-toolbar-title {
+    font-size: 1rem !important;
+  }
+
+  .fc-button {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .fc-view {
+    font-size: 0.875rem;
+  }
+}
+
+/* Estilos para telas muito pequenas */
+@media (max-width: 480px) {
+  .fc-header-toolbar {
+    font-size: 0.75rem;
+  }
+
+  .fc-daygrid-day-number {
+    font-size: 0.75rem;
+  }
+
+  .fc-event {
+    font-size: 0.75rem !important;
+  }
+}
