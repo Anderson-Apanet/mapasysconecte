@@ -5,10 +5,10 @@ import {
   UsersIcon,
   CurrencyDollarIcon,
   CalendarIcon,
-  WrenchScrewdriverIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   SignalIcon,
+  WifiIcon,
 } from '@heroicons/react/24/outline';
 import { useSidebar } from '../contexts/SidebarContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,9 +20,9 @@ const menuItems = [
   { path: '/adm', name: 'ADM', icon: UserGroupIcon },
   { path: '/clientes', name: 'Clientes', icon: UsersIcon },
   { path: '/planos', name: 'Planos', icon: SignalIcon },
+  { path: '/rede', name: 'Rede', icon: WifiIcon },
   { path: '/financeiro', name: 'Financeiro', icon: CurrencyDollarIcon },
   { path: '/agenda', name: 'Agenda', icon: CalendarIcon },
-  { path: '/suporte', name: 'Suporte', icon: WrenchScrewdriverIcon },
 ];
 
 export default function Sidebar() {

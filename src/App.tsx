@@ -9,8 +9,8 @@ import { ADM } from './pages/ADM';
 import Clientes from './pages/Clientes';
 import Financeiro from './pages/Financeiro';
 import Agenda from './pages/Agenda';
-import Suporte from './pages/Suporte';
 import Planos from './pages/Planos';
+import Rede from './pages/Rede'; 
 
 function Layout() {
   const { isExpanded } = useSidebar();
@@ -31,9 +31,9 @@ function Layout() {
               <Route path="/adm" element={<ADM />} />
               <Route path="/clientes" element={<Clientes />} />
               <Route path="/planos" element={<Planos />} />
+              <Route path="/rede" element={<Rede />} /> 
               <Route path="/financeiro" element={<Financeiro />} />
               <Route path="/agenda" element={<Agenda />} />
-              <Route path="/suporte" element={<Suporte />} />
             </Routes>
           </div>
         </div>

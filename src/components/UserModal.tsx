@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Empresa, UserTipo } from '../types';
+import { User, UserTipo } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { XMarkIcon } from '@heroicons/react/24/outline';
@@ -8,18 +8,16 @@ interface UserModalProps {
   isOpen: boolean;
   onClose: () => void;
   user?: User;
-  onSave: () => void;
+  onSuccess: () => void;
 }
 
-export default function UserModal({ isOpen, onClose, user, onSave }: UserModalProps) {
+export default function UserModal({ isOpen, onClose, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false);
+  const [resetingPassword, setResetingPassword] = useState(false);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [empresaId, setEmpresaId] = useState<number>(0);
   const [userTipoId, setUserTipoId] = useState<number>(1);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [userTipos, setUserTipos] = useState<UserTipo[]>([]);
 
   useEffect(() => {
@@ -27,37 +25,18 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
       setNome(user.nome || '');
       setEmail(user.auth_user?.email || '');
       setPhone(user.auth_user?.phone || '');
-      setEmpresaId(user.id_empresa || 0);
       setUserTipoId(user.id_user_tipo || 1);
-      setIsSuperAdmin(user.auth_user?.is_super_admin || false);
     } else {
       setNome('');
       setEmail('');
       setPhone('');
-      setEmpresaId(0);
       setUserTipoId(1);
-      setIsSuperAdmin(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchEmpresas();
     fetchUserTipos();
   }, []);
-
-  const fetchEmpresas = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('id_empresa, nome, cnpj')
-        .order('nome');
-
-      if (error) throw error;
-      setEmpresas(data || []);
-    } catch (error: any) {
-      toast.error('Erro ao carregar empresas: ' + error.message);
-    }
-  };
 
   const fetchUserTipos = async () => {
     try {
@@ -73,6 +52,30 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
     }
   };
 
+  const generateRandomPassword = () => {
+    const length = 12;
+    const uppercaseChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercaseChars = "abcdefghijklmnopqrstuvwxyz";
+    const numberChars = "0123456789";
+    const specialChars = "!@#$%^&*";
+    
+    // Garantir pelo menos um de cada tipo
+    let password = 
+      uppercaseChars[Math.floor(Math.random() * uppercaseChars.length)] +
+      lowercaseChars[Math.floor(Math.random() * lowercaseChars.length)] +
+      numberChars[Math.floor(Math.random() * numberChars.length)] +
+      specialChars[Math.floor(Math.random() * specialChars.length)];
+    
+    // Completar o resto da senha
+    const allChars = uppercaseChars + lowercaseChars + numberChars + specialChars;
+    for (let i = password.length; i < length; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Embaralhar a senha
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -80,20 +83,50 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
     try {
       // Se for um novo usuário
       if (!user) {
+        // Verificar se o email já existe
+        const { data: existingUsers, error: searchError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('email', email)
+          .limit(1);
+
+        if (searchError) {
+          throw searchError;
+        }
+
+        if (existingUsers && existingUsers.length > 0) {
+          toast.error('Este email já está cadastrado no sistema.');
+          setLoading(false);
+          return;
+        }
+
+        const password = generateRandomPassword();
+        
         // 1. Criar usuário no auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
-          password: generateRandomPassword(),
+          password,
           options: {
             data: {
               nome,
-              is_super_admin: isSuperAdmin
-            }
+              phone
+            },
+            emailRedirectTo: `${window.location.origin}/login`
           }
         });
 
-        if (authError) throw authError;
-        if (!authData.user) throw new Error('Erro ao criar usuário no auth');
+        if (authError) {
+          if (authError.message === 'User already registered') {
+            toast.error('Este email já está registrado no sistema.');
+            setLoading(false);
+            return;
+          }
+          throw authError;
+        }
+
+        if (!authData.user) {
+          throw new Error('Erro ao criar usuário no auth');
+        }
 
         // 2. Criar usuário na tabela public.users
         const { error: userError } = await supabase
@@ -102,35 +135,31 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
             id_user: authData.user.id,
             nome,
             email,
-            id_empresa: empresaId,
             id_user_tipo: userTipoId
           }]);
 
         if (userError) {
-          // Se falhar ao criar na tabela public.users, tentar deletar o usuário do auth
-          await supabase.auth.admin.deleteUser(authData.user.id);
-          throw userError;
+          console.error('Erro ao criar usuário na tabela users:', userError);
+          toast.error('Erro ao criar usuário. Por favor, tente novamente.');
+          return;
         }
 
-        // 3. Atualizar o telefone se fornecido
-        if (phone) {
-          const { error: phoneError } = await supabase.auth.updateUser({
-            phone
-          });
+        // 3. Mostrar senha temporária e instruções
+        toast.success(
+          'Usuário criado com sucesso!\n\n' +
+          'Senha temporária: ' + password + '\n\n' +
+          'Por favor, anote esta senha e forneça ao usuário de forma segura. ' +
+          'Um email de confirmação será enviado para o usuário.',
+          { duration: 10000 } // Mostrar por 10 segundos
+        );
 
-          if (phoneError) {
-            console.warn('Erro ao atualizar telefone:', phoneError);
-          }
-        }
-
-        toast.success('Usuário criado com sucesso! Um email de confirmação foi enviado.');
+        onSuccess();
+        onClose();
       } else {
         // Atualizar usuário existente
         const updates = {
           nome,
-          id_empresa: empresaId,
-          id_user_tipo: userTipoId,
-          updated_at: new Date().toISOString()
+          id_user_tipo: userTipoId
         };
 
         // 1. Atualizar na tabela public.users
@@ -144,8 +173,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
         // 2. Atualizar dados do auth user
         const authUpdates: any = {
           data: {
-            nome,
-            is_super_admin: isSuperAdmin
+            nome
           }
         };
 
@@ -162,7 +190,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
         toast.success('Usuário atualizado com sucesso!');
       }
 
-      onSave();
+      onSuccess();
       onClose();
     } catch (error: any) {
       console.error('Erro ao salvar usuário:', error);
@@ -172,14 +200,25 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
     }
   };
 
-  const generateRandomPassword = () => {
-    const length = 12;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    let password = "";
-    for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length));
+  const handleResetPassword = async () => {
+    if (!user?.auth_user?.email) return;
+    
+    try {
+      setResetingPassword(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        user.auth_user.email,
+        { redirectTo: `${window.location.origin}/reset-password` }
+      );
+      
+      if (error) throw error;
+      
+      toast.success('Email de redefinição de senha enviado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao resetar senha:', error);
+      toast.error('Erro ao enviar email de redefinição: ' + error.message);
+    } finally {
+      setResetingPassword(false);
     }
-    return password;
   };
 
   if (!isOpen) return null;
@@ -187,7 +226,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm">
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="w-full max-w-2xl transform overflow-hidden backdrop-blur-md bg-white/80 dark:bg-gray-800/80 rounded-xl border border-white/50 dark:border-gray-700/50 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all">
+        <div className="w-full max-w-2xl transform overflow-hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
               {user ? 'Editar Usuário' : 'Novo Usuário'}
@@ -244,26 +283,6 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
             </div>
 
             <div>
-              <label htmlFor="empresa" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Empresa
-              </label>
-              <select
-                id="empresa"
-                value={empresaId}
-                onChange={(e) => setEmpresaId(Number(e.target.value))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
-                required
-              >
-                <option value={0}>Selecione uma empresa</option>
-                {empresas.map((empresa) => (
-                  <option key={empresa.id_empresa} value={empresa.id_empresa}>
-                    {empresa.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label htmlFor="userTipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Tipo de Usuário
               </label>
@@ -282,19 +301,6 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
               </select>
             </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="superadmin"
-                checked={isSuperAdmin}
-                onChange={(e) => setIsSuperAdmin(e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
-              />
-              <label htmlFor="superadmin" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                Super Administrador
-              </label>
-            </div>
-
             <div className="mt-6 flex justify-end space-x-3">
               <button
                 type="button"
@@ -303,6 +309,16 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
               >
                 Cancelar
               </button>
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetingPassword}
+                  className="px-4 py-2 text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-400 rounded-lg transition-colors duration-200"
+                >
+                  {resetingPassword ? 'Enviando...' : 'Resetar Senha'}
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={loading}

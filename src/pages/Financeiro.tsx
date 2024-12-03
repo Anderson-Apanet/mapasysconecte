@@ -11,7 +11,8 @@ import {
   DocumentTextIcon,
   NoSymbolIcon,
   LockClosedIcon,
-  ClockIcon
+  ClockIcon,
+  XMarkIcon
 } from '@heroicons/react/24/solid';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
@@ -96,6 +97,17 @@ interface Transaction {
   cliente_id?: number;
   contrato_id?: number;
   titulo_id?: number;
+  paymentType?: string;
+  installmentInfo?: {
+    currentInstallment: number;
+    totalInstallments: number;
+    originalValue: number;
+  };
+  recurringInfo?: {
+    isRecurring: boolean;
+    startDate: string;
+    endDate: string;
+  };
 }
 
 interface Lancamento {
@@ -168,16 +180,38 @@ const MOCK_CONTRATOS_LISTA = [
 ];
 
 const Financeiro: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('all');
+  // Estados gerais
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showNewTransactionModal, setShowNewTransactionModal] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState('all');
-
   const [activeView, setActiveView] = useState<'caixa' | 'contratos'>('caixa');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Estados do modal de transação
+  const [showNewTransactionModal, setShowNewTransactionModal] = useState(false);
+  const [selectedType, setSelectedType] = useState(TRANSACTION_TYPES.INCOME);
+  const [paymentType, setPaymentType] = useState<'single' | 'installment' | 'recurring'>('single');
+  const [installments, setInstallments] = useState(2);
+  const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [transactionValue, setTransactionValue] = useState('');
+  
+  // Estados de categorias
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [expenseCategories, setExpenseCategories] = useState(CATEGORIES.EXPENSE);
+  
+  // Estados de filtros
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [contractStatusFilter, setContractStatusFilter] = useState('all');
+
+  const handleAddCategory = () => {
+    if (newCategoryName.trim()) {
+      setExpenseCategories([...expenseCategories, newCategoryName.trim()]);
+      setNewCategoryName('');
+      setShowNewCategoryModal(false);
+      toast.success('Categoria adicionada com sucesso!');
+    }
+  };
 
   // Lista de todas as categorias únicas
   const uniqueCategories = useMemo(() => {
@@ -554,57 +588,86 @@ const Financeiro: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
     const formData = new FormData(form);
 
+    const baseTransaction = {
+      type: selectedType,
+      description: formData.get('description') as string,
+      category: selectedType === TRANSACTION_TYPES.EXPENSE ? formData.get('category') as string : 'Receita',
+      value: parseFloat(formData.get('value') as string),
+      date: formData.get('date') as string,
+      status: formData.get('status') as string,
+      paymentType: selectedType === TRANSACTION_TYPES.EXPENSE ? paymentType : 'single',
+    };
+
     try {
-      let newTransaction: Transaction = {
-        id: transactions.length + 1,
-        type: selectedType,
-        description: formData.get('description') as string,
-        category: formData.get('category') as string,
-        value: parseFloat(formData.get('value') as string),
-        date: formData.get('date') as string,
-        status: formData.get('status') as string,
-      };
-
-      // Adicionar informações do cliente, contrato e título se for receita
-      if (selectedType === TRANSACTION_TYPES.INCOME && selectedCliente && selectedContrato && selectedTitulo) {
-        newTransaction = {
-          ...newTransaction,
-          cliente_id: selectedCliente.id,
-          contrato_id: selectedContrato.id,
-          titulo_id: selectedTitulo.id,
-          description: `${selectedCliente.nome} - ${selectedContrato.numero} - ${formData.get('description')}`,
-        };
-
-        // Atualizar o status do título para pago
-        try {
-          const { error } = await supabase
-            .from('titulos')
-            .update({ status: 'PAGO' })
-            .eq('id', selectedTitulo.id);
-
-          if (error) throw error;
-        } catch (error) {
-          console.error('Erro ao atualizar status do título:', error);
-          toast.error('Erro ao atualizar status do título');
-          return;
+      if (selectedType === TRANSACTION_TYPES.EXPENSE && paymentType !== 'single') {
+        const transactions = [];
+        const baseDate = new Date(baseTransaction.date);
+        
+        if (paymentType === 'installment') {
+          // Criar transações para cada parcela
+          const installmentValue = baseTransaction.value / installments;
+          for (let i = 0; i < installments; i++) {
+            const installmentDate = new Date(baseDate);
+            installmentDate.setMonth(baseDate.getMonth() + i);
+            
+            transactions.push({
+              ...baseTransaction,
+              description: `${baseTransaction.description} (${i + 1}/${installments})`,
+              value: installmentValue,
+              date: installmentDate.toISOString().split('T')[0],
+              installmentInfo: {
+                currentInstallment: i + 1,
+                totalInstallments: installments,
+                originalValue: baseTransaction.value
+              }
+            });
+          }
+        } else if (paymentType === 'recurring') {
+          // Criar transações mensais até a data final
+          const endDate = new Date(recurringEndDate);
+          let currentDate = new Date(baseDate);
+          
+          while (currentDate <= endDate) {
+            transactions.push({
+              ...baseTransaction,
+              date: currentDate.toISOString().split('T')[0],
+              recurringInfo: {
+                isRecurring: true,
+                startDate: baseDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+              }
+            });
+            
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          }
         }
+
+        // Salvar todas as transações
+        for (const transaction of transactions) {
+          await addTransaction(transaction);
+        }
+
+        toast.success(
+          paymentType === 'installment'
+            ? `Lançamento parcelado criado em ${installments}x`
+            : 'Lançamento mensal recorrente criado'
+        );
+      } else {
+        // Lançamento único
+        await addTransaction(baseTransaction);
+        toast.success('Lançamento criado com sucesso!');
       }
 
-      setTransactions([...transactions, newTransaction]);
       setShowNewTransactionModal(false);
-      setSelectedCliente(null);
-      setSelectedContrato(null);
-      setSelectedTitulo(null);
-      setSearchTerm('');
-      toast.success('Lançamento salvo com sucesso!');
+      await fetchTransactions(); // Atualizar a lista de transações
     } catch (error) {
-      console.error('Erro ao salvar lançamento:', error);
-      toast.error('Erro ao salvar lançamento');
+      console.error('Erro ao criar lançamento:', error);
+      toast.error('Erro ao criar lançamento');
     }
   };
 
@@ -808,131 +871,167 @@ const Financeiro: React.FC = () => {
     balance: 0
   });
 
+  // Reset modal states
+  const resetModalStates = () => {
+    setSelectedType(TRANSACTION_TYPES.INCOME);
+    setPaymentType('single');
+    setInstallments(2);
+    setRecurringEndDate('');
+    setTransactionValue('');
+  };
+
+  // Fechar modal
+  const handleCloseModal = () => {
+    setShowNewTransactionModal(false);
+    resetModalStates();
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
+        {/* Cabeçalho elegante */}
+        <div className="mb-8">
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Financeiro
+              </h1>
+              <div className="absolute -bottom-2 left-0 w-1/3 h-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full"></div>
+            </div>
+            <div className="flex-1 h-px bg-gradient-to-r from-blue-600/20 to-transparent"></div>
+          </div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400 text-lg">
+            Gerencie suas transações financeiras
+          </p>
+        </div>
+
         <div className="space-y-6">
-          {/* Navegação */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setActiveView('caixa')}
-                className={`flex items-center px-4 py-2 rounded-lg transition-all duration-200 ${
-                  activeView === 'caixa'
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <BanknotesIcon className="h-5 w-5 mr-2" />
-                Caixa
-              </button>
-              <button
-                onClick={() => setActiveView('contratos')}
-                className={`flex items-center px-4 py-2 rounded-lg transition-all duration-200 ${
-                  activeView === 'contratos'
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <DocumentTextIcon className="h-5 w-5 mr-2" />
-                Contratos
-              </button>
+          {/* Navegação e Arquivo de Retorno em um único card */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md shadow-gray-400/20 dark:shadow-gray-700/20 backdrop-blur-xl border border-gray-100 dark:border-gray-700 p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Navegação - Ocupa 2 colunas */}
+              <div className="lg:col-span-2">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Navegação</h3>
+                <div className="flex flex-wrap gap-4">
+                  <button
+                    onClick={() => setActiveView('caixa')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                      activeView === 'caixa'
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <BanknotesIcon className="h-5 w-5" />
+                    <span>Caixa</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveView('contratos')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                      activeView === 'contratos'
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <DocumentTextIcon className="h-5 w-5" />
+                    <span>Contratos</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Arquivo de Retorno - Ocupa 1 coluna */}
+              <div className="lg:col-span-1">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Arquivo de Retorno</h3>
+                <div className="flex flex-col gap-4">
+                  <div className="relative">
+                    <input
+                      type="file"
+                      className="hidden"
+                      id="retorno-upload"
+                      accept=".ret"
+                      onChange={handleFileUpload}
+                    />
+                    <label
+                      htmlFor="retorno-upload"
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+                    >
+                      <ArrowUpTrayIcon className="h-5 w-5" />
+                      <span>Selecionar Arquivo</span>
+                    </label>
+                  </div>
+                  {selectedFile && (
+                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg">
+                      <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                        {selectedFile.name}
+                      </span>
+                      <button
+                        onClick={() => setSelectedFile(null)}
+                        className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+                      >
+                        <XMarkIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Conteúdo Principal */}
           {activeView === 'caixa' ? (
             <div className="space-y-6">
-              {/* Upload de Arquivo de Retorno */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] backdrop-blur-xl border border-gray-100 dark:border-gray-700 p-6 drop-shadow-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Arquivo de Retorno Bancário
-                  </h3>
-                </div>
-                <div className="mt-2">
-                  <label
-                    htmlFor="file-upload"
-                    className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors duration-200"
-                  >
-                    <div className="space-y-1 text-center">
-                      <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-gray-400" />
-                      <div className="flex text-sm text-gray-600 dark:text-gray-400">
-                        <label
-                          htmlFor="file-upload"
-                          className="relative cursor-pointer rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                        >
-                          <span>Fazer upload de arquivo</span>
-                          <input
-                            id="file-upload"
-                            name="file-upload"
-                            type="file"
-                            className="sr-only"
-                            accept=".ret,.txt"
-                            onChange={handleFileUpload}
-                            multiple
-                          />
-                        </label>
-                        <p className="pl-1">ou arraste e solte</p>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Arquivos .RET ou .TXT até 10MB
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
               {/* Cards de Resumo */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] backdrop-blur-xl border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-green-600 dark:text-green-400 font-medium">Total Receitas</p>
-                      <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL'
-                        }).format(lancamentosSummary.totalIncome)}
-                      </p>
+                    <div className="flex items-center">
+                      <div className="rounded-full p-2 bg-emerald-100 dark:bg-emerald-900/50">
+                        <ArrowTrendingUpIcon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Receitas</p>
+                        <h4 className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                          R$ 5.000,00
+                        </h4>
+                      </div>
                     </div>
-                    <ArrowTrendingUpIcon className="h-8 w-8 text-green-500 dark:text-green-400" />
                   </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] backdrop-blur-xl border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-red-600 dark:text-red-400 font-medium">Total Despesas</p>
-                      <p className="text-2xl font-bold text-red-700 dark:text-red-300">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL'
-                        }).format(lancamentosSummary.totalExpense)}
-                      </p>
+                    <div className="flex items-center">
+                      <div className="rounded-full p-2 bg-red-100 dark:bg-red-900/50">
+                        <ArrowTrendingDownIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Despesas</p>
+                        <h4 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                          R$ 3.000,00
+                        </h4>
+                      </div>
                     </div>
-                    <ArrowTrendingDownIcon className="h-8 w-8 text-red-500 dark:text-red-400" />
                   </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] backdrop-blur-xl border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Saldo</p>
-                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                        {new Intl.NumberFormat('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL'
-                        }).format(lancamentosSummary.balance)}
-                      </p>
+                    <div className="flex items-center">
+                      <div className="rounded-full p-2 bg-blue-100 dark:bg-blue-900/50">
+                        <BanknotesIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Saldo</p>
+                        <h4 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                          R$ 2.000,00
+                        </h4>
+                      </div>
                     </div>
-                    <BanknotesIcon className="h-8 w-8 text-blue-500 dark:text-blue-400" />
                   </div>
                 </div>
               </div>
 
               {/* Ações do Caixa */}
-              <div className="flex flex-wrap gap-4 items-center justify-between">
+              <div className="flex flex-wrap gap-4 items-center justify-between mb-6">
                 <button
                   onClick={() => setShowNewTransactionModal(true)}
                   className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
@@ -957,7 +1056,14 @@ const Financeiro: React.FC = () => {
               </div>
 
               {/* Tabela de Transações */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.24)] backdrop-blur-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Transações Recentes
+                    </h3>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-900/50">
@@ -1102,7 +1208,7 @@ const Financeiro: React.FC = () => {
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">Filtros</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Status do Contrato
                       </label>
                       <select
@@ -1258,19 +1364,305 @@ const Financeiro: React.FC = () => {
         {showNewTransactionModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowNewTransactionModal(false)}></div>
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => handleCloseModal()}></div>
               <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6 shadow-xl">
                 <div className="absolute top-0 right-0 pt-4 pr-4">
                   <button
-                    onClick={() => setShowNewTransactionModal(false)}
+                    onClick={() => handleCloseModal()}
                     className="text-gray-400 hover:text-gray-500 focus:outline-none"
                   >
                     <XMarkIcon className="h-6 w-6" />
                   </button>
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Novo Lançamento</h3>
-                {/* Form de Nova Transação */}
-                {/* TODO: Implementar formulário */}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Tipo de Lançamento */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Tipo de Lançamento
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedType(TRANSACTION_TYPES.INCOME)}
+                        className={`flex items-center justify-center px-4 py-3 rounded-xl transition-all duration-200 ${
+                          selectedType === TRANSACTION_TYPES.INCOME
+                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-[0_8px_30px_rgb(16,185,129,0.12)] hover:shadow-[0_8px_30px_rgb(16,185,129,0.24)]'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        <ArrowTrendingUpIcon className={`h-5 w-5 mr-2 ${
+                          selectedType === TRANSACTION_TYPES.INCOME
+                            ? 'text-white'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`} />
+                        Receita
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedType(TRANSACTION_TYPES.EXPENSE)}
+                        className={`flex items-center justify-center px-4 py-3 rounded-xl transition-all duration-200 ${
+                          selectedType === TRANSACTION_TYPES.EXPENSE
+                            ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-[0_8px_30px_rgb(239,68,68,0.12)] hover:shadow-[0_8px_30px_rgb(239,68,68,0.24)]'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        <ArrowTrendingDownIcon className={`h-5 w-5 mr-2 ${
+                          selectedType === TRANSACTION_TYPES.EXPENSE
+                            ? 'text-white'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`} />
+                        Despesa
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Descrição */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Descrição
+                    </label>
+                    <input
+                      type="text"
+                      name="description"
+                      required
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Categoria */}
+                  {selectedType === TRANSACTION_TYPES.EXPENSE && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Categoria
+                      </label>
+                      <div className="relative">
+                        <select
+                          name="category"
+                          required
+                          onChange={(e) => {
+                            if (e.target.value === 'new') {
+                              setShowNewCategoryModal(true);
+                              e.target.value = expenseCategories[0]; // Reset to first option
+                            }
+                          }}
+                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                          {expenseCategories.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                          <option value="new" className="font-medium text-blue-600 dark:text-blue-400">
+                            + Adicionar nova categoria
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tipo de Pagamento - Apenas para Despesa */}
+                  {selectedType === TRANSACTION_TYPES.EXPENSE && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Tipo de Pagamento
+                        </label>
+                        <div className="mt-2 grid grid-cols-3 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentType('single')}
+                            className={`flex items-center justify-center px-3 py-2 border rounded-md text-sm font-medium
+                              ${paymentType === 'single'
+                                ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900 dark:text-blue-200'
+                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                              }`}
+                          >
+                            À Vista
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentType('installment')}
+                            className={`flex items-center justify-center px-3 py-2 border rounded-md text-sm font-medium
+                              ${paymentType === 'installment'
+                                ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900 dark:text-blue-200'
+                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                              }`}
+                          >
+                            Parcelado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentType('recurring')}
+                            className={`flex items-center justify-center px-3 py-2 border rounded-md text-sm font-medium
+                              ${paymentType === 'recurring'
+                                ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900 dark:text-blue-200'
+                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                              }`}
+                          >
+                            Mensal
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Opções específicas para pagamento parcelado */}
+                      {paymentType === 'installment' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Número de Parcelas
+                          </label>
+                          <input
+                            type="number"
+                            name="installments"
+                            min="2"
+                            max="48"
+                            value={installments}
+                            onChange={(e) => setInstallments(Math.max(2, Math.min(48, parseInt(e.target.value) || 2)))}
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Valor por parcela: R$ {(parseFloat(transactionValue || '0') / installments).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Opções específicas para pagamento mensal */}
+                      {paymentType === 'recurring' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Data Final da Recorrência
+                          </label>
+                          <input
+                            type="date"
+                            name="recurringEndDate"
+                            value={recurringEndDate}
+                            onChange={(e) => setRecurringEndDate(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Valor */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Valor
+                    </label>
+                    <input
+                      type="number"
+                      name="value"
+                      step="0.01"
+                      required
+                      value={transactionValue}
+                      onChange={(e) => setTransactionValue(e.target.value)}
+                      min="0"
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Data */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Data
+                    </label>
+                    <input
+                      type="date"
+                      name="date"
+                      required
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Status
+                    </label>
+                    <select
+                      name="status"
+                      required
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="PENDENTE">Pendente</option>
+                      <option value="PAGO">Pago</option>
+                      <option value="CANCELADO">Cancelado</option>
+                    </select>
+                  </div>
+
+                  {/* Botões */}
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => handleCloseModal()}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para Nova Categoria */}
+        {showNewCategoryModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div 
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                onClick={() => setShowNewCategoryModal(false)}
+              ></div>
+              <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 shadow-xl">
+                <div className="absolute top-0 right-0 pt-4 pr-4">
+                  <button
+                    onClick={() => setShowNewCategoryModal(false)}
+                    className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Nova Categoria
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Nome da Categoria
+                    </label>
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Digite o nome da categoria"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategoryModal(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
