@@ -3,14 +3,18 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 
-# Copy package files
+# Install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy all files
+# Copy source files
 COPY . .
 
-# Build the application
+# Set environment variables for build
+ENV NODE_ENV=production
+ENV VITE_API_URL=/api
+
+# Build the application with the new configuration
 RUN npm run build
 
 # Production stage
@@ -22,12 +26,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-# Copy built frontend files
+# Copy built frontend files and server files
 COPY --from=build /app/dist ./dist
-
-# Copy server files
 COPY server.js ./
 COPY .env ./
+
+# Set production environment variables
+ENV NODE_ENV=production
+ENV PORT=3001
 
 # Expose port
 EXPOSE 3001

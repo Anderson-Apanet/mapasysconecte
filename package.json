@@ -8,7 +8,7 @@
     "server": "tsx src/server/index.ts",
     "dev:frontend": "vite",
     "dev:backend": "tsx watch src/server/index.ts",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
