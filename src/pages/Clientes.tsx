@@ -1,293 +1,258 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon, 
-  MagnifyingGlassIcon 
+  MagnifyingGlassIcon,
+  EyeIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
+import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
+import { Cliente } from '../types/financeiro';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { Cliente } from '../types/cliente';
-import ClienteModal from '../components/ClienteModal';
+import { default as ClienteModal } from '../components/ClienteModal';
 
 const Clientes: React.FC = () => {
+  const navigate = useNavigate();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const clientesPerPage = 5;
+  const [totalCount, setTotalCount] = useState(0);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const itemsPerPage = 5;
 
-  // Buscar clientes
-  const fetchClientes = async () => {
+  // Função para buscar clientes com paginação e busca no servidor
+  const fetchClientes = async (page: number, searchTerm: string = '') => {
     try {
       setLoading(true);
       
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.error('Usuário não autenticado');
-        toast.error('Você precisa estar autenticado para ver os clientes');
-        return;
-      }
-
-      const { data, error } = await supabase
+      // Primeiro, vamos buscar o total de registros para a paginação
+      let query = supabase
         .from('clientes')
-        .select(`
-          id,
-          nome,
-          email,
-          cpf_cnpj,
-          bairro,
-          id_empresa
-        `)
-        .eq('id_empresa', 2)
-        .order('nome');
+        .select('count', { count: 'exact' });
 
-      if (error) {
-        console.error('Erro ao buscar clientes:', error);
-        toast.error('Erro ao carregar clientes: ' + error.message);
-        return;
+      // Adiciona filtros de busca se houver termo de pesquisa
+      if (searchTerm) {
+        query = query.or(`nome.ilike.%${searchTerm}%,fonewhats.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`);
       }
 
+      const { count, error: countError } = await query;
+
+      if (countError) throw countError;
+      setTotalCount(count || 0);
+
+      // Agora, busca os registros da página atual
+      let dataQuery = supabase
+        .from('clientes')
+        .select('*')
+        .order('data_cad_cliente', { ascending: false });
+
+      // Adiciona os mesmos filtros de busca
+      if (searchTerm) {
+        dataQuery = dataQuery.or(`nome.ilike.%${searchTerm}%,fonewhats.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`);
+      }
+
+      // Adiciona paginação
+      const from = (page - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      
+      const { data, error } = await dataQuery
+        .range(from, to);
+
+      if (error) throw error;
       setClientes(data || []);
     } catch (error: any) {
-      console.error('Erro:', error);
+      console.error('Erro ao carregar clientes:', error);
       toast.error('Erro ao carregar clientes: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Efeito para carregar os clientes quando a página ou termo de busca mudar
   useEffect(() => {
-    fetchClientes();
-  }, []);
+    fetchClientes(currentPage, searchTerm);
+  }, [currentPage, searchTerm]);
 
-  // Filtragem de clientes
-  const filteredClientes = clientes.filter((cliente) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      cliente.nome?.toLowerCase().includes(searchLower) ||
-      cliente.email?.toLowerCase().includes(searchLower) ||
-      cliente.bairro?.toLowerCase().includes(searchLower) ||
-      cliente.cpf_cnpj?.toLowerCase().includes(searchLower)
-    );
-  });
-
-  // Paginação
-  const totalPages = Math.ceil(filteredClientes.length / clientesPerPage);
-  const indexOfLastCliente = currentPage * clientesPerPage;
-  const indexOfFirstCliente = indexOfLastCliente - clientesPerPage;
-  const currentClientes = filteredClientes.slice(indexOfFirstCliente, indexOfLastCliente);
-
-  // Reset página quando mudar a busca
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
+  // Funções de navegação
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
   };
 
-  const handleEdit = (cliente: Cliente) => {
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+
+  // Cálculo do total de páginas
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  // Handler para mudança no termo de busca com debounce
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1); // Volta para a primeira página ao pesquisar
+  };
+
+  // Handler para abrir o modal com os detalhes do cliente
+  const handleViewCliente = (cliente: Cliente) => {
     setSelectedCliente(cliente);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+  // Handler para fechar o modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedCliente(undefined);
+  };
 
-    try {
-      const { error } = await supabase
-        .from('clientes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast.success('Cliente excluído com sucesso!');
-      fetchClientes();
-    } catch (error: any) {
-      console.error('Erro ao excluir cliente:', error);
-      toast.error('Erro ao excluir cliente: ' + error.message);
-    }
+  // Handler para salvar alterações do cliente
+  const handleSaveCliente = () => {
+    fetchClientes(currentPage, searchTerm);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Cabeçalho elegante */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Clientes
-              </h1>
-              <div className="absolute -bottom-2 left-0 w-1/3 h-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full"></div>
-            </div>
-            <div className="flex-1 h-px bg-gradient-to-r from-blue-600/20 to-transparent"></div>
-          </div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400 text-lg">
-            Gerencie seus clientes e contratos
-          </p>
-        </div>
-
-        {/* Search and Add Client */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div className="flex-1 w-full sm:max-w-xs">
+    <Layout>
+      <div className="min-h-screen">
+        <div className="container mx-auto px-4 py-8">
+          <h1 className="text-2xl font-bold mb-6 text-white">Gerenciamento de Clientes</h1>
+          
+          {/* Área de Pesquisa */}
+          <div className="mb-6">
             <div className="relative">
               <input
                 type="text"
+                placeholder="Pesquisar por nome, telefone ou CPF/CNPJ..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nome, email, CPF/CNPJ ou bairro..."
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                onChange={handleSearchChange}
+                className="w-full p-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               />
               <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
             </div>
           </div>
-          <button
-            onClick={() => {
-              setSelectedCliente(undefined);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
-          >
-            <PlusIcon className="h-5 w-5" />
-            <span>Novo Cliente</span>
-          </button>
-        </div>
 
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        ) : currentClientes.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400">Nenhum cliente encontrado</p>
-          </div>
-        ) : (
-          <div className="backdrop-blur-md bg-white/30 dark:bg-gray-800/30 rounded-xl border border-white/50 dark:border-gray-700/50 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] transition-shadow duration-300">
+          {/* Lista de Clientes */}
+          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200/50 dark:divide-gray-700/50">
+              <table className="min-w-full">
                 <thead>
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Nome
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      CPF/CNPJ
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Bairro
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Ações
-                    </th>
+                  <tr className="bg-gray-50 dark:bg-gray-700">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-white uppercase tracking-wider">Nome</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-white uppercase tracking-wider">Telefone</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-white uppercase tracking-wider">CPF/CNPJ</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-white uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-white uppercase tracking-wider">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                  {currentClientes.map((cliente) => (
-                    <tr key={cliente.id} className="hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {cliente.nome || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {cliente.email || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {cliente.cpf_cnpj || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {cliente.bairro || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleEdit(cliente)}
-                          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 mr-4 transition-colors duration-150"
-                        >
-                          <PencilIcon className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(cliente.id)}
-                          className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-150"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                        <div className="flex justify-center items-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : clientes.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                        Nenhum cliente encontrado
+                      </td>
+                    </tr>
+                  ) : (
+                    clientes.map((cliente) => (
+                      <tr key={cliente.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          {cliente.nome}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                          {cliente.fonewhats || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                          {cliente.cpf_cnpj || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${cliente.status === 'Ativo' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' : 
+                            cliente.status === 'Inativo' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' : 
+                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'}`}>
+                            {cliente.status || 'Pendente'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                          <button
+                            onClick={() => handleViewCliente(cliente)}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors duration-150"
+                          >
+                            <EyeIcon className="h-5 w-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+          </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex justify-center items-center gap-2">
+          {/* Paginação */}
+          {!loading && totalCount > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalCount)} de {totalCount} registros
+              </div>
+              <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => handlePageChange(1)}
+                  onClick={goToPreviousPage}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded-md transition-colors duration-150 
-                    ${currentPage === 1
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                    }`}
+                  className={`p-2 rounded-md ${
+                    currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
-                  Primeiro
+                  <ChevronLeftIcon className="h-5 w-5" />
                 </button>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Página {currentPage} de {totalPages}
+                </span>
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded-md transition-colors duration-150 
-                    ${currentPage === 1
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                    }`}
-                >
-                  Anterior
-                </button>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
+                  onClick={goToNextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded-md transition-colors duration-150 
-                    ${currentPage === totalPages
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                    }`}
+                  className={`p-2 rounded-md ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
-                  Próximo
-                </button>
-                <button
-                  onClick={() => handlePageChange(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded-md transition-colors duration-150 
-                    ${currentPage === totalPages
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                      : 'bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                    }`}
-                >
-                  Último
+                  <ChevronRightIcon className="h-5 w-5" />
                 </button>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        <ClienteModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          cliente={selectedCliente}
-          onSuccess={() => {
-            setIsModalOpen(false);
-            fetchClientes();
-          }}
-        />
+          {/* Botão Adicionar Cliente */}
+          <div className="mt-6">
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-150"
+            >
+              Adicionar Cliente
+            </button>
+          </div>
+
+          {/* Modal de Cliente */}
+          <ClienteModal
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            cliente={selectedCliente}
+            onSave={handleSaveCliente}
+          />
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

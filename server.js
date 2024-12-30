@@ -593,11 +593,38 @@ app.delete('/api/agenda/:id', async (req, res) => {
   }
 });
 
-// Start the Express server on localhost
-const EXPRESS_PORT = 3001;
-const EXPRESS_HOST = 'localhost';
+// Add endpoint for last 10 connections of a specific user
+app.get('/api/connections/user/:username/history', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const query = `
+      SELECT 
+        radacctid,
+        username,
+        nasipaddress,
+        acctstarttime,
+        acctstoptime,
+        acctinputoctets,
+        acctoutputoctets,
+        acctterminatecause,
+        framedipaddress,
+        callingstationid
+      FROM radacct 
+      WHERE username = ?
+      ORDER BY acctstarttime DESC
+      LIMIT 10
+    `;
 
-app.listen(EXPRESS_PORT, EXPRESS_HOST, () => {
-  console.log(`Express API server running at http://${EXPRESS_HOST}:${EXPRESS_PORT}`);
-  console.log('MySQL server connected at:', dbConfig.host + ':' + dbConfig.port);
+    const [rows] = await pool.query(query, [username]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching user connection history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Start server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
 });

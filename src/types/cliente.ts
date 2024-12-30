@@ -1,9 +1,17 @@
 export interface Cliente {
   id: number;
   nome: string;
-  email?: string;
-  cpf_cnpj?: string;
-  bairro?: string;
-  id_empresa: number;
+  email: string | null;
+  fonewhats: string | null;
+  logradouro: string | null;
+  nrlogradouro: string | null;
+  complemento: string | null;
+  id_bairro: number | null;
+  uf: string | null;
+  cep: string | null;
+  rg: string | null;
+  cpf_cnpj: string | null;
+  datanas: string | null;
   created_at?: string;
+  status: 'Ativo' | 'Inativo' | 'Pendente' | null;
 }

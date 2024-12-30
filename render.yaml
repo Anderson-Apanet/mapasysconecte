@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: mapasys
+    env: docker
+    buildCommand: docker build -t mapasys .
+    startCommand: docker run -p 3001:3001 mapasys
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_SUPABASE_ACCESS_KEY_ID
+        sync: false
+      - key: VITE_SUPABASE_SECRET_ACCESS_KEY
+        sync: false
+      - key: VITE_ROUTER_BORDA_ADDRESS
+        sync: false
+      - key: VITE_ROUTER_BORDA_USER
+        sync: false
+      - key: VITE_ROUTER_BORDA_PASSWORD
+        sync: false
+      - key: VITE_ROUTER_BORDA_INTERFACE
+        sync: false
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_MYSQL_HOST
+        sync: false
+      - key: VITE_MYSQL_USER
+        sync: false
+      - key: VITE_MYSQL_PASSWORD
+        sync: false
