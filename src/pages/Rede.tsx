@@ -59,7 +59,8 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/concentrator-stats');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${baseUrl}/api/concentrator-stats`);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
       }
@@ -84,7 +85,8 @@ export default function Rede() {
     setError(null);
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
-      const url = new URL('http://localhost:3001/api/connections');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const url = new URL(`${baseUrl}/api/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
       url.searchParams.set('status', statusFilter);
@@ -117,7 +119,8 @@ export default function Rede() {
 
   const fetchUserConsumption = async (username: string) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/user-consumption/${username}`);
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${baseUrl}/api/user-consumption/${username}`);
       if (!response.ok) {
         throw new Error('Failed to fetch user consumption');
       }
@@ -141,7 +144,8 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/connections/user/${username}/history`);
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${baseUrl}/api/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');
       }

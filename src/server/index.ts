@@ -19,11 +19,18 @@ app.get('/api/connections', async (req, res) => {
     const offset = (page - 1) * limit;
 
     try {
+        console.log('Tentando conectar ao MySQL com:', {
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            database: process.env.MYSQL_DATABASE
+        });
+        
         const connection = await mysql.createConnection({
-            host: process.env.VITE_MYSQL_HOST || '187.103.249.49',
-            user: process.env.VITE_MYSQL_USER || 'root',
-            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-            database: 'radius'
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE || 'radius',
+            connectTimeout: 10000 // 10 segundos
         });
 
         let whereClause = '1=1';
@@ -83,11 +90,18 @@ app.get('/api/connections', async (req, res) => {
 // Rota para estatísticas dos concentradores
 app.get('/api/concentrator-stats', async (req, res) => {
     try {
+        console.log('Tentando conectar ao MySQL com:', {
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            database: process.env.MYSQL_DATABASE
+        });
+        
         const connection = await mysql.createConnection({
-            host: process.env.VITE_MYSQL_HOST || '187.103.249.49',
-            user: process.env.VITE_MYSQL_USER || 'root',
-            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-            database: 'radius'
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE || 'radius',
+            connectTimeout: 10000 // 10 segundos
         });
 
         const [rows] = await connection.execute(
@@ -108,11 +122,18 @@ app.get('/api/concentrator-stats', async (req, res) => {
 // Rota para consumo do usuário
 app.get('/api/user-consumption/:username', async (req, res) => {
     try {
+        console.log('Tentando conectar ao MySQL com:', {
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            database: process.env.MYSQL_DATABASE
+        });
+        
         const connection = await mysql.createConnection({
-            host: process.env.VITE_MYSQL_HOST || '187.103.249.49',
-            user: process.env.VITE_MYSQL_USER || 'root',
-            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-            database: 'radius'
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE || 'radius',
+            connectTimeout: 10000 // 10 segundos
         });
 
         const [rows] = await connection.execute(
@@ -141,11 +162,18 @@ app.get('/radius/groups', async (req, res) => {
     console.log('Recebida requisição GET /radius/groups');
     
     try {
+        console.log('Tentando conectar ao MySQL com:', {
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            database: process.env.MYSQL_DATABASE
+        });
+        
         const connection = await mysql.createConnection({
-            host: process.env.VITE_MYSQL_HOST || '187.103.249.49',
-            user: process.env.VITE_MYSQL_USER || 'root',
-            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-            database: 'radius'
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE || 'radius',
+            connectTimeout: 10000 // 10 segundos
         });
 
         console.log('Conexão MySQL estabelecida');

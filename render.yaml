@@ -21,19 +21,19 @@ services:
         sync: false
       - key: VITE_SUPABASE_SECRET_ACCESS_KEY
         sync: false
-      - key: VITE_ROUTER_BORDA_ADDRESS
+      - key: MYSQL_HOST
         sync: false
-      - key: VITE_ROUTER_BORDA_USER
+      - key: MYSQL_USER
         sync: false
-      - key: VITE_ROUTER_BORDA_PASSWORD
+      - key: MYSQL_PASSWORD
         sync: false
-      - key: VITE_ROUTER_BORDA_INTERFACE
-        sync: false
-      - key: VITE_GOOGLE_MAPS_API_KEY
+      - key: MYSQL_DATABASE
         sync: false
       - key: VITE_MYSQL_HOST
         sync: false
       - key: VITE_MYSQL_USER
         sync: false
       - key: VITE_MYSQL_PASSWORD
+        sync: false
+      - key: VITE_GOOGLE_MAPS_API_KEY
         sync: false
