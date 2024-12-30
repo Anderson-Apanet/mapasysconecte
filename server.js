@@ -25,7 +25,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: https: blob:",
-      "connect-src 'self' https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com",
+      "connect-src 'self' http://localhost:* https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com",
       "frame-src 'self' https://*.google.com",
       "worker-src 'self' blob:"
     ].join('; ')
