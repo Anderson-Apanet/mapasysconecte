@@ -28,8 +28,15 @@ RUN npm install --production
 
 # Copy built frontend files and server files
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/public ./public
 COPY server.js ./
 COPY .env ./
+
+# Create directory for fonts if it doesn't exist
+RUN mkdir -p dist/type-font
+
+# Copy fonts if they exist in public
+COPY --from=build /app/public/type-font ./dist/type-font
 
 # Set production environment variables
 ENV NODE_ENV=production

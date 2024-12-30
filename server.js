@@ -3,11 +3,29 @@ import mysql from 'mysql2/promise';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Carrega as variáveis de ambiente
 dotenv.config();
 
 const app = express();
+
+// Configuração de segurança
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306"
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
 
 // Enable CORS for all origins during development
 app.use(cors({
@@ -621,6 +639,14 @@ app.get('/api/connections/user/:username/history', async (req, res) => {
     console.error('Error fetching user connection history:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Serve arquivos estáticos
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Rota catch-all para o SPA
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 // Start server

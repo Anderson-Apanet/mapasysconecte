@@ -23,6 +23,17 @@ module.exports = {
           900: '#0c4a6e',
         },
       },
+      fontFamily: {
+        sans: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif'
+        ],
+      },
     },
   },
   plugins: [forms],
