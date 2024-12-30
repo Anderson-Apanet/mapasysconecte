@@ -10,7 +10,7 @@ services:
       - key: PORT
         sync: false
       - key: VITE_API_URL
-        value: /api
+        value: https://mapasys.onrender.com
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY

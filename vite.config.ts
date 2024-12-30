@@ -7,7 +7,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/radius': 'http://localhost:3001'
+      '/api': {
+        target: process.env.NODE_ENV === 'production' 
+          ? process.env.VITE_API_URL 
+          : 'http://localhost:10000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
     }
+  },
+  define: {
+    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '')
   }
 });
