@@ -1,28 +1,33 @@
-// Base URL for API requests
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Environment variables
+const isDevelopment = import.meta.env.DEV;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+// Base URL for API requests - in development, use the full URL, in production use the relative path
+const getBaseUrl = () => isDevelopment ? API_BASE_URL : '';
 
 // API endpoints
 export const API_ENDPOINTS = {
   // Connections
-  connections: `${API_BASE_URL}/api/connections`,
-  concentratorStats: `${API_BASE_URL}/api/concentrator-stats`,
+  connections: `${getBaseUrl()}/api/connections`,
+  concentratorStats: `${getBaseUrl()}/api/concentrator-stats`,
   
   // Radius
-  radius: `${API_BASE_URL}/api/radius`,
+  radius: `${getBaseUrl()}/api/radius`,
   
   // MySQL
-  mysql: `${API_BASE_URL}/api/mysql`,
+  mysql: `${getBaseUrl()}/api/mysql`,
   
   // Router
-  router: `${API_BASE_URL}/api/router`,
+  router: `${getBaseUrl()}/api/router`,
   
   // Other endpoints
-  agenda: `${API_BASE_URL}/api/agenda`,
-  users: `${API_BASE_URL}/api/users`,
-  clients: `${API_BASE_URL}/api/clients`,
-  contracts: `${API_BASE_URL}/api/contracts`,
-  financial: `${API_BASE_URL}/api/financial`,
-  support: `${API_BASE_URL}/api/support`
+  agenda: `${getBaseUrl()}/api/agenda`,
+  users: `${getBaseUrl()}/api/users`,
+  clients: `${getBaseUrl()}/api/clients`,
+  contracts: `${getBaseUrl()}/api/contracts`,
+  financial: `${getBaseUrl()}/api/financial`,
+  support: `${getBaseUrl()}/api/support`
 };
 
 export default API_ENDPOINTS;
