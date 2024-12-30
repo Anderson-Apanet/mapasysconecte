@@ -3,7 +3,7 @@ services:
     name: mapasys
     env: docker
     buildCommand: docker build -t mapasys .
-    startCommand: docker run -p $PORT:3001 mapasys
+    startCommand: docker run -p $PORT:10000 mapasys
     envVars:
       - key: NODE_ENV
         value: production

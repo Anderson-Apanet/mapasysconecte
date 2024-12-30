@@ -40,10 +40,10 @@ COPY --from=build /app/public/type-font ./dist/type-font
 
 # Set production environment variables
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=10000
 
 # Expose port
-EXPOSE 3001
+EXPOSE 10000
 
 # Start the server
 CMD ["node", "server.js"]
