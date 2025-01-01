@@ -16,8 +16,12 @@ ENV VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
 ENV NODE_ENV=production
 ENV VITE_API_URL=/api
 
-# Build the application
+# Build the frontend
 RUN npm run build
+
+# Build the backend (compile TypeScript)
+RUN npm install -g typescript
+RUN tsc -p tsconfig.server.json
 
 # Production stage
 FROM node:20-alpine as production
@@ -28,9 +32,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-# Copy built frontend files and server files
+# Copy built frontend and server files
 COPY --from=build /app/dist ./dist
-COPY src/server ./src/server
 
 # Set production environment variables
 ENV NODE_ENV=production
@@ -40,4 +43,4 @@ ENV PORT=10000
 EXPOSE 10000
 
 # Start the server
-CMD ["node", "src/server/index.js"]
+CMD ["node", "dist/server/index.js"]
