@@ -29,11 +29,11 @@ RUN npm install --production
 # Copy built frontend files and server files
 COPY --from=build /app/dist ./dist
 COPY server.js ./
-COPY .env ./
 
 # Set production environment variables
 ENV NODE_ENV=production
 ENV PORT=10000
+ENV VITE_GOOGLE_MAPS_API_KEY=AIzaSyDzF8YuPqRvvCYF1gF8Q57hh1mVpOtYnxA
 
 # Expose port for Render deployment
 EXPOSE 10000
