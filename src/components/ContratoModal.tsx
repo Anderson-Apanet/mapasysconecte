@@ -54,8 +54,11 @@ const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato
   const [marker, setMarker] = useState<google.maps.marker.AdvancedMarkerElement | null>(null);
   const [infoWindow, setInfoWindow] = useState<google.maps.InfoWindow | null>(null);
 
+  // Garantir que a chave do Google Maps esteja disponível
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey,
     libraries
   });
 
@@ -106,7 +109,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
           address
-        )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+        )}&key=${googleMapsApiKey}`
       );
       const data = await response.json();
 
@@ -119,7 +122,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato
     } finally {
       setIsLoading(false);
     }
-  }, [contrato.endereco, contrato.bairros]);
+  }, [contrato.endereco, contrato.bairros, googleMapsApiKey]);
 
   useEffect(() => {
     if (contrato.locallat && contrato.locallon) {
@@ -362,7 +365,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato
             {/* Mapa */}
             <div className="mt-6">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Localização no Mapa</h3>
-              {import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
+              {googleMapsApiKey ? (
                 <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
                   {isLoaded ? (
                     <GoogleMap
