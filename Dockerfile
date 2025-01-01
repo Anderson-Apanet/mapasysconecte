@@ -11,10 +11,12 @@ RUN npm install
 COPY . .
 
 # Set environment variables for build
+ARG VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
 ENV NODE_ENV=production
 ENV VITE_API_URL=/api
 
-# Build the application with the new configuration
+# Build the application
 RUN npm run build
 
 # Production stage
@@ -28,15 +30,14 @@ RUN npm install --production
 
 # Copy built frontend files and server files
 COPY --from=build /app/dist ./dist
-COPY server.js ./
+COPY src/server ./src/server
 
 # Set production environment variables
 ENV NODE_ENV=production
 ENV PORT=10000
-ENV VITE_GOOGLE_MAPS_API_KEY=AIzaSyDzF8YuPqRvvCYF1gF8Q57hh1mVpOtYnxA
 
 # Expose port for Render deployment
 EXPOSE 10000
 
 # Start the server
-CMD ["node", "server.js"]
+CMD ["node", "src/server/index.js"]
