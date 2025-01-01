@@ -49,36 +49,29 @@ app.use(express.urlencoded({ extended: true }));
 
 // MySQL connection configuration
 const dbConfig = {
-  host: process.env.MYSQL_HOST,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE || 'radius',
+  host: '187.103.249.49',
+  port: 3306,
+  user: 'root',
+  password: 'bk134',
+  database: 'radius',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  queueLimit: 0
 };
 
 console.log('Attempting to connect to MySQL at:', dbConfig.host + ':' + dbConfig.port);
 
-let pool;
-try {
-  pool = mysql.createPool(dbConfig);
-  console.log('MySQL pool created successfully');
-} catch (error) {
-  console.error('Error creating MySQL pool:', error);
-}
+// Create connection pool
+const pool = mysql.createPool(dbConfig);
 
 // Test database connection on startup
 pool.getConnection()
   .then(connection => {
-    console.log('Successfully connected to MySQL database at', dbConfig.host + ':' + dbConfig.port);
+    console.log('Successfully connected to MySQL');
     connection.release();
   })
   .catch(err => {
     console.error('Failed to connect to MySQL:', err);
-    process.exit(1); // Exit if we can't connect to the database
   });
 
 // Configuração do Supabase
@@ -679,5 +672,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor rodando em http://0.0.0.0:${PORT}`);
   console.log('Ambiente:', process.env.NODE_ENV);
-  console.log('Diretório atual:', __dirname);
 });
