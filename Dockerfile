@@ -22,13 +22,13 @@ FROM node:20-alpine as production
 
 WORKDIR /app
 
-# Copy package files for production
+# Copy package files and install production dependencies
 COPY package*.json ./
 RUN npm install --production
 
-# Copy built frontend files and server files
+# Copy built frontend files and server
 COPY --from=build /app/dist ./dist
-COPY server.js ./
+COPY --from=build /app/server.js ./server.js
 
 # Set production environment variables
 ENV NODE_ENV=production

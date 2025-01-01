@@ -49,19 +49,26 @@ app.use(express.urlencoded({ extended: true }));
 
 // MySQL connection configuration
 const dbConfig = {
-  host: '187.103.249.49',
-  port: 3306,
-  user: 'root',
-  password: 'bk134',
-  database: 'radius',
+  host: process.env.MYSQL_HOST,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE || 'radius',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 };
 
 console.log('Attempting to connect to MySQL at:', dbConfig.host + ':' + dbConfig.port);
 
-const pool = mysql.createPool(dbConfig);
+let pool;
+try {
+  pool = mysql.createPool(dbConfig);
+  console.log('MySQL pool created successfully');
+} catch (error) {
+  console.error('Error creating MySQL pool:', error);
+}
 
 // Test database connection on startup
 pool.getConnection()
@@ -658,8 +665,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor rodando em http://0.0.0.0:${PORT}`);
+  console.log('Ambiente:', process.env.NODE_ENV);
+  console.log('Diretório atual:', __dirname);
 });
