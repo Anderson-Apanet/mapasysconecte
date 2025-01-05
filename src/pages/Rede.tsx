@@ -86,7 +86,7 @@ export default function Rede() {
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
       const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const url = new URL(`${baseUrl}/api/connections`);
+      const url = new URL(`${baseUrl}/api/support/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
       url.searchParams.set('status', statusFilter);
@@ -283,7 +283,7 @@ export default function Rede() {
 
   return (
     <Layout>
-      <div className="min-h-screen dark:bg-transparent">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
             <div className="flex items-center mb-2">

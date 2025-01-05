@@ -115,7 +115,7 @@ const Clientes: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         <div className="container mx-auto px-4 py-8">
           <h1 className="text-2xl font-bold mb-6 text-white">Gerenciamento de Clientes</h1>
           

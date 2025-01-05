@@ -77,7 +77,7 @@ const Home: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-gray-900 py-8">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center">
             <div className="mb-8">

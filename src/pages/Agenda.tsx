@@ -368,7 +368,7 @@ export default function Agenda() {
 
   return (
     <Layout>
-      <div className="min-h-screen p-4">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="h-full" onClick={() => selectedMoreEvents && setSelectedMoreEvents(null)}>
             <FullCalendar

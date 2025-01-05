@@ -530,7 +530,7 @@ const ADM: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center mb-2">

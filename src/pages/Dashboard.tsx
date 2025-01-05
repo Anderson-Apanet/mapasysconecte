@@ -429,7 +429,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-6">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
