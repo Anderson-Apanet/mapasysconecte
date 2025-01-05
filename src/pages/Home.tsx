@@ -77,14 +77,14 @@ const Home: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1092E8] dark:bg-gray-900 py-8">
+      <div className="min-h-screen bg-[#1E4620] dark:bg-gray-900 py-8">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center">
             <div className="mb-8">
               <img 
-                src="https://5214d91aacaa4d329edd4980b94103ad.cdn.bubble.io/f1667228236434x338619235269048450/logoconecte.jpg"
-                alt="Conecte Logo"
-                className="w-[150px] h-auto"
+                src="https://aunfucsmyfbdyxfgvpha.supabase.co/storage/v1/object/public/assets-mapasys/Nostranet/logosemfundo.PNG"
+                alt="Nostranet Logo"
+                className="w-[225px] h-auto"
               />
             </div>
             
