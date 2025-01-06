@@ -1,0 +1,2 @@
+/*
+  Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https://*.onrender.com https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com; connect-src 'self' https://*.onrender.com https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; frame-src 'self' https://*.supabase.co;
