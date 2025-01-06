@@ -5,9 +5,11 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
+// Configuração básica do CORS
 app.use(cors());
+
 app.use(express.json());
 
 // Middleware para logging
@@ -18,13 +20,74 @@ app.use((req, res, next) => {
 
 // Função para criar conexão com o MySQL
 const createConnection = async () => {
-    return await mysql.createConnection({
-        host: process.env.MYSQL_HOST || '187.103.249.60',
-        user: process.env.MYSQL_USER || 'root',
-        password: process.env.MYSQL_PASSWORD || 'bk134',
-        database: process.env.MYSQL_DATABASE || 'radius'
+    const config = {
+        host: process.env.MYSQL_HOST,
+        user: process.env.MYSQL_USER,
+        password: process.env.MYSQL_PASSWORD,
+        database: process.env.MYSQL_DATABASE
+    };
+
+    console.log('Tentando conectar ao MySQL com config:', {
+        host: config.host,
+        user: config.user,
+        database: config.database
     });
+
+    try {
+        const connection = await mysql.createConnection(config);
+        console.log('Conexão MySQL estabelecida com sucesso');
+        return connection;
+    } catch (error) {
+        console.error('Erro ao conectar ao MySQL:', error);
+        throw error;
+    }
 };
+
+// Rota para buscar estatísticas dos concentradores
+app.get('/api/concentrator-stats', async (req, res) => {
+    try {
+        const connection = await createConnection();
+
+        // Query para buscar os concentradores da tabela nas e contar usuários ativos por concentrador
+        const query = `
+            SELECT 
+                n.nasname,
+                n.shortname,
+                n.type,
+                n.ports,
+                n.description,
+                COUNT(DISTINCT CASE 
+                    WHEN r.acctstoptime IS NULL THEN 
+                        CASE 
+                            WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
+                            WHEN n.nasname = r.nasipaddress THEN r.username
+                            ELSE NULL
+                        END
+                    ELSE NULL 
+                END) as user_count
+            FROM nas n
+            LEFT JOIN radacct r ON 
+                CASE 
+                    WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
+                    ELSE n.nasname = r.nasipaddress
+                END
+            GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
+            ORDER BY n.nasname;
+        `;
+
+        console.log('Executando query de estatísticas dos concentradores');
+        const [rows] = await connection.execute(query);
+        
+        // Log para debug
+        console.log('Resultados:', rows);
+
+        await connection.end();
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro ao buscar estatísticas dos concentradores:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
 
 // Rota para buscar conexões
 app.get('/api/support/connections', async (req, res) => {
@@ -129,139 +192,89 @@ app.get('/api/support/connections', async (req, res) => {
     }
 });
 
-// Rota antiga para compatibilidade
-app.get('/api/connections', async (req, res) => {
+// Rota para buscar consumo do usuário
+app.get('/api/user-consumption/:username', async (req, res) => {
     try {
         const connection = await createConnection();
-        const page = parseInt(req.query.page) || 1;
-        const limit = 10;
-        const offset = (page - 1) * limit;
-        const search = req.query.search || '';
-        const status = req.query.status || 'all';
-        const nasip = req.query.nasip || 'all';
+        const username = req.params.username;
 
-        // Consulta para obter apenas o último registro de cada username
+        // Query para buscar o consumo do usuário nos últimos 7 dias
         const query = `
-            SELECT r.*
-            FROM radacct r
-            INNER JOIN (
-                SELECT username, MAX(radacctid) as max_id
-                FROM radacct
-                GROUP BY username
-            ) latest ON r.username = latest.username AND r.radacctid = latest.max_id
-            WHERE CASE 
-                WHEN ? = 'up' THEN r.acctstoptime IS NULL
-                WHEN ? = 'down' THEN r.acctstoptime IS NOT NULL
-                ELSE TRUE
-            END
-            AND CASE 
-                WHEN ? != 'all' THEN r.nasipaddress = ?
-                ELSE TRUE
-            END
-            AND CASE 
-                WHEN ? != '' THEN 
-                    r.username LIKE CONCAT('%', ?, '%')
-                    OR r.framedipaddress LIKE CONCAT('%', ?, '%')
-                    OR r.callingstationid LIKE CONCAT('%', ?, '%')
-                ELSE TRUE
-            END
-            ORDER BY r.radacctid DESC
-            LIMIT ? OFFSET ?;
+            SELECT 
+                DATE(acctstarttime) as date,
+                ROUND(SUM(acctinputoctets) / (1024 * 1024 * 1024), 2) as download_gb,
+                ROUND(SUM(acctoutputoctets) / (1024 * 1024 * 1024), 2) as upload_gb
+            FROM radacct 
+            WHERE username = ?
+            AND acctstarttime >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY DATE(acctstarttime)
+            ORDER BY date;
         `;
 
-        // Consulta para contar o total de usernames únicos
-        const countQuery = `
-            SELECT COUNT(*) as total
-            FROM (
-                SELECT username
-                FROM radacct
-                GROUP BY username
-                HAVING MAX(radacctid)
-            ) unique_users
-            WHERE EXISTS (
-                SELECT 1
-                FROM radacct r
-                WHERE r.username = unique_users.username
-                AND CASE 
-                    WHEN ? = 'up' THEN r.acctstoptime IS NULL
-                    WHEN ? = 'down' THEN r.acctstoptime IS NOT NULL
-                    ELSE TRUE
-                END
-                AND CASE 
-                    WHEN ? != 'all' THEN r.nasipaddress = ?
-                    ELSE TRUE
-                END
-                AND CASE 
-                    WHEN ? != '' THEN 
-                        r.username LIKE CONCAT('%', ?, '%')
-                        OR r.framedipaddress LIKE CONCAT('%', ?, '%')
-                        OR r.callingstationid LIKE CONCAT('%', ?, '%')
-                    ELSE TRUE
-                END
-            );
-        `;
-
+        console.log('Executando query de consumo do usuário:', username);
+        const [rows] = await connection.execute(query, [username]);
+        
         // Log para debug
-        console.log('Executing query with params:', {
-            status, nasip, search,
-            limit, offset
-        });
+        console.log('Resultados:', rows);
 
-        // Executar as consultas
-        const [rows] = await connection.execute(query, [
-            status, status,
-            nasip, nasip,
-            search, search, search, search,
-            limit, offset
-        ]);
-
-        const [countRows] = await connection.execute(countQuery, [
-            status, status,
-            nasip, nasip,
-            search, search, search, search
-        ]);
-
-        const total = countRows[0].total;
-        const totalPages = Math.ceil(total / limit);
+        // Formatar as datas para DD/MM
+        const formattedData = rows.map(row => ({
+            ...row,
+            date: new Date(row.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        }));
 
         await connection.end();
-
-        res.json({
-            data: rows,
-            pagination: {
-                currentPage: page,
-                totalPages: totalPages,
-                totalRecords: total,
-                recordsPerPage: limit
-            }
-        });
+        res.json(formattedData);
     } catch (error) {
-        console.error('Database error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Erro ao buscar consumo do usuário:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
 
-app.get('/api/router/traffic', (req, res) => {
-    console.log('Recebida requisição para /api/router/traffic');
-    
-    // Dados fictícios da interface
-    const mockData = [{
-        name: 'sfp-sfpplus1-WAN-Adylnet',
-        "rx-bits-per-second": Math.floor(Math.random() * 1000000000),
-        "tx-bits-per-second": Math.floor(Math.random() * 1000000000),
-        "rx-packets-per-second": Math.floor(Math.random() * 1000),
-        "tx-packets-per-second": Math.floor(Math.random() * 1000)
-    }];
+// Rota para buscar histórico de conexões do usuário
+app.get('/api/connections/user/:username/history', async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const username = req.params.username;
 
-    console.log('Enviando dados:', mockData);
-    res.json(mockData);
+        // Query para buscar o histórico de conexões do usuário
+        const query = `
+            SELECT 
+                radacctid,
+                acctstarttime,
+                acctstoptime,
+                acctsessiontime,
+                acctinputoctets,
+                acctoutputoctets,
+                callingstationid,
+                framedipaddress,
+                nasipaddress
+            FROM radacct 
+            WHERE username = ?
+            ORDER BY acctstarttime DESC
+            LIMIT 10;
+        `;
+
+        console.log('Executando query de histórico do usuário:', username);
+        const [rows] = await connection.execute(query, [username]);
+        
+        // Log para debug
+        console.log('Resultados:', rows);
+
+        await connection.end();
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro ao buscar histórico do usuário:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
 });
 
-// Rota de teste
-app.get('/api/test', (req, res) => {
-    res.json({ status: 'ok', message: 'Server is running' });
-});
-
+// Inicia o servidor
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
+    console.log(`Servidor rodando na porta ${port}`);
+    console.log('Variáveis de ambiente carregadas:', {
+        MYSQL_HOST: process.env.MYSQL_HOST,
+        MYSQL_DATABASE: process.env.MYSQL_DATABASE,
+        PORT: process.env.PORT
+    });
 });

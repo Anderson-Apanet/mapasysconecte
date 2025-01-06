@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import clsx from 'clsx';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { userData } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,24 +16,12 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) throw authError;
-
-      // Buscar o tipo de usuário
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          id_user_tipo,
-          user_tipo (tipo)
-        `)
-        .eq('id_user', authData.session?.user.id)
-        .single();
-
-      if (userError) throw userError;
 
       toast.success('Login realizado com sucesso!');
 
@@ -77,6 +66,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="Seu email"
+                disabled={isLoading}
               />
             </div>
             
@@ -94,43 +84,25 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="Sua senha"
+                disabled={isLoading}
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Lembrar-me
-              </label>
-            </div>
-
-            <div className="text-sm">
-              <a href="#" className="font-medium text-primary-600 hover:text-primary-500 transition-colors">
-                Esqueceu sua senha?
-              </a>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={clsx(
-                'group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white transition-colors',
-                'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500',
-                isLoading && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {isLoading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                Entrando...
+              </div>
+            ) : (
+              'Entrar'
+            )}
+          </button>
         </form>
       </div>
     </div>

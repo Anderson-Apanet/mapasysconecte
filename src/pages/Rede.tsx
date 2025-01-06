@@ -37,6 +37,15 @@ interface ConsumptionData {
   download_gb: number;
 }
 
+interface ConcentratorStats {
+  nasname: string;
+  shortname: string;
+  type: string;
+  ports: number;
+  description: string;
+  user_count: number;
+}
+
 export default function Rede() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +60,7 @@ export default function Rede() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down'>('all');
   const [nasIpFilter, setNasIpFilter] = useState<string>('all');
   const [allNasIps, setAllNasIps] = useState<string[]>([]);
-  const [concentratorStats, setConcentratorStats] = useState<{[key: string]: number}>({});
+  const [concentrators, setConcentrators] = useState<ConcentratorStats[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [consumptionData, setConsumptionData] = useState<ConsumptionData[]>([]);
   const [connectionHistory, setConnectionHistory] = useState<Connection[]>([]);
@@ -65,16 +74,12 @@ export default function Rede() {
         throw new Error('Failed to fetch concentrator stats');
       }
       const data = await response.json();
-      console.log('Raw concentrator stats:', data); // Debug log
+      console.log('Dados dos concentradores:', data);
+      setConcentrators(data);
       
-      const stats: {[key: string]: number} = {};
-      data.forEach((item: { nasipaddress: string; user_count: number }) => {
-        console.log('Processing concentrator:', item); // Debug log
-        stats[item.nasipaddress] = parseInt(item.user_count);
-      });
-      
-      console.log('Processed concentrator stats:', stats); // Debug log
-      setConcentratorStats(stats);
+      // Atualiza a lista de IPs dos concentradores para o filtro
+      const ips = data.map((concentrator: ConcentratorStats) => concentrator.nasname);
+      setAllNasIps(ips);
     } catch (err) {
       console.error('Error fetching concentrator stats:', err);
     }
@@ -297,26 +302,36 @@ export default function Rede() {
             </p>
           </div>
 
-          {/* Concentrator Stats Cards */}
+          {/* Cards dos Concentradores */}
           <div className="mb-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {allNasIps.map((nasip) => (
+              {concentrators.map((concentrator) => (
                 <div
-                  key={nasip}
+                  key={concentrator.nasname}
                   className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-100 dark:border-gray-700"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Concentrador</h3>
-                      <p className="text-gray-600 dark:text-gray-300">{nasip}</p>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {concentrator.shortname || 'Concentrador'}
+                      </h3>
+                      <p className="text-gray-600 dark:text-gray-300">{concentrator.nasname}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {concentrator.description || 'Sem descrição'}
+                      </p>
                       <p className="mt-2">
                         <span className="font-bold text-gray-900 dark:text-white text-xl">
-                          {concentratorStats[nasip] || 0}
+                          {concentrator.user_count}
                         </span>{' '}
                         <span className="text-gray-600 dark:text-gray-300">
                           usuários
                         </span>
                       </p>
+                      {concentrator.ports && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          Portas: {concentrator.ports}
+                        </p>
+                      )}
                     </div>
                     <div className="text-blue-600 dark:text-blue-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -392,7 +407,7 @@ export default function Rede() {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <>
+            <div>
               <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -472,7 +487,7 @@ export default function Rede() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
           {showModal && selectedUser && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
