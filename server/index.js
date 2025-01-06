@@ -7,13 +7,33 @@ const mysql = require('mysql2/promise');
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Configuração básica do CORS
-app.use(cors({
-  origin: ['http://localhost:5173', 'https://mapasys.onrender.com'],
+// Configuração do CORS
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Em desenvolvimento, permitir localhost
+    if (process.env.NODE_ENV === 'development') {
+      callback(null, true);
+      return;
+    }
+    
+    // Em produção, permitir apenas origens específicas
+    const allowedOrigins = [
+      'https://mapasys.onrender.com',
+      'https://mapasys-api.onrender.com'
+    ];
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
