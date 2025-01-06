@@ -8,7 +8,12 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Configuração básica do CORS
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://mapasys.onrender.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 app.use(express.json());
 

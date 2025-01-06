@@ -7,7 +7,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: 'custom-csp',
+        transformIndexHtml(html) {
+          return html.replace(
+            /<head>/,
+            `<head>
+              <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://localhost:* https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com https://*.onrender.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; frame-src 'self' https://*.supabase.co;">`
+          )
+        }
+      }
+    ],
     define: {
       'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || mode),
       'process.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || ''),
