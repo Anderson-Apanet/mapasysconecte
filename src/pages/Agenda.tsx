@@ -12,6 +12,8 @@ import 'react-tooltip/dist/react-tooltip.css';
 import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
 interface AgendaEvent {
   id: number;
   nome: string;
@@ -202,8 +204,8 @@ export default function Agenda() {
       };
 
       const url = selectedEvent 
-        ? `http://localhost:3001/api/agenda/${selectedEvent.id}`
-        : 'http://localhost:3001/api/agenda';
+      ? `${API_BASE_URL}/api/agenda/${selectedEvent.id}`
+      : `${API_BASE_URL}/api/agenda`;
       
       const method = selectedEvent ? 'PUT' : 'POST';
 
