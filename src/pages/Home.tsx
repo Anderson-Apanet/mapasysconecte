@@ -12,6 +12,7 @@ import {
   BanknotesIcon
 } from '@heroicons/react/24/solid';
 import Layout from '../components/Layout';
+import { ROUTES } from '../constants/routes';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -21,59 +22,59 @@ const Home: React.FC = () => {
       title: 'Dashboard',
       icon: ChartBarIcon,
       description: 'Visualize métricas e indicadores importantes',
-      path: '/dashboard',
+      path: ROUTES.DASHBOARD,
       color: 'from-blue-400 to-blue-600'
     },
     {
       title: 'Clientes',
       icon: UsersIcon,
       description: 'Gerencie seus clientes e contratos',
-      path: '/clientes',
+      path: ROUTES.CLIENTES,
       color: 'from-green-400 to-green-600'
     },
     {
       title: 'Financeiro',
       icon: CurrencyDollarIcon,
       description: 'Controle financeiro e faturamento',
-      path: '/financeiro',
+      path: ROUTES.FINANCEIRO,
       color: 'from-yellow-400 to-yellow-600'
     },
     {
       title: 'Planos',
       icon: DocumentTextIcon,
       description: 'Configure e gerencie planos',
-      path: '/planos',
+      path: ROUTES.PLANOS,
       color: 'from-purple-400 to-purple-600'
     },
     {
       title: 'Agenda',
       icon: CalendarIcon,
       description: 'Organize instalações e visitas',
-      path: '/agenda',
+      path: ROUTES.AGENDA,
       color: 'from-indigo-400 to-indigo-600'
     },
     {
       title: 'Suporte Técnico',
       icon: WrenchScrewdriverIcon,
       description: 'Monitore e configure sua rede',
-      path: '/suporte',
+      path: ROUTES.REDE,
       color: 'from-teal-400 to-teal-600'
     },
     {
       title: 'Caixa',
       icon: BanknotesIcon,
       description: 'Lançamentos diários de receitas e despesas',
-      path: '/caixa',
+      path: ROUTES.CAIXA,
       color: 'from-emerald-400 to-emerald-600'
     },
     {
       title: 'ADM',
       icon: Cog8ToothIcon,
       description: 'Configurações administrativas',
-      path: '/adm',
+      path: ROUTES.ADM,
       color: 'from-gray-400 to-gray-600'
     }
-  ];
+  ] as const;
 
   return (
     <Layout>

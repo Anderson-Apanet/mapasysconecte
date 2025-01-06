@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import Suporte from './pages/Suporte';
 import { ADM } from './pages/ADM';
 import Caixa from './pages/Caixa';
+import Tecnicos from './pages/Tecnicos';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -61,7 +62,7 @@ function App() {
           } />
           <Route path="/suporte" element={
             <PrivateRoute>
-              <Rede />
+              <Suporte />
             </PrivateRoute>
           } />
           <Route path="/adm" element={
@@ -72,6 +73,11 @@ function App() {
           <Route path="/caixa" element={
             <PrivateRoute>
               <Caixa />
+            </PrivateRoute>
+          } />
+          <Route path="/tecnicos" element={
+            <PrivateRoute>
+              <Tecnicos />
             </PrivateRoute>
           } />
 

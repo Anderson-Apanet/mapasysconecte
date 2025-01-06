@@ -15,14 +15,33 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+
+      // Buscar o tipo de usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          id_user_tipo,
+          user_tipo (tipo)
+        `)
+        .eq('id_user', authData.session?.user.id)
+        .single();
+
+      if (userError) throw userError;
+
       toast.success('Login realizado com sucesso!');
-      navigate('/');
+
+      // Se for técnico externo, redireciona para /tecnicos
+      if (userData?.user_tipo?.tipo === 'Técnico Externo') {
+        navigate('/tecnicos');
+      } else {
+        navigate('/');
+      }
     } catch (error: any) {
       toast.error(error.error_description || error.message || 'Erro ao fazer login');
     } finally {
