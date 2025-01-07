@@ -2,12 +2,148 @@ import express from 'express';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import axios from 'axios';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Configuração da API do Asaas
+const ASAAS_API_KEY = process.env.ASAAS_API_KEY || '';
+const ASAAS_API_URL = 'https://api.asaas.com/v3';
+
+if (!ASAAS_API_KEY) {
+  console.error('Erro: Token da API do Asaas não configurado!');
+  process.exit(1);
+}
+
+console.log('Configurando API do Asaas:');
+console.log('URL:', ASAAS_API_URL);
+console.log('Token:', ASAAS_API_KEY);
+
+// Middleware para logging de requisições
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Rota de teste do Asaas
+app.get('/api/asaas/test', async (req, res) => {
+  console.log('Rota de teste do Asaas chamada');
+  try {
+    console.log('Testando conexão com a API do Asaas...');
+    
+    // Headers exatamente como no curl
+    const headers = {
+      'Content-Type': 'application/json',
+      'access_token': ASAAS_API_KEY
+    };
+    
+    console.log('Headers:', {
+      ...headers,
+      'access_token': ASAAS_API_KEY.substring(0, 10) + '...' // Ocultando o token completo no log
+    });
+    
+    // Testando com uma requisição GET para listar clientes
+    const response = await axios.get(`${ASAAS_API_URL}/customers`, { headers });
+    
+    console.log('Teste bem-sucedido!');
+    console.log('Status:', response.status);
+    console.log('Headers da resposta:', response.headers);
+    console.log('Dados:', response.data);
+    
+    res.json({
+      success: true,
+      message: 'Conexão com a API do Asaas estabelecida com sucesso',
+      data: response.data
+    });
+  } catch (error: any) {
+    console.error('Erro no teste:');
+    console.error('Status:', error.response?.status);
+    console.error('Dados:', error.response?.data);
+    console.error('Headers:', error.response?.headers);
+    console.error('URL:', error.config?.url);
+    console.error('Método:', error.config?.method);
+    console.error('Headers da requisição:', error.config?.headers);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao conectar com a API do Asaas',
+      error: error.response?.data || error.message,
+      details: {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.config?.headers
+      }
+    });
+  }
+});
+
+// Buscar cliente por CPF/CNPJ
+app.get('/api/asaas/customers', async (req, res) => {
+  console.log('Rota de busca de clientes chamada');
+  try {
+    const { cpfCnpj } = req.query;
+    if (!cpfCnpj) {
+      return res.status(400).json({ error: 'CPF/CNPJ não fornecido' });
+    }
+
+    console.log('Buscando cliente com CPF/CNPJ:', cpfCnpj);
+    
+    const url = `/customers?cpfCnpj=${cpfCnpj}`;
+    console.log('URL da requisição:', ASAAS_API_URL + url);
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'access_token': ASAAS_API_KEY
+    };
+    
+    const response = await axios.get(ASAAS_API_URL + url, { headers });
+    
+    console.log('Resposta da API Asaas:', response.data);
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Erro ao buscar cliente no Asaas:');
+    console.error('Status:', error.response?.status);
+    console.error('Dados:', error.response?.data);
+    console.error('Headers:', error.response?.headers);
+    console.error('URL:', error.config?.url);
+    console.error('Método:', error.config?.method);
+    
+    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+  }
+});
+
+// Buscar pagamentos de um cliente
+app.get('/api/asaas/payments', async (req, res) => {
+  console.log('Rota de busca de pagamentos chamada');
+  try {
+    const { customer } = req.query;
+    if (!customer) {
+      return res.status(400).json({ error: 'ID do cliente não fornecido' });
+    }
+
+    console.log('Buscando pagamentos do cliente:', customer);
+    
+    const url = `/payments?customer=${customer}`;
+    console.log('URL da requisição:', ASAAS_API_URL + url);
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'access_token': ASAAS_API_KEY
+    };
+    
+    const response = await axios.get(ASAAS_API_URL + url, { headers });
+    
+    console.log('Resposta da API Asaas:', response.data);
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Erro ao buscar pagamentos no Asaas:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+  }
+});
 
 // Rota para buscar conexões com paginação e filtros
 app.get('/api/connections', async (req, res) => {

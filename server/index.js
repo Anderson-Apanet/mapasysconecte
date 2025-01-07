@@ -4,37 +4,19 @@ const cors = require('cors');
 const path = require('path');
 const mysql = require('mysql2/promise');
 
+console.log('Iniciando servidor...');
+
+// Importar rotas do Asaas
+const asaasRoutePath = path.join(__dirname, 'routes', 'asaas.js');
+console.log('Tentando importar rotas do Asaas de:', asaasRoutePath);
+const asaasRouter = require(asaasRoutePath);
+console.log('Rotas do Asaas importadas com sucesso');
+
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Configuração do CORS
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Em desenvolvimento, permitir localhost
-    if (process.env.NODE_ENV === 'development') {
-      callback(null, true);
-      return;
-    }
-    
-    // Em produção, permitir apenas origens específicas
-    const allowedOrigins = [
-      'https://mapasys.onrender.com',
-      'https://mapasys-api.onrender.com'
-    ];
-    
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-app.use(cors(corsOptions));
-
+// Configurar CORS
+app.use(cors());
 app.use(express.json());
 
 // Middleware para logging
@@ -42,6 +24,11 @@ app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
+
+// Registrar as rotas do Asaas
+console.log('Registrando rotas do Asaas em /api/asaas');
+app.use('/api/asaas', asaasRouter);
+console.log('Rotas do Asaas registradas');
 
 // Função para criar conexão com o MySQL
 const createConnection = async () => {

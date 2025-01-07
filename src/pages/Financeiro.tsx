@@ -28,7 +28,7 @@ import { Transition } from '@headlessui/react';
 
 const Financeiro: React.FC = () => {
   // Estados para contratos e títulos
-  const [contratos, setContratos] = useState<(Contrato & { cliente_nome?: string })[]>([]);
+  const [contratos, setContratos] = useState<(Contrato & { cliente_nome?: string, cliente_idasaas?: string | null })[]>([]);
   const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
   const [showTitulosModal, setShowTitulosModal] = useState(false);
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
@@ -146,19 +146,23 @@ const Financeiro: React.FC = () => {
 
         const { data: clientesData, error: clientesError } = await supabase
           .from('clientes')
-          .select('id, nome')
+          .select('id, nome, idasaas')
           .in('id', clienteIds);
 
         if (clientesError) throw clientesError;
 
         const clientesMap = (clientesData || []).reduce((acc, cliente) => {
-          acc[cliente.id] = cliente.nome;
+          acc[cliente.id] = {
+            nome: cliente.nome,
+            idasaas: cliente.idasaas
+          };
           return acc;
-        }, {} as { [key: number]: string });
+        }, {} as { [key: number]: { nome: string, idasaas: string | null } });
 
         const contratosFormatados = contratosData.map(contrato => ({
           ...contrato,
-          cliente_nome: clientesMap[contrato.id_cliente] || 'Cliente não encontrado'
+          cliente_nome: clientesMap[contrato.id_cliente]?.nome || 'Cliente não encontrado',
+          cliente_idasaas: clientesMap[contrato.id_cliente]?.idasaas
         }));
 
         setContratos(contratosFormatados);
@@ -202,9 +206,11 @@ const Financeiro: React.FC = () => {
   // Cálculo do total de páginas
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-  // Função para abrir modal de títulos
-  const handleOpenTitulosModal = (pppoe: string) => {
-    setSelectedPPPoE(pppoe);
+  // Handler para abrir o modal de títulos
+  const handleOpenTitulosModal = (contrato: any) => {
+    console.log('Abrindo modal com contrato:', contrato);
+    setSelectedContrato(contrato);
+    setSelectedPPPoE(contrato.pppoe || '');
     setShowTitulosModal(true);
   };
 
@@ -569,19 +575,19 @@ const Financeiro: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Cliente
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         PPPoE
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Cliente
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Plano
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Asaas ID
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Ações
                       </th>
                     </tr>
@@ -589,34 +595,33 @@ const Financeiro: React.FC = () => {
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {contratos.map((contrato) => (
                       <tr key={contrato.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {contrato.cliente_nome}
-                          </div>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                          {contrato.pppoe}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                          {contrato.cliente_nome}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {contrato.pppoe || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            contrato.status === 'ativos' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' 
-                              : contrato.status === 'pendencia' 
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' 
-                                : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                          }`}>
-                            {CONTRACT_STATUS_OPTIONS.find(status => status.value === contrato.status)?.label || contrato.status}
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${contrato.status === 'Ativo' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
+                            contrato.status === 'Bloqueado' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
+                            contrato.status === 'Agendado' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}>
+                            {contrato.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {contrato.plano || '-'}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${contrato.cliente_idasaas ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' : 
+                            'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'}`}>
+                            {contrato.cliente_idasaas ? 'Integrado' : 'Não Integrado'}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
-                            onClick={() => handleOpenTitulosModal(contrato.pppoe)}
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 mr-4"
+                            onClick={() => handleOpenTitulosModal(contrato)}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            title="Ver Títulos"
                           >
                             <DocumentTextIcon className="h-5 w-5" />
                           </button>
@@ -655,8 +660,14 @@ const Financeiro: React.FC = () => {
             {showTitulosModal && (
               <TitulosContratosModal
                 isOpen={showTitulosModal}
-                onClose={() => setShowTitulosModal(false)}
+                onClose={() => {
+                  console.log('Fechando modal');
+                  setShowTitulosModal(false);
+                  setSelectedContrato(null);
+                  setSelectedPPPoE('');
+                }}
                 pppoe={selectedPPPoE}
+                contrato={selectedContrato}
               />
             )}
           </div>
