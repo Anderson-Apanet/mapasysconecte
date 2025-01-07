@@ -13,12 +13,13 @@ import Suporte from './pages/Suporte';
 import { ADM } from './pages/ADM';
 import Caixa from './pages/Caixa';
 import Tecnicos from './pages/Tecnicos';
+import Estoque from './pages/Estoque';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-[#1092E8]">
+      <div className="min-h-screen">
         <Toaster position="top-right" />
         <Routes>
           {/* Rota pública */}
@@ -80,9 +81,14 @@ function App() {
               <Tecnicos />
             </PrivateRoute>
           } />
+          <Route path="/estoque" element={
+            <PrivateRoute>
+              <Estoque />
+            </PrivateRoute>
+          } />
 
-          {/* Redireciona qualquer rota não encontrada para a home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Redirecionar qualquer rota não encontrada para a home ou login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </div>
     </Router>

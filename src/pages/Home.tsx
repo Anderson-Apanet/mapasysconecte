@@ -9,7 +9,8 @@ import {
   CalendarIcon,
   WrenchScrewdriverIcon,
   Cog8ToothIcon,
-  BanknotesIcon
+  BanknotesIcon,
+  ArchiveBoxIcon
 } from '@heroicons/react/24/solid';
 import Layout from '../components/Layout';
 import { ROUTES } from '../constants/routes';
@@ -73,12 +74,19 @@ const Home: React.FC = () => {
       description: 'Configurações administrativas',
       path: ROUTES.ADM,
       color: 'from-gray-400 to-gray-600'
+    },
+    {
+      title: 'Estoque',
+      icon: ArchiveBoxIcon,
+      description: 'Gerencie seu estoque e produtos',
+      path: ROUTES.ESTOQUE,
+      color: 'from-orange-400 to-orange-600'
     }
   ] as const;
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1E4620] p-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center">
             <div className="mb-8">

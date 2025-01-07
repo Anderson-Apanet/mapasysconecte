@@ -9,7 +9,8 @@ export const ROUTES = {
   REDE: '/rede',
   CAIXA: '/caixa',
   ADM: '/adm',
-  TECNICOS: '/tecnicos'
+  TECNICOS: '/tecnicos',
+  ESTOQUE: '/estoque'
 } as const;
 
 export type RouteKeys = keyof typeof ROUTES;
