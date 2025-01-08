@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
 import { PlusIcon, PencilIcon, TrashIcon, TagIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface Material {
   id: number;
@@ -23,6 +24,7 @@ interface ModeloMaterial {
 }
 
 const Estoque: React.FC = () => {
+  const navigate = useNavigate();
   const [materiais, setMateriais] = useState<Material[]>([]);
   const [modelos, setModelos] = useState<ModeloMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,18 @@ const Estoque: React.FC = () => {
     marca: ''
   });
 
+  // Verificar autenticação
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        navigate('/login');
+        return;
+      }
+    };
+    checkAuth();
+  }, [navigate]);
+
   // Buscar materiais e modelos
   const fetchMateriais = async () => {
     try {
@@ -52,7 +66,16 @@ const Estoque: React.FC = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42P01') {
+          console.error('Tabela não encontrada:', error);
+          toast.error('Erro ao carregar materiais: Tabela não encontrada');
+        } else {
+          console.error('Erro ao buscar materiais:', error);
+          toast.error('Erro ao carregar materiais');
+        }
+        return;
+      }
       setMateriais(data || []);
     } catch (error) {
       console.error('Erro ao buscar materiais:', error);
@@ -69,7 +92,16 @@ const Estoque: React.FC = () => {
         .select('*')
         .order('nome');
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42P01') {
+          console.error('Tabela não encontrada:', error);
+          toast.error('Erro ao carregar modelos: Tabela não encontrada');
+        } else {
+          console.error('Erro ao buscar modelos:', error);
+          toast.error('Erro ao carregar modelos');
+        }
+        return;
+      }
       setModelos(data || []);
     } catch (error) {
       console.error('Erro ao buscar modelos:', error);
