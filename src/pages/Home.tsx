@@ -1,5 +1,23 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { 
   ChartBarIcon, 
   UsersIcon,
@@ -14,11 +32,118 @@ import {
 } from '@heroicons/react/24/solid';
 import Layout from '../components/Layout';
 import { ROUTES } from '../constants/routes';
+import { useCardOrder, MenuItem } from '../hooks/useCardOrder';
+
+interface SortableCardProps {
+  card: MenuItem;
+  onClick: () => void;
+}
+
+interface IconComponentProps {
+  icon: any;
+}
+
+const IconComponent: React.FC<IconComponentProps> = ({ icon }) => {
+  const iconClass = "h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white";
+  
+  switch (icon) {
+    case ChartBarIcon:
+      return <ChartBarIcon className={iconClass} />;
+    case UsersIcon:
+      return <UsersIcon className={iconClass} />;
+    case CurrencyDollarIcon:
+      return <CurrencyDollarIcon className={iconClass} />;
+    case DocumentTextIcon:
+      return <DocumentTextIcon className={iconClass} />;
+    case GlobeAltIcon:
+      return <GlobeAltIcon className={iconClass} />;
+    case CalendarIcon:
+      return <CalendarIcon className={iconClass} />;
+    case WrenchScrewdriverIcon:
+      return <WrenchScrewdriverIcon className={iconClass} />;
+    case Cog8ToothIcon:
+      return <Cog8ToothIcon className={iconClass} />;
+    case BanknotesIcon:
+      return <BanknotesIcon className={iconClass} />;
+    case ArchiveBoxIcon:
+      return <ArchiveBoxIcon className={iconClass} />;
+    default:
+      return null;
+  }
+};
+
+const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.title });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1 : 0,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className={`group
+        relative w-[260px] p-6 rounded-xl cursor-pointer
+        transition-all duration-300 transform hover:-translate-y-1
+        ${isDragging ? 'scale-105 z-50 opacity-50' : 'hover:scale-105'}
+        bg-white dark:bg-gray-800 backdrop-blur-lg
+        shadow-[5px_5px_15px_rgba(0,0,0,0.1),-5px_-5px_15px_rgba(255,255,255,0.8)]
+        dark:shadow-[5px_5px_15px_rgba(0,0,0,0.3),-5px_-5px_15px_rgba(255,255,255,0.05)]
+        hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.05),inset_-5px_-5px_15px_rgba(255,255,255,0.8)]
+        dark:hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.2),inset_-5px_-5px_15px_rgba(255,255,255,0.05)]
+        border border-gray-200 dark:border-gray-700
+      `}
+    >
+      {/* Barra colorida no topo */}
+      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} rounded-t-xl opacity-80`} />
+      
+      {/* Conteúdo do card */}
+      <div className="flex flex-col items-center text-center space-y-4">
+        <div className="relative">
+          <IconComponent icon={card.icon} />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white group-hover:text-gray-900 dark:group-hover:text-white">
+          {card.title}
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+          {card.description}
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8, // Precisa mover 8px para começar o drag
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100, // Espera 100ms antes de começar o drag no touch
+        tolerance: 5, // Tolerância de movimento durante o delay
+      },
+    })
+  );
 
-  const menuCards = [
+  const menuItems = [
     {
       title: 'Dashboard',
       icon: ChartBarIcon,
@@ -84,6 +209,28 @@ const Home: React.FC = () => {
     }
   ] as const;
 
+  const { cards, reorder } = useCardOrder(menuItems);
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const activeCard = activeId ? cards.find(card => card.title === activeId) : null;
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      reorder(active.id as string, over.id as string);
+    }
+
+    setActiveId(null);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+  };
+
   return (
     <Layout>
       <div className="min-h-screen bg-[#1E4620] p-6">
@@ -97,33 +244,39 @@ const Home: React.FC = () => {
               />
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-              {menuCards.map((card, index) => (
-                <button
-                  key={index}
-                  onClick={() => navigate(card.path)}
-                  className="group relative p-6 rounded-xl transition-all duration-300 w-[260px]
-                           bg-white dark:bg-gray-800 backdrop-blur-lg
-                           shadow-[5px_5px_15px_rgba(0,0,0,0.1),-5px_-5px_15px_rgba(255,255,255,0.8)]
-                           dark:shadow-[5px_5px_15px_rgba(0,0,0,0.3),-5px_-5px_15px_rgba(255,255,255,0.05)]
-                           hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.05),inset_-5px_-5px_15px_rgba(255,255,255,0.8)]
-                           dark:hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.2),inset_-5px_-5px_15px_rgba(255,255,255,0.05)]
-                           transform hover:-translate-y-1 hover:scale-105
-                           border border-gray-200 dark:border-gray-700"
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                <SortableContext 
+                  items={cards.map(card => card.title)}
+                  strategy={horizontalListSortingStrategy}
                 >
-                  <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} rounded-t-xl opacity-80`} />
-                  <div className="flex flex-col items-center text-center space-y-4">
-                    <card.icon className="h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white" />
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white group-hover:text-gray-900 dark:group-hover:text-white">
-                      {card.title}
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {card.description}
-                    </p>
+                  {cards.map((card) => (
+                    <SortableCard
+                      key={card.title}
+                      card={card}
+                      onClick={() => navigate(card.path)}
+                    />
+                  ))}
+                </SortableContext>
+              </div>
+
+              <DragOverlay>
+                {activeId && activeCard ? (
+                  <div className="opacity-50">
+                    <SortableCard
+                      card={activeCard}
+                      onClick={() => {}}
+                    />
                   </div>
-                </button>
-              ))}
-            </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </div>
       </div>

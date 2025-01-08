@@ -10,7 +10,7 @@ import Layout from '../components/Layout';
 import { EventModal } from '../components/Agenda/EventModal';
 import { MoreEventsPopover } from '../components/Agenda/MoreEventsPopover';
 import { AgendaEvent } from '../types/agenda';
-import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents } from '../services/agenda';
+import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates } from '../services/agenda';
 import { debounce } from '../utils/date';
 
 export default function Agenda() {
@@ -112,6 +112,26 @@ export default function Agenda() {
       toast.error('Erro ao buscar contratos');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleEventDrop = async (dropInfo: any) => {
+    try {
+      const eventId = parseInt(dropInfo.event.id);
+      const start = dropInfo.event.start.toISOString();
+      const end = dropInfo.event.end?.toISOString() || start;
+
+      await updateEventDates(eventId, start, end);
+      toast.success('Evento atualizado com sucesso!');
+      
+      // Atualizar a lista de eventos
+      const dateInfo = dropInfo.view.getCurrentData().dateProfile;
+      const updatedEvents = await fetchEvents(dateInfo.activeRange.start, dateInfo.activeRange.end);
+      setEvents(updatedEvents);
+    } catch (error) {
+      console.error('Erro ao atualizar evento:', error);
+      toast.error('Erro ao atualizar evento');
+      dropInfo.revert();
     }
   };
 
@@ -249,6 +269,7 @@ export default function Agenda() {
               }}
               select={handleDateSelect}
               eventClick={handleEventClick}
+              eventDrop={handleEventDrop}
               locale={ptBrLocale}
             />
           </div>

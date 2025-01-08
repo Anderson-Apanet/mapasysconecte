@@ -10,13 +10,13 @@ import Planos from './pages/Planos';
 import Rede from './pages/Rede';
 import Dashboard from './pages/Dashboard';
 import Suporte from './pages/Suporte';
-import { ADM } from './pages/ADM';
+import ADM from './pages/ADM';
 import Caixa from './pages/Caixa';
 import Tecnicos from './pages/Tecnicos';
 import Estoque from './pages/Estoque';
 import PrivateRoute from './components/PrivateRoute';
 
-function App() {
+const App: React.FC = () => {
   return (
     <Router>
       <div className="min-h-screen">
@@ -93,6 +93,6 @@ function App() {
       </div>
     </Router>
   );
-}
+};
 
 export default App;

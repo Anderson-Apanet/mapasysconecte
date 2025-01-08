@@ -81,6 +81,29 @@ export async function fetchUsers() {
   })) || [];
 }
 
+export async function updateEventDates(eventId: number, start: string, end: string) {
+  try {
+    const { data, error } = await supabase
+      .from('agenda')
+      .update({
+        datainicio: start,
+        datafinal: end,
+      })
+      .eq('id', eventId)
+      .select();
+
+    if (error) {
+      console.error('Erro ao atualizar datas do evento:', error);
+      throw error;
+    }
+
+    return data?.[0];
+  } catch (error) {
+    console.error('Erro ao atualizar evento:', error);
+    throw error;
+  }
+}
+
 export function transformEvents(events: AgendaEvent[]) {
   console.log('Transformando eventos - Total:', events.length);
   return events.map(event => {
