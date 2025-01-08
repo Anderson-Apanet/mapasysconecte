@@ -128,3 +128,23 @@ export const updateClienteAsaasId = async (clienteId: number, asaasId: string) =
     throw error;
   }
 };
+
+export async function getPaymentIdentificationField(paymentId: string): Promise<string> {
+  try {
+    const response = await api.get(`/payments/${paymentId}/identificationField`);
+    return response.data.identificationField;
+  } catch (error) {
+    console.error('Erro ao buscar linha digitável:', error);
+    throw error;
+  }
+}
+
+export async function getPaymentPixQrCode(paymentId: string): Promise<string> {
+  try {
+    const response = await api.get(`/payments/${paymentId}/pixQrCode`);
+    return response.data.encodedImage;
+  } catch (error) {
+    console.error('Erro ao buscar QR Code PIX:', error);
+    throw error;
+  }
+}

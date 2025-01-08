@@ -93,4 +93,25 @@ router.get('/payments/:customerId', async (req, res) => {
   }
 });
 
+// Buscar linha digitável
+router.get('/payments/:id/identificationField', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('Buscando linha digitável para pagamento:', id);
+    
+    const response = await asaasApi.get(`/payments/${id}/identificationField`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'access_token': ASAAS_API_KEY
+      }
+    });
+    
+    console.log('Resposta linha digitável:', response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Erro ao buscar linha digitável:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+  }
+});
+
 module.exports = router;
