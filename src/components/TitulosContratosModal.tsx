@@ -3,7 +3,7 @@ import { Dialog } from '@headlessui/react';
 import { supabase } from '../utils/supabaseClient';
 import { toast } from 'react-toastify';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { findCustomerByCpfCnpj, getCustomerPayments, AsaasPayment } from '../services/asaasApi';
+import { findCustomerByCpfCnpj, getCustomerPayments, AsaasPayment, createCustomer, CreateCustomerData } from '../services/asaasApi';
 
 interface TitulosContratosModalProps {
   isOpen: boolean;
@@ -34,7 +34,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({
       // Buscar dados do cliente no banco local
       const { data: cliente, error: clienteError } = await supabase
         .from('clientes')
-        .select('cpf_cnpj, nome, idasaas')
+        .select('*')
         .eq('id', contrato.id_cliente)
         .single();
 
@@ -44,26 +44,42 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({
         return;
       }
 
-      if (!cliente || !cliente.cpf_cnpj) {
-        toast.warning('O cliente não possui um CPF/CNPJ cadastrado');
-        return;
-      }
+      let asaasId = cliente?.idasaas;
+      let clienteAsaas;
 
-      let asaasId = cliente.idasaas;
-
-      // Se não tem ID do Asaas, tenta buscar pelo CPF/CNPJ
       if (!asaasId) {
         // Remover caracteres especiais do CPF/CNPJ
         const cpfCnpjLimpo = cliente.cpf_cnpj.replace(/[^\d]/g, '');
         console.log('CPF/CNPJ limpo:', cpfCnpjLimpo);
         
         // Buscar cliente no Asaas
-        const clienteAsaas = await findCustomerByCpfCnpj(cpfCnpjLimpo);
+        clienteAsaas = await findCustomerByCpfCnpj(cpfCnpjLimpo);
         
+        // Se o cliente não existe no Asaas, criar
         if (!clienteAsaas) {
-          toast.warning(`Cliente ${cliente.nome} não está cadastrado no Asaas`);
-          setAsaasTitulos([]);
-          return;
+          try {
+            const customerData: CreateCustomerData = {
+              name: cliente.nome,
+              cpfCnpj: cpfCnpjLimpo,
+              email: cliente.email || `${cpfCnpjLimpo}@email.com`,
+              phone: cliente.telefone || undefined,
+              mobilePhone: cliente.celular || undefined,
+              address: cliente.endereco || undefined,
+              addressNumber: cliente.numero || undefined,
+              complement: cliente.complemento || undefined,
+              province: cliente.bairro || undefined,
+              postalCode: cliente.cep ? cliente.cep.replace(/[^\d]/g, '') : undefined,
+              city: cliente.cidade || undefined,
+              state: cliente.estado || undefined
+            };
+
+            clienteAsaas = await createCustomer(customerData);
+            toast.success(`Cliente ${cliente.nome} criado no Asaas com sucesso!`);
+          } catch (error: any) {
+            console.error('Erro ao criar cliente no Asaas:', error);
+            toast.error('Erro ao criar cliente no Asaas: ' + error.message);
+            return;
+          }
         }
 
         // Salvar o ID do Asaas no banco local
@@ -79,13 +95,19 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({
           return;
         }
 
-        toast.success(`Cliente encontrado no Asaas: ${clienteAsaas.name}`);
+        toast.success(`Cliente vinculado ao Asaas: ${clienteAsaas.name}`);
       }
 
       // Buscar cobranças usando o ID do Asaas
       console.log('Buscando cobranças para o cliente Asaas:', asaasId);
       const pagamentos = await getCustomerPayments(asaasId);
-      setAsaasTitulos(pagamentos);
+      
+      // Ordenar pagamentos por data de vencimento (ascendente)
+      const pagamentosOrdenados = pagamentos.sort((a, b) => {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+      
+      setAsaasTitulos(pagamentosOrdenados);
       
     } catch (error: any) {
       console.error('Erro ao buscar títulos no Asaas:', error);

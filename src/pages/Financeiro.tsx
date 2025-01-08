@@ -34,6 +34,7 @@ const Financeiro: React.FC = () => {
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [contractStatusFilter, setContractStatusFilter] = useState('');
+  const [showAsaasOnly, setShowAsaasOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -97,7 +98,7 @@ const Financeiro: React.FC = () => {
       // Primeiro, buscar o total de registros para paginação
       let countQuery = supabase
         .from('contratos')
-        .select('*', { count: 'exact', head: true });
+        .select('*, clientes!inner(idasaas)', { count: 'exact', head: true });
 
       // Aplicar filtros na query de contagem
       if (searchTerm) {
@@ -107,6 +108,9 @@ const Financeiro: React.FC = () => {
         countQuery = countQuery.eq('pendencia', true);
       } else if (status) {
         countQuery = countQuery.eq('status', status);
+      }
+      if (showAsaasOnly) {
+        countQuery = countQuery.not('clientes.idasaas', 'is', null);
       }
 
       const { count, error: countError } = await countQuery;
@@ -118,7 +122,7 @@ const Financeiro: React.FC = () => {
       // Agora, buscar os registros da página atual
       let dataQuery = supabase
         .from('contratos')
-        .select('*')
+        .select('*, clientes!inner(id, nome, idasaas)')
         .order('created_at', { ascending: false });
 
       // Aplicar os mesmos filtros na query de dados
@@ -130,6 +134,9 @@ const Financeiro: React.FC = () => {
       } else if (status) {
         dataQuery = dataQuery.eq('status', status);
       }
+      if (showAsaasOnly) {
+        dataQuery = dataQuery.not('clientes.idasaas', 'is', null);
+      }
 
       // Adicionar paginação
       const from = (page - 1) * itemsPerPage;
@@ -140,29 +147,11 @@ const Financeiro: React.FC = () => {
 
       if (contratosError) throw contratosError;
 
-      // Se temos contratos, buscar os nomes dos clientes
-      if (contratosData && contratosData.length > 0) {
-        const clienteIds = [...new Set(contratosData.map(c => c.id_cliente))].filter(Boolean);
-
-        const { data: clientesData, error: clientesError } = await supabase
-          .from('clientes')
-          .select('id, nome, idasaas')
-          .in('id', clienteIds);
-
-        if (clientesError) throw clientesError;
-
-        const clientesMap = (clientesData || []).reduce((acc, cliente) => {
-          acc[cliente.id] = {
-            nome: cliente.nome,
-            idasaas: cliente.idasaas
-          };
-          return acc;
-        }, {} as { [key: number]: { nome: string, idasaas: string | null } });
-
+      if (contratosData) {
         const contratosFormatados = contratosData.map(contrato => ({
           ...contrato,
-          cliente_nome: clientesMap[contrato.id_cliente]?.nome || 'Cliente não encontrado',
-          cliente_idasaas: clientesMap[contrato.id_cliente]?.idasaas
+          cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
+          cliente_idasaas: contrato.clientes?.idasaas
         }));
 
         setContratos(contratosFormatados);
@@ -177,10 +166,10 @@ const Financeiro: React.FC = () => {
     }
   };
 
-  // Efeito para carregar os contratos quando a página, termo de busca ou status mudar
+  // Efeito para carregar os contratos quando a página, termo de busca, status ou filtro Asaas mudar
   useEffect(() => {
     fetchContratos(currentPage, searchTerm, contractStatusFilter);
-  }, [currentPage, searchTerm, contractStatusFilter]);
+  }, [currentPage, searchTerm, contractStatusFilter, showAsaasOnly]);
 
   // Handler para mudança no termo de busca
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -561,6 +550,20 @@ const Financeiro: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Filtro de Asaas */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="asaasFilter"
+                      checked={showAsaasOnly}
+                      onChange={(e) => setShowAsaasOnly(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="asaasFilter" className="ml-2 text-sm text-gray-700">
+                      Apenas clientes Asaas
+                    </label>
                   </div>
 
                   {/* Contador de Resultados */}

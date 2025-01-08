@@ -13,6 +13,15 @@ export interface AsaasCustomer {
   name: string;
   cpfCnpj: string;
   email: string;
+  phone?: string;
+  mobilePhone?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  province?: string;
+  postalCode?: string;
+  city?: string;
+  state?: string;
 }
 
 export interface AsaasPayment {
@@ -26,6 +35,21 @@ export interface AsaasPayment {
   dueDate: string;
   originalValue: number;
   description?: string;
+}
+
+export interface CreateCustomerData {
+  name: string;
+  cpfCnpj: string;
+  email: string;
+  phone?: string;
+  mobilePhone?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  province?: string;
+  postalCode?: string;
+  city?: string;
+  state?: string;
 }
 
 export const findCustomerByCpfCnpj = async (cpfCnpj: string): Promise<AsaasCustomer | null> => {
@@ -66,14 +90,25 @@ export const getCustomerById = async (customerId: string): Promise<AsaasCustomer
   }
 };
 
-export const getCustomerPayments = async (customerId: string): Promise<AsaasPayment[]> => {
+export async function getCustomerPayments(customerId: string): Promise<AsaasPayment[]> {
   try {
-    const response = await api.get('/payments', {
-      params: { customer: customerId }
-    });
+    const response = await api.get(`/payments/${customerId}`);
     return response.data.data || [];
+  } catch (error) {
+    console.error('Erro ao buscar pagamentos:', error);
+    throw error;
+  }
+};
+
+export const createCustomer = async (customerData: CreateCustomerData): Promise<AsaasCustomer> => {
+  try {
+    console.log('Enviando dados para criar cliente:', customerData);
+    const response = await api.post('/customers', customerData);
+    console.log('Resposta da criação do cliente:', response.data);
+    return response.data;
   } catch (error: any) {
-    console.error('Erro ao buscar pagamentos do cliente no Asaas:', error);
+    console.error('Erro ao criar cliente no Asaas:', error);
+    console.error('Resposta:', error.response?.data);
     throw error;
   }
 };
