@@ -31,6 +31,15 @@ const Estoque: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modeloModalOpen, setModeloModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
+  const [filters, setFilters] = useState({
+    nome: '',
+    tipo: '',
+    modelo: '',
+    etiqueta: ''
+  });
   const [formData, setFormData] = useState({
     nome: '',
     tipo: '',
@@ -58,13 +67,42 @@ const Estoque: React.FC = () => {
   // Buscar materiais e modelos
   const fetchMateriais = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('materiais')
         .select(`
           *,
           modelo:modelo_materiais(id, nome, marca)
         `)
         .order('created_at', { ascending: false });
+
+      // Aplicar filtros
+      if (filters.nome) {
+        query = query.ilike('nome', `%${filters.nome}%`);
+      }
+      if (filters.tipo) {
+        query = query.ilike('tipo', `%${filters.tipo}%`);
+      }
+      if (filters.etiqueta) {
+        query = query.ilike('etiqueta', `%${filters.etiqueta}%`);
+      }
+      if (filters.modelo) {
+        query = query.eq('id_modelo', filters.modelo);
+      }
+
+      // Aplicar paginação
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      
+      // Primeiro, pegar o total de registros
+      const { count } = await supabase
+        .from('materiais')
+        .select('*', { count: 'exact', head: true });
+      
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+
+      // Depois, pegar os registros da página atual
+      const { data, error } = await query
+        .range(from, to);
 
       if (error) {
         if (error.code === '42P01') {
@@ -112,7 +150,17 @@ const Estoque: React.FC = () => {
   useEffect(() => {
     fetchMateriais();
     fetchModelos();
-  }, []);
+  }, [currentPage, filters]);
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+    setCurrentPage(1); // Resetar para primeira página ao filtrar
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   // Funções do CRUD
   const handleSubmit = async (e: React.FormEvent) => {
@@ -212,31 +260,86 @@ const Estoque: React.FC = () => {
 
   return (
     <Layout>
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-semibold text-gray-800 dark:text-white">
-              Gestão de Estoque
-            </h1>
-            <div className="flex space-x-4">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col space-y-6">
+          {/* Título */}
+          <h1 className="text-3xl font-bold text-white">Gestão de Estoque</h1>
+
+          {/* Card de Ações */}
+          <div className="bg-white shadow rounded-lg p-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={() => setModeloModalOpen(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <PlusIcon className="h-5 w-5 mr-2" />
                 Novo Modelo
               </button>
               <button
                 onClick={() => {
-                  resetForm();
                   setEditingMaterial(null);
+                  resetForm();
                   setModalOpen(true);
                 }}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <PlusIcon className="h-5 w-5 mr-2" />
                 Novo Material
               </button>
+            </div>
+          </div>
+
+          {/* Card de Filtros */}
+          <div className="bg-white shadow rounded-lg p-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label htmlFor="nome" className="block text-sm font-medium text-gray-700">Nome</label>
+                <input
+                  type="text"
+                  name="nome"
+                  id="nome"
+                  value={filters.nome}
+                  onChange={handleFilterChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">Tipo</label>
+                <input
+                  type="text"
+                  name="tipo"
+                  id="tipo"
+                  value={filters.tipo}
+                  onChange={handleFilterChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="modelo" className="block text-sm font-medium text-gray-700">Modelo</label>
+                <select
+                  name="modelo"
+                  id="modelo"
+                  value={filters.modelo}
+                  onChange={handleFilterChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="">Todos</option>
+                  {modelos.map((modelo) => (
+                    <option key={modelo.id} value={modelo.id}>{modelo.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="etiqueta" className="block text-sm font-medium text-gray-700">Etiqueta</label>
+                <input
+                  type="text"
+                  name="etiqueta"
+                  id="etiqueta"
+                  value={filters.etiqueta}
+                  onChange={handleFilterChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
             </div>
           </div>
 
@@ -300,6 +403,39 @@ const Estoque: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Paginação */}
+          <div className="mt-4 flex justify-center">
+            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              {[...Array(totalPages)].map((_, i) => (
+                <button
+                  key={i + 1}
+                  onClick={() => handlePageChange(i + 1)}
+                  className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                    currentPage === i + 1
+                      ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
+                      : 'text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Próxima
+              </button>
+            </nav>
           </div>
 
           {/* Modal de Cadastro/Edição de Material */}
