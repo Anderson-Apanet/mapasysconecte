@@ -40,36 +40,11 @@ interface SortableCardProps {
 }
 
 interface IconComponentProps {
-  icon: any;
+  icon: React.ForwardRefExoticComponent<any>;
 }
 
-const IconComponent: React.FC<IconComponentProps> = ({ icon }) => {
-  const iconClass = "h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white";
-  
-  switch (icon) {
-    case ChartBarIcon:
-      return <ChartBarIcon className={iconClass} />;
-    case UsersIcon:
-      return <UsersIcon className={iconClass} />;
-    case CurrencyDollarIcon:
-      return <CurrencyDollarIcon className={iconClass} />;
-    case DocumentTextIcon:
-      return <DocumentTextIcon className={iconClass} />;
-    case GlobeAltIcon:
-      return <GlobeAltIcon className={iconClass} />;
-    case CalendarIcon:
-      return <CalendarIcon className={iconClass} />;
-    case WrenchScrewdriverIcon:
-      return <WrenchScrewdriverIcon className={iconClass} />;
-    case Cog8ToothIcon:
-      return <Cog8ToothIcon className={iconClass} />;
-    case BanknotesIcon:
-      return <BanknotesIcon className={iconClass} />;
-    case ArchiveBoxIcon:
-      return <ArchiveBoxIcon className={iconClass} />;
-    default:
-      return null;
-  }
+const IconComponent: React.FC<IconComponentProps> = ({ icon: Icon }) => {
+  return <Icon className="h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white" />;
 };
 
 const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
@@ -104,22 +79,15 @@ const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
         dark:shadow-[5px_5px_15px_rgba(0,0,0,0.3),-5px_-5px_15px_rgba(255,255,255,0.05)]
         hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.05),inset_-5px_-5px_15px_rgba(255,255,255,0.8)]
         dark:hover:shadow-[inset_5px_5px_15px_rgba(0,0,0,0.2),inset_-5px_-5px_15px_rgba(255,255,255,0.05)]
-        border border-gray-200 dark:border-gray-700
-      `}
+        border border-gray-200 dark:border-gray-700`}
     >
-      {/* Barra colorida no topo */}
       <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} rounded-t-xl opacity-80`} />
-      
-      {/* Conteúdo do card */}
       <div className="flex flex-col items-center text-center space-y-4">
-        <div className="relative">
-          <IconComponent icon={card.icon} />
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
-        </div>
+        <IconComponent icon={card.icon} />
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white group-hover:text-gray-900 dark:group-hover:text-white">
           {card.title}
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           {card.description}
         </p>
       </div>
@@ -132,13 +100,13 @@ const Home: React.FC = () => {
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 8, // Precisa mover 8px para começar o drag
+        distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 100, // Espera 100ms antes de começar o drag no touch
-        tolerance: 5, // Tolerância de movimento durante o delay
+        delay: 100,
+        tolerance: 5,
       },
     })
   );
@@ -201,11 +169,18 @@ const Home: React.FC = () => {
       color: 'from-gray-400 to-gray-600'
     },
     {
+      title: 'Técnicos',
+      icon: WrenchScrewdriverIcon,
+      description: 'Gerenciar técnicos',
+      path: ROUTES.TECNICOS,
+      color: 'from-orange-400 to-orange-600'
+    },
+    {
       title: 'Estoque',
       icon: ArchiveBoxIcon,
-      description: 'Gerencie seu estoque e produtos',
+      description: 'Controle de estoque',
       path: ROUTES.ESTOQUE,
-      color: 'from-orange-400 to-orange-600'
+      color: 'from-red-400 to-red-600'
     }
   ] as const;
 

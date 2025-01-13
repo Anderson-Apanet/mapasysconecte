@@ -10,7 +10,8 @@ export const ROUTES = {
   CAIXA: '/caixa',
   ADM: '/adm',
   TECNICOS: '/tecnicos',
-  ESTOQUE: '/estoque'
+  ESTOQUE: '/estoque',
+  ADM_BAIRROS: '/adm/bairros'
 } as const;
 
 export type RouteKeys = keyof typeof ROUTES;

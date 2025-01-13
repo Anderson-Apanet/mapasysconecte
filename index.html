@@ -9,5 +9,11 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Desabilita o ping do HMR em produção
+      if (window.location.hostname !== 'localhost') {
+        window.__vite_ping = () => {};
+      }
+    </script>
   </body>
 </html>

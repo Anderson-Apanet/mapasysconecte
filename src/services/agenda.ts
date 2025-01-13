@@ -1,25 +1,41 @@
 import { supabase } from '../utils/supabaseClient';
 import { AgendaEvent } from '../types/agenda';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-
-export async function fetchEvents(start: Date, end: Date) {
+export async function fetchEvents(start?: Date | number | string, end?: Date | number | string) {
   try {
-    console.log('Buscando eventos para o período:', { start, end });
-    
-    const { data, error } = await supabase
-      .from('agenda')
-      .select('*')
-      .gte('datainicio', start.toISOString())
-      .lte('datafinal', end.toISOString())
-      .order('datainicio', { ascending: true });
+    let query = supabase.from('agenda').select('*');
+
+    // Se for um ID, busca apenas o evento específico
+    if (typeof start === 'number') {
+      console.log('Buscando evento por ID:', start);
+      const { data, error } = await query.eq('id', start).single();
+      
+      if (error) {
+        console.error('Erro ao buscar evento por ID:', error);
+        throw error;
+      }
+      
+      console.log('Evento encontrado:', data);
+      return data;
+    }
+
+    // Se for uma data, busca eventos no período
+    if (start instanceof Date) {
+      query = query.gte('datainicio', start.toISOString());
+    }
+
+    if (end instanceof Date) {
+      query = query.lte('datafinal', end.toISOString());
+    }
+
+    const { data, error } = await query.order('datainicio', { ascending: true });
 
     if (error) {
       console.error('Erro ao buscar eventos:', error);
       throw error;
     }
 
-    return data || [];
+    return data;
   } catch (error) {
     console.error('Erro ao carregar eventos:', error);
     throw error;
@@ -27,26 +43,33 @@ export async function fetchEvents(start: Date, end: Date) {
 }
 
 export async function saveEvent(event: Partial<AgendaEvent>, selectedEvent: AgendaEvent | null) {
-  const url = selectedEvent 
-    ? `${API_BASE_URL}/api/agenda/${selectedEvent.id}`
-    : `${API_BASE_URL}/api/agenda`;
-  
-  const method = selectedEvent ? 'PUT' : 'POST';
+  try {
+    if (selectedEvent?.id) {
+      // Atualiza evento existente
+      const { data, error } = await supabase
+        .from('agenda')
+        .update(event)
+        .eq('id', selectedEvent.id)
+        .select()
+        .single();
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(event),
-  });
+      if (error) throw error;
+      return data;
+    } else {
+      // Cria novo evento
+      const { data, error } = await supabase
+        .from('agenda')
+        .insert(event)
+        .select()
+        .single();
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.details || 'Falha ao salvar evento');
+      if (error) throw error;
+      return data;
+    }
+  } catch (error) {
+    console.error('Erro ao salvar evento:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function searchContratos(searchTerm: string) {
@@ -108,28 +131,55 @@ export function transformEvents(events: AgendaEvent[]) {
   console.log('Transformando eventos - Total:', events.length);
   return events.map(event => {
     try {
-      const startDate = new Date(event.datainicio);
-      const endDate = new Date(event.datafinal);
+      // Garantir que as datas sejam tratadas como UTC para evitar problemas de fuso horário
+      const startDate = new Date(event.datainicio + 'Z');
+      const endDate = new Date(event.datafinal + 'Z');
 
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         console.log('Data inválida para o evento:', event);
         return null;
       }
 
+      // Log para debug
+      console.log('Processando evento:', {
+        id: event.id,
+        nome: event.nome,
+        horamarcada: event.horamarcada,
+        datainicio: event.datainicio,
+        datafinal: event.datafinal,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+
       // Define a cor de fundo com base no status e na cor do evento
       const isRealizada = event.realizada === true;
       const eventColor = isRealizada ? '#E2E8F0' : event.cor;
       const textColor = isRealizada ? '#1F2937' : '#ffffff';
 
-      return {
+      // Verifica se o evento é para o dia todo
+      const isAllDay = !event.horamarcada;
+
+      // Formata as datas mantendo o horário para eventos com hora marcada
+      const formattedStart = event.datainicio;
+      const formattedEnd = event.datafinal;
+
+      const transformedEvent = {
         id: event.id.toString(),
         title: `[${event.tipo_evento}] ${event.nome || 'Sem título'}`,
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
+        start: formattedStart,
+        end: formattedEnd,
         backgroundColor: eventColor,
         borderColor: eventColor,
         textColor: textColor,
-        allDay: !event.horamarcada,
+        allDay: isAllDay,
+        display: 'block',
+        classNames: [
+          isRealizada ? 'event-realizada' : '',
+          event.cancelado ? 'event-cancelada' : '',
+          event.parcial ? 'event-parcial' : '',
+          event.prioritario ? 'event-prioritaria' : '',
+          isAllDay ? 'event-all-day' : 'event-timed'
+        ].filter(Boolean),
         extendedProps: {
           descricao: event.descricao,
           tipo_evento: event.tipo_evento,
@@ -142,6 +192,11 @@ export function transformEvents(events: AgendaEvent[]) {
           pppoe: event.pppoe
         }
       };
+
+      // Log do evento transformado
+      console.log('Evento transformado:', transformedEvent);
+
+      return transformedEvent;
     } catch (error) {
       console.error('Erro ao transformar evento:', event, error);
       return null;

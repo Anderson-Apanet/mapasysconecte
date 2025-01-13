@@ -67,7 +67,7 @@ export default function Planos() {
       const planoData = {
         id: nextId,
         ...newPlano,
-        valor: Number(newPlano.valor)
+        valor: Number(newPlano.valor.replace(/\D/g, '')) / 100
       };
 
       console.log('Criando plano:', planoData);
@@ -152,10 +152,12 @@ export default function Planos() {
 
   const handleEdit = (plano: Plano) => {
     setSelectedPlano(plano);
+    // Formata o valor inicial usando a mesma função de formatação
+    const initialValue = plano.valor ? formatCurrency(String(plano.valor * 100)) : '';
     setEditForm({
       nome: plano.nome || '',
       radius: plano.radius || '',
-      valor: plano.valor?.toString() || '',
+      valor: initialValue,
       ativo: plano.ativo || false
     });
     setIsEditModalOpen(true);
@@ -172,7 +174,7 @@ export default function Planos() {
         .update({
           nome: editForm.nome,
           radius: editForm.radius,
-          valor: parseFloat(editForm.valor),
+          valor: parseFloat(editForm.valor.replace(/\D/g, '')) / 100,
           ativo: editForm.ativo
         })
         .eq('id', selectedPlano.id);
@@ -181,11 +183,59 @@ export default function Planos() {
 
       toast.success('Plano atualizado com sucesso!');
       setIsEditModalOpen(false);
-      fetchPlanos(); // Recarrega a lista
+      fetchPlanos();
     } catch (error) {
       console.error('Erro ao atualizar plano:', error);
       toast.error('Erro ao atualizar plano');
     }
+  };
+
+  const handleEditValorChange = (value: string) => {
+    // Remove formatação atual
+    const plainNumber = value.replace(/\D/g, '');
+    
+    // Se não houver números, define como vazio
+    if (!plainNumber) {
+      setEditForm(prev => ({ ...prev, valor: '' }));
+      return;
+    }
+    
+    // Formata o valor
+    const formattedValue = formatCurrency(plainNumber);
+    
+    // Atualiza o estado com o valor formatado
+    setEditForm(prev => ({ ...prev, valor: formattedValue }));
+  };
+
+  const formatCurrency = (value: string): string => {
+    // Remove tudo que não é número
+    let numbers = value.replace(/\D/g, '');
+    
+    // Converte para número e divide por 100 para considerar os centavos
+    const amount = parseFloat(numbers) / 100;
+    
+    // Formata o número com pontuação de milhar e decimal
+    return new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const handleValorChange = (value: string) => {
+    // Remove formatação atual
+    const plainNumber = value.replace(/\D/g, '');
+    
+    // Se não houver números, define como vazio
+    if (!plainNumber) {
+      handleNewPlanoChange('valor', '');
+      return;
+    }
+    
+    // Formata o valor
+    const formattedValue = formatCurrency(plainNumber);
+    
+    // Atualiza o estado com o valor formatado
+    handleNewPlanoChange('valor', formattedValue);
   };
 
   return (
@@ -438,10 +488,10 @@ export default function Planos() {
                     Valor
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="numeric"
                     value={editForm.valor}
-                    onChange={(e) => setEditForm({ ...editForm, valor: e.target.value })}
+                    onChange={(e) => handleEditValorChange(e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     required
                   />
@@ -535,10 +585,9 @@ export default function Planos() {
                     Valor
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     value={newPlano.valor}
-                    onChange={(e) => handleNewPlanoChange('valor', e.target.value)}
+                    onChange={(e) => handleValorChange(e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     required
                   />

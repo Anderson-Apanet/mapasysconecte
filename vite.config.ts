@@ -5,6 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const isProd = mode === 'production';
 
   return {
     plugins: [react()],
@@ -28,6 +29,11 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:10000',
           changeOrigin: true
         }
+      },
+      hmr: {
+        protocol: 'ws',
+        host: 'localhost',
+        clientPort: 5173
       }
     },
     build: {
@@ -42,6 +48,9 @@ export default defineConfig(({ mode }) => {
           }
         }
       }
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom']
     }
   };
 });

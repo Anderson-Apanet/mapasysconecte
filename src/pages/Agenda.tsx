@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -31,32 +31,80 @@ export default function Agenda() {
   const [searchResults, setSearchResults] = useState<Array<{ id: number; pppoe: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<Array<{ id: number; nome: string }>>([]);
+  const calendarRef = useRef<FullCalendar | null>(null);
+
+  const loadEvents = async (start: Date, end: Date) => {
+    try {
+      const fetchedEvents = await fetchEvents(start, end);
+      const transformedEvents = transformEvents(fetchedEvents);
+      setEvents(transformedEvents);
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
+      toast.error('Erro ao carregar eventos');
+    }
+  };
 
   const handleDateSelect = (selectInfo: any) => {
+    setSelectedEvent(null);
     setNewEvent({
+      nome: '',
+      descricao: '',
       datainicio: selectInfo.startStr,
       datafinal: selectInfo.endStr,
       horamarcada: !selectInfo.allDay,
+      prioritario: false,
+      cor: '#3788d8'
     });
     setIsModalOpen(true);
   };
 
   const handleEventClick = async (info: any) => {
     const eventId = parseInt(info.event.id);
+    console.log('Clicou no evento:', eventId);
+    
     try {
-      const { data: event, error } = await fetchEvents(eventId);
-
-      if (error) throw error;
+      const event = await fetchEvents(eventId);
+      console.log('Evento carregado:', event);
 
       if (event) {
-        setSelectedEvent(event);
-        setNewEvent(event);
+        const eventData = {
+          id: event.id,
+          nome: event.nome,
+          descricao: event.descricao,
+          datainicio: event.datainicio,
+          datafinal: event.datafinal,
+          tipo_evento: event.tipo_evento,
+          usuario_resp: event.usuario_resp,
+          horamarcada: event.horamarcada,
+          prioritario: event.prioritario,
+          realizada: event.realizada,
+          parcial: event.parcial,
+          cancelado: event.cancelado,
+          pppoe: event.pppoe,
+          cor: event.cor
+        };
+
+        console.log('Dados do evento formatados:', eventData);
+        setSelectedEvent(eventData);
+        setNewEvent(eventData);
         setIsModalOpen(true);
       }
     } catch (error) {
       console.error('Erro ao carregar evento:', error);
       toast.error('Erro ao carregar evento');
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedEvent(null);
+    setNewEvent({
+      nome: '',
+      descricao: '',
+      horamarcada: false,
+      prioritario: false,
+      cor: '#3788d8'
+    });
   };
 
   const handleSaveEvent = async () => {
@@ -71,12 +119,19 @@ export default function Agenda() {
         return;
       }
 
-      await saveEvent(newEvent, selectedEvent);
+      const savedEvent = await saveEvent(newEvent, selectedEvent);
       
       toast.success(selectedEvent ? 'Evento atualizado!' : 'Evento criado!');
       setIsModalOpen(false);
-      const updatedEvents = await fetchEvents(new Date(), new Date());
-      setEvents(updatedEvents);
+      
+      // Atualiza o calendário com o novo evento
+      const calendarApi = calendarRef.current?.getApi();
+      if (calendarApi) {
+        const dateRange = calendarApi.view.getCurrentData().dateProfile.activeRange;
+        await loadEvents(dateRange.start, dateRange.end);
+      }
+
+      setSelectedEvent(null);
       setNewEvent({
         nome: '',
         descricao: '',
@@ -126,13 +181,16 @@ export default function Agenda() {
       
       // Atualizar a lista de eventos
       const dateInfo = dropInfo.view.getCurrentData().dateProfile;
-      const updatedEvents = await fetchEvents(dateInfo.activeRange.start, dateInfo.activeRange.end);
-      setEvents(updatedEvents);
+      await loadEvents(dateInfo.activeRange.start, dateInfo.activeRange.end);
     } catch (error) {
       console.error('Erro ao atualizar evento:', error);
       toast.error('Erro ao atualizar evento');
       dropInfo.revert();
     }
+  };
+
+  const handleDatesSet = (dateInfo: any) => {
+    loadEvents(dateInfo.start, dateInfo.end);
   };
 
   useEffect(() => {
@@ -159,6 +217,7 @@ export default function Agenda() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="h-full" onClick={() => selectedMoreEvents && setSelectedMoreEvents(null)}>
             <FullCalendar
+              ref={calendarRef}
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
               headerToolbar={{
                 left: 'prev,next today',
@@ -173,110 +232,130 @@ export default function Agenda() {
               weekends={true}
               slotMinTime="07:00:00"
               slotMaxTime="19:00:00"
-              allDaySlot={false}
+              allDaySlot={true}
+              allDayText="Dia inteiro"
               slotDuration="00:30:00"
               eventMinHeight={24}
+              displayEventTime={true}
+              displayEventEnd={true}
               eventDisplay="block"
-              eventOrder="start"
-              moreLinkContent={({ num }) => `Ver mais (${num})`}
-              moreLinkClick={handleMoreEventsClick}
-              slotEventOverlap={true}
-              eventTimeFormat={{
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-              }}
-              eventClassNames={(arg) => {
-                const classes = [];
-                if (arg.view.type === 'listWeek') {
-                  classes.push(`list-event-${arg.event.id}`);
-                }
-                if (arg.view.type === 'timeGridDay' || arg.view.type === 'timeGridWeek') {
-                  classes.push('time-grid-event');
-                }
-                return classes;
-              }}
-              eventContent={(eventInfo) => {
-                const viewType = eventInfo.view.type;
-                
-                if (viewType === 'timeGridDay' || viewType === 'timeGridWeek') {
-                  return (
-                    <div className="event-content p-1 h-full">
-                      <div className="font-semibold text-xs">
-                        {eventInfo.timeText && (
-                          <span className="mr-1">{eventInfo.timeText}</span>
-                        )}
-                        {eventInfo.event.title}
-                        {eventInfo.event.extendedProps.prioritario && (
-                          <span className="ml-1 text-yellow-300">⚡</span>
-                        )}
-                      </div>
-                      {eventInfo.event.extendedProps.descricao && (
-                        <div className="text-xs opacity-90 truncate">
-                          {eventInfo.event.extendedProps.descricao}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                
-                return (
-                  <div className="fc-content p-1">
-                    <div className="fc-title font-semibold">
-                      {eventInfo.event.title}
-                      {eventInfo.event.extendedProps.prioritario && (
-                        <span className="ml-1 text-red-500">⚡</span>
-                      )}
-                    </div>
-                    {eventInfo.event.extendedProps.descricao && (
-                      <div className="fc-description text-sm truncate">
-                        {eventInfo.event.extendedProps.descricao}
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-              datesSet={async (dateInfo) => {
-                console.log('Período do calendário alterado:', dateInfo);
-                const events = await fetchEvents(dateInfo.start, dateInfo.end);
-                setEvents(events);
-              }}
-              events={(info, successCallback, failureCallback) => {
-                try {
-                  const transformedEvents = transformEvents(events);
-                  const viewType = info?.view?.type || 'dayGridMonth';
-
-                  const filteredEvents = transformedEvents.filter(event => {
-                    if (!event) return false;
-                    
-                    if (viewType === 'listWeek') {
-                      return true;
-                    }
-                    
-                    return event.extendedProps.realizada !== true;
-                  });
-
-                  filteredEvents.sort((a, b) => {
-                    if (!a || !b) return 0;
-                    return new Date(a.start).getTime() - new Date(b.start).getTime();
-                  });
-
-                  successCallback(filteredEvents);
-                } catch (error) {
-                  console.error('Erro ao transformar eventos:', error);
-                  failureCallback(error);
-                }
-              }}
+              eventOrder="start,-allDay"
+              events={events}
+              datesSet={handleDatesSet}
               select={handleDateSelect}
               eventClick={handleEventClick}
               eventDrop={handleEventDrop}
+              moreLinkContent={({ num }) => `Ver mais (${num})`}
+              moreLinkClick={handleMoreEventsClick}
+              slotEventOverlap={false}
               locale={ptBrLocale}
+              nowIndicator={true}
+              scrollTime="07:00:00"
+              eventTimeFormat={{
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                meridiem: false
+              }}
+              views={{
+                timeGridWeek: {
+                  titleFormat: { year: 'numeric', month: 'long', day: '2-digit' },
+                  slotLabelFormat: {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                  },
+                  dayHeaderFormat: { weekday: 'long', day: '2-digit' }
+                },
+                timeGridDay: {
+                  titleFormat: { year: 'numeric', month: 'long', day: '2-digit' },
+                  slotLabelFormat: {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                  },
+                  dayHeaderFormat: { weekday: 'long', day: '2-digit' },
+                  nowIndicator: true,
+                  scrollTime: '07:00:00'
+                }
+              }}
+              eventContent={(eventInfo) => {
+                const viewType = eventInfo.view.type;
+                const event = eventInfo.event;
+                const extendedProps = event.extendedProps;
+                const isRealizada = extendedProps.realizada === true;
+                const isCancelado = extendedProps.cancelado === true;
+                const isParcial = extendedProps.parcial === true;
+                const isPrioritario = extendedProps.prioritario === true;
+                const isAllDay = event.allDay;
+
+                // Log para debug
+                if (viewType === 'timeGridDay') {
+                  console.log('Evento na visualização diária:', {
+                    id: event.id,
+                    title: event.title,
+                    start: event.start,
+                    end: event.end,
+                    allDay: event.allDay,
+                    horamarcada: extendedProps.horamarcada
+                  });
+                }
+
+                let statusClass = '';
+                if (isRealizada) statusClass = 'bg-gray-200 text-gray-800';
+                else if (isCancelado) statusClass = 'bg-red-100 text-red-800';
+                else if (isParcial) statusClass = 'bg-yellow-100 text-yellow-800';
+                else if (isPrioritario) statusClass = 'bg-orange-100 text-orange-800';
+
+                const timeText = !isAllDay && eventInfo.timeText 
+                  ? eventInfo.timeText 
+                  : '';
+
+                const commonContent = (
+                  <>
+                    <div className="font-semibold text-sm">
+                      {event.title}
+                    </div>
+                    {timeText && (
+                      <div className="text-xs opacity-75">
+                        {timeText}
+                      </div>
+                    )}
+                    {extendedProps.descricao && (
+                      <div className="text-xs mt-1 opacity-75 line-clamp-2">
+                        {extendedProps.descricao}
+                      </div>
+                    )}
+                    {extendedProps.usuario_resp && (
+                      <div className="text-xs mt-1 opacity-75">
+                        Resp: {extendedProps.usuario_resp}
+                      </div>
+                    )}
+                  </>
+                );
+
+                if (viewType === 'timeGridWeek' || viewType === 'timeGridDay') {
+                  return (
+                    <div className={`h-full w-full ${statusClass}`}>
+                      <div className="p-1">
+                        {commonContent}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className={`p-1 ${statusClass}`}>
+                    {commonContent}
+                  </div>
+                );
+              }}
             />
           </div>
 
           <EventModal
             isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
+            onClose={handleCloseModal}
             event={newEvent}
             onEventChange={setNewEvent}
             onSave={handleSaveEvent}
@@ -286,10 +365,13 @@ export default function Agenda() {
             onSearchPPPoE={debouncedSearch}
           />
 
-          <MoreEventsPopover
-            selectedMoreEvents={selectedMoreEvents}
-            onClose={() => setSelectedMoreEvents(null)}
-          />
+          {selectedMoreEvents && (
+            <MoreEventsPopover
+              events={selectedMoreEvents.events}
+              position={selectedMoreEvents.position}
+              onClose={() => setSelectedMoreEvents(null)}
+            />
+          )}
         </div>
       </div>
     </Layout>

@@ -6,6 +6,14 @@ import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
 import ContratoModal from './ContratoModal';
 import NovoContratoModal from './NovoContratoModal';
+import {
+  formatPhone,
+  isValidEmail,
+  formatCEP,
+  formatCPFCNPJ,
+  isValidCPFCNPJ,
+  formatRG
+} from '../utils/formatters';
 
 interface Contrato {
   id: number;
@@ -71,6 +79,12 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
     id_bairro: null,
     status: 'Pendente'
   });
+
+  const [errors, setErrors] = useState({
+    email: false,
+    cpf_cnpj: false
+  });
+
   const [bairros, setBairros] = useState<Bairro[]>([]);
   const [selectedBairro, setSelectedBairro] = useState<Bairro | null>(null);
   const [loading, setLoading] = useState(false);
@@ -143,103 +157,121 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
     }
   }, [cliente, bairros]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    let formattedValue = value;
+
+    // Aplicar formatações específicas para cada campo
+    switch (name) {
+      case 'fonewhats':
+        formattedValue = formatPhone(value);
+        break;
+      case 'email':
+        setErrors(prev => ({ ...prev, email: !isValidEmail(value) }));
+        break;
+      case 'cep':
+        formattedValue = formatCEP(value);
+        break;
+      case 'cpf_cnpj':
+        formattedValue = formatCPFCNPJ(value);
+        setErrors(prev => ({ ...prev, cpf_cnpj: !isValidCPFCNPJ(value) }));
+        break;
+      case 'rg':
+        formattedValue = formatRG(value);
+        break;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: formattedValue
+    }));
+  };
+
+  const validateForm = () => {
+    const validations = {
+      email: isValidEmail(formData.email),
+      cpf_cnpj: isValidCPFCNPJ(formData.cpf_cnpj)
+    };
+
+    setErrors(prev => ({
+      ...prev,
+      email: !validations.email,
+      cpf_cnpj: !validations.cpf_cnpj
+    }));
+
+    return Object.values(validations).every(Boolean);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      toast.error('Por favor, corrija os erros no formulário antes de continuar.');
+      return;
+    }
+
+    if (!selectedBairro?.id) {
+      toast.error('Por favor, selecione um bairro');
+      return;
+    }
+
     setLoading(true);
-
     try {
-      if (!selectedBairro) {
-        toast.error('Por favor, selecione um bairro');
-        return;
-      }
+      // Preparar os dados para envio
+      const currentDate = new Date().toISOString().split('T')[0];
+      const clienteData = {
+        nome: formData.nome,
+        email: formData.email || null,
+        fonewhats: formData.fonewhats || null,
+        logradouro: formData.logradouro || null,
+        nrlogradouro: formData.nrlogradouro || null,
+        complemento: formData.complemento || null,
+        uf: formData.uf || null,
+        cep: formData.cep || null,
+        rg: formData.rg || null,
+        cpf_cnpj: formData.cpf_cnpj || null,
+        datanas: formData.datanas || null,
+        id_bairro: selectedBairro.id,
+        status: formData.status || 'Pendente',
+        data_cad_cliente: cliente ? undefined : currentDate // Adiciona a data apenas para novos registros
+      };
 
-      if (cliente?.id) {
+      if (cliente) {
         // Atualização
-        const { error: updateError } = await supabase
+        const { error } = await supabase
           .from('clientes')
-          .update({
-            nome: formData.nome || null,
-            email: formData.email || null,
-            fonewhats: formData.fonewhats || null,
-            logradouro: formData.logradouro || null,
-            nrlogradouro: formData.nrlogradouro || null,
-            complemento: formData.complemento || null,
-            id_bairro: selectedBairro.id,
-            uf: formData.uf || null,
-            cep: formData.cep || null,
-            rg: formData.rg || null,
-            cpf_cnpj: formData.cpf_cnpj || null,
-            datanas: formData.datanas || null,
-            status: formData.status || 'Pendente'
-          })
+          .update(clienteData)
           .eq('id', cliente.id);
 
-        if (updateError) throw updateError;
+        if (error) throw error;
+        toast.success('Cliente atualizado com sucesso!');
       } else {
-        // Primeiro, pegar o maior ID
-        const { data: maxIdResult } = await supabase
+        // Inserção
+        const { error } = await supabase
           .from('clientes')
-          .select('id')
-          .order('id', { ascending: false })
-          .limit(1)
-          .single();
+          .insert([clienteData]);
 
-        const nextId = (maxIdResult?.id || 1480) + 1;
-
-        // Inserção com retorno do created_at
-        const { data: newCliente, error: insertError } = await supabase
-          .from('clientes')
-          .insert([{
-            id: nextId,
-            nome: formData.nome,
-            email: formData.email || null,
-            fonewhats: formData.fonewhats || null,
-            logradouro: formData.logradouro || null,
-            nrlogradouro: formData.nrlogradouro || null,
-            complemento: formData.complemento || null,
-            id_bairro: selectedBairro.id,
-            uf: formData.uf || null,
-            cep: formData.cep || null,
-            rg: formData.rg || null,
-            cpf_cnpj: formData.cpf_cnpj || null,
-            datanas: formData.datanas || null,
-            status: 'Pendente'
-          }])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Erro de inserção:', insertError);
-          throw insertError;
-        }
-
-        // Atualizar data_cad_cliente com a data do created_at
-        if (newCliente && newCliente.created_at) {
-          const dataCadCliente = newCliente.created_at.split('T')[0];
-          const { error: updateError } = await supabase
-            .from('clientes')
-            .update({ data_cad_cliente: dataCadCliente })
-            .eq('id', newCliente.id);
-
-          if (updateError) {
-            console.error('Erro ao atualizar data_cad_cliente:', updateError);
-          }
-        }
+        if (error) throw error;
+        toast.success('Cliente cadastrado com sucesso!');
       }
 
-      toast.success(cliente?.id ? 'Cliente atualizado com sucesso!' : 'Cliente criado com sucesso!');
       onSave();
       onClose();
-    } catch (error) {
-      console.error('Erro detalhado ao salvar cliente:', error);
-      toast.error('Erro ao salvar cliente');
+    } catch (error: any) {
+      console.error('Erro ao salvar cliente:', error);
+      toast.error('Erro ao salvar cliente: ' + (error.message || error.details || 'Erro desconhecido'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBairroChange = (bairro: Bairro | null) => {
+    setSelectedBairro(bairro);
+    if (bairro) {
+      setFormData(prev => ({
+        ...prev,
+        id_bairro: bairro.id
+      }));
     }
   };
 
@@ -343,20 +375,12 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
     toast.success('Contrato criado com sucesso!');
   };
 
-  const handleBairroChange = (bairro: Bairro | null) => {
-    setSelectedBairro(bairro);
-    setFormData(prev => ({
-      ...prev,
-      cidade: bairro?.cidade || '',
-      bairro: bairro?.nome || ''
-    }));
-  };
-
   return (
     <Dialog
+      as="div"
+      className="fixed inset-0 z-50 overflow-y-auto"
+      onClose={onClose}
       open={isOpen}
-      onClose={handleCloseModal}
-      className="relative z-50"
     >
       {/* The backdrop, rendered as a fixed sibling to the panel container */}
       <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
@@ -466,7 +490,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="nome"
                       name="nome"
                       value={formData.nome}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                       required
                     />
@@ -481,9 +505,17 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="email"
                       name="email"
                       value={formData.email || ''}
-                      onChange={handleChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.email ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
                     />
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-500">
+                        Por favor, insira um email válido
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -491,12 +523,14 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       Telefone/WhatsApp
                     </label>
                     <input
-                      type="tel"
+                      type="text"
                       id="fonewhats"
                       name="fonewhats"
                       value={formData.fonewhats || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                      maxLength={15}
+                      required
                     />
                   </div>
 
@@ -509,9 +543,17 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="cpf_cnpj"
                       name="cpf_cnpj"
                       value={formData.cpf_cnpj || ''}
-                      onChange={handleChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.cpf_cnpj ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
                     />
+                    {errors.cpf_cnpj && (
+                      <p className="mt-1 text-sm text-red-500">
+                        Por favor, insira um CPF ou CNPJ válido
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -523,7 +565,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="rg"
                       name="rg"
                       value={formData.rg || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -537,7 +579,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="datanas"
                       name="datanas"
                       value={formData.datanas || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -551,8 +593,10 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="cep"
                       name="cep"
                       value={formData.cep || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                      maxLength={9}
+                      required
                     />
                   </div>
 
@@ -565,7 +609,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="logradouro"
                       name="logradouro"
                       value={formData.logradouro || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -579,7 +623,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="nrlogradouro"
                       name="nrlogradouro"
                       value={formData.nrlogradouro || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -593,7 +637,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="complemento"
                       name="complemento"
                       value={formData.complemento || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -605,7 +649,9 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                     <Listbox value={selectedBairro} onChange={handleBairroChange}>
                       <div className="relative mt-1">
                         <Listbox.Button className="relative w-full cursor-default rounded-lg bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 focus:outline-none focus-visible:border-primary-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-300 sm:text-sm">
-                          <span className="block truncate">{selectedBairro?.nome || 'Selecione um bairro'}</span>
+                          <span className="block truncate">
+                            {selectedBairro ? selectedBairro.nome : 'Selecione um bairro'}
+                          </span>
                           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                             <ChevronUpDownIcon
                               className="h-5 w-5 text-gray-400"
@@ -614,17 +660,20 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                           </span>
                         </Listbox.Button>
                         <Transition
+                          as={React.Fragment}
                           leave="transition ease-in duration-100"
                           leaveFrom="opacity-100"
                           leaveTo="opacity-0"
                         >
-                          <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm z-10">
+                          <Listbox.Options className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
                             {bairros.map((bairro) => (
                               <Listbox.Option
                                 key={bairro.id}
                                 className={({ active }) =>
                                   `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                    active ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100' : 'text-gray-900 dark:text-gray-100'
+                                    active
+                                      ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100'
+                                      : 'text-gray-900 dark:text-white'
                                   }`
                                 }
                                 value={bairro}
@@ -650,11 +699,8 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                     </label>
                     <input
                       type="text"
-                      id="cidade"
-                      name="cidade"
                       value={selectedBairro?.cidade || ''}
-                      onChange={handleChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:text-white cursor-not-allowed"
                       readOnly
                     />
                   </div>
@@ -668,7 +714,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                       id="uf"
                       name="uf"
                       value={formData.uf || ''}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white"
                     />
                   </div>
@@ -723,11 +769,10 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                 <NovoContratoModal
                   isOpen={showNovoContrato}
                   onClose={handleNovoContratoClose}
-                  clienteId={cliente.id}
-                  clienteNome={cliente.nome}
-                  clienteBairro={cliente.bairro}
-                  clienteEndereco={cliente.logradouro}
-                  clienteComplemento={cliente.complemento}
+                  clienteData={{
+                    id: cliente.id,
+                    nome: cliente.nome
+                  }}
                   onSuccess={handleNovoContratoSuccess}
                 />
               )}

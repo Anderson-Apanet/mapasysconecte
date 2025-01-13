@@ -25,22 +25,15 @@ export function EventModal({
   isSearching,
   onSearchPPPoE,
 }: EventModalProps) {
+  const isEditMode = Boolean(event?.id);
+  const modalTitle = isEditMode ? 'Editar Evento' : 'Novo Evento';
+
   return (
-    <Dialog
-      open={isOpen}
-      onClose={onClose}
-      className="fixed inset-0 z-50 overflow-y-auto"
-    >
-      <div className="flex items-center justify-center min-h-screen">
-        <Dialog.Overlay className="fixed inset-0 bg-black/30 dark:bg-black/50" />
-
-        <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full mx-4 p-6 shadow-xl">
-          <div className="mb-4">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              {event.id ? 'Editar Evento' : 'Novo Evento'}
-            </h3>
-          </div>
-
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="mx-auto max-w-xl w-full rounded bg-white p-6">
+          <Dialog.Title className="text-lg font-medium mb-4">{modalTitle}</Dialog.Title>
           <form onSubmit={(e) => { e.preventDefault(); onSave(); }}>
             <div className="space-y-4">
               <div>
@@ -110,7 +103,7 @@ export function EventModal({
                     )}
                   </div>
                   
-                  {searchResults.length > 0 && (
+                  {searchResults.length > 0 && event.pppoe && (
                     <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
                       {searchResults.map((contrato) => (
                         <div
@@ -118,6 +111,7 @@ export function EventModal({
                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                           onClick={() => {
                             onEventChange({ ...event, pppoe: contrato.pppoe });
+                            onSearchPPPoE(''); // Limpa os resultados após selecionar
                           }}
                         >
                           <span className="text-gray-900 dark:text-white">{contrato.pppoe}</span>
@@ -250,7 +244,7 @@ export function EventModal({
               </div>
             </div>
           </form>
-        </div>
+        </Dialog.Panel>
       </div>
     </Dialog>
   );

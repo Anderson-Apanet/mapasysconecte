@@ -14,7 +14,9 @@ import ADM from './pages/ADM';
 import Caixa from './pages/Caixa';
 import Tecnicos from './pages/Tecnicos';
 import Estoque from './pages/Estoque';
+import Bairros from './pages/ADM/Bairros';
 import PrivateRoute from './components/PrivateRoute';
+import { ROUTES } from './constants/routes';
 
 const App: React.FC = () => {
   return (
@@ -23,72 +25,77 @@ const App: React.FC = () => {
         <Toaster position="top-right" />
         <Routes>
           {/* Rota pública */}
-          <Route path="/login" element={<Login />} />
+          <Route path={ROUTES.LOGIN} element={<Login />} />
 
           {/* Rotas protegidas */}
-          <Route path="/" element={
+          <Route path={ROUTES.HOME} element={
             <PrivateRoute>
               <Home />
             </PrivateRoute>
           } />
-          <Route path="/dashboard" element={
+          <Route path={ROUTES.DASHBOARD} element={
             <PrivateRoute>
               <Dashboard />
             </PrivateRoute>
           } />
-          <Route path="/clientes" element={
+          <Route path={ROUTES.CLIENTES} element={
             <PrivateRoute>
               <Clientes />
             </PrivateRoute>
           } />
-          <Route path="/financeiro" element={
+          <Route path={ROUTES.FINANCEIRO} element={
             <PrivateRoute>
               <Financeiro />
             </PrivateRoute>
           } />
-          <Route path="/agenda" element={
+          <Route path={ROUTES.AGENDA} element={
             <PrivateRoute>
               <Agenda />
             </PrivateRoute>
           } />
-          <Route path="/planos" element={
+          <Route path={ROUTES.PLANOS} element={
             <PrivateRoute>
               <Planos />
             </PrivateRoute>
           } />
-          <Route path="/rede" element={
+          <Route path={ROUTES.REDE} element={
             <PrivateRoute>
               <Rede />
             </PrivateRoute>
           } />
-          <Route path="/suporte" element={
+          <Route path={ROUTES.SUPORTE} element={
             <PrivateRoute>
               <Suporte />
             </PrivateRoute>
           } />
-          <Route path="/adm" element={
-            <PrivateRoute>
-              <ADM />
-            </PrivateRoute>
-          } />
-          <Route path="/caixa" element={
+          <Route path={ROUTES.CAIXA} element={
             <PrivateRoute>
               <Caixa />
             </PrivateRoute>
           } />
-          <Route path="/tecnicos" element={
+          <Route path={ROUTES.ADM} element={
+            <PrivateRoute>
+              <ADM />
+            </PrivateRoute>
+          } />
+          <Route path={ROUTES.TECNICOS} element={
             <PrivateRoute>
               <Tecnicos />
             </PrivateRoute>
           } />
-          <Route path="/estoque" element={
+          <Route path={ROUTES.ESTOQUE} element={
             <PrivateRoute>
               <Estoque />
             </PrivateRoute>
           } />
+          <Route path={ROUTES.ADM_BAIRROS} element={
+            <PrivateRoute>
+              <Bairros />
+            </PrivateRoute>
+          } />
 
-          {/* Redirecionar qualquer rota não encontrada para a home ou login */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Redirecionar para home se a rota não existir */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>
