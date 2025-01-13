@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src')
-      }
+      },
+      extensions: ['.js', '.jsx', '.ts', '.tsx']
     },
     define: {
       'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || mode),
