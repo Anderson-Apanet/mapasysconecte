@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
-import Layout from '@/components/Layout.tsx';
-import AdminMenu from '@/components/adm/AdminMenu.tsx';
-import UserTypesModal from '@/components/adm/UserTypesModal.tsx';
+import Layout from '@/components/Layout';
+import AdminMenu from '@/components/ADM/AdminMenu';
+import UserTypesModal from '@/components/ADM/UserTypesModal';
 
 const ADM: React.FC = () => {
   const [isUserTypesModalOpen, setIsUserTypesModalOpen] = useState(false);
