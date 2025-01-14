@@ -18,33 +18,41 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { 
-  ChartBarIcon, 
-  UsersIcon,
-  CurrencyDollarIcon,
-  DocumentTextIcon,
-  GlobeAltIcon,
-  CalendarIcon,
-  WrenchScrewdriverIcon,
-  Cog8ToothIcon,
-  BanknotesIcon,
-  ArchiveBoxIcon
-} from '@heroicons/react/24/solid';
 import Layout from '../components/Layout';
+import {
+  ChartBarIcon,
+  UserGroupIcon,
+  CubeIcon,
+  BanknotesIcon,
+  MapIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon,
+  HomeIcon,
+  DocumentDuplicateIcon,
+  WrenchScrewdriverIcon,
+  BuildingStorefrontIcon,
+  DocumentTextIcon,
+} from '@heroicons/react/24/outline';
+import { useCardOrder } from '../hooks/useCardOrder';
 import { ROUTES } from '../constants/routes';
-import { useCardOrder, MenuItem } from '../hooks/useCardOrder';
+
+interface MenuItem {
+  title: string;
+  icon: React.ForwardRefExoticComponent<any>;
+  description: string;
+  path: string;
+  color: string;
+}
 
 interface SortableCardProps {
   card: MenuItem;
   onClick: () => void;
 }
 
-interface IconComponentProps {
-  icon: React.ForwardRefExoticComponent<any>;
-}
-
-const IconComponent: React.FC<IconComponentProps> = ({ icon: Icon }) => {
-  return <Icon className="h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white" />;
+const renderIcon = (IconComponent: React.ForwardRefExoticComponent<any>) => {
+  return (
+    <IconComponent className="h-12 w-12 text-gray-600 dark:text-gray-300 group-hover:text-gray-800 dark:group-hover:text-white" />
+  );
 };
 
 const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
@@ -83,7 +91,7 @@ const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
     >
       <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${card.color} rounded-t-xl opacity-80`} />
       <div className="flex flex-col items-center text-center space-y-4">
-        <IconComponent icon={card.icon} />
+        {renderIcon(card.icon)}
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white group-hover:text-gray-900 dark:group-hover:text-white">
           {card.title}
         </h2>
@@ -95,8 +103,84 @@ const SortableCard: React.FC<SortableCardProps> = ({ card, onClick }) => {
   );
 };
 
+const initialMenuItems = [
+  {
+    title: 'Dashboard',
+    icon: ChartBarIcon,
+    description: 'Visualize métricas e indicadores importantes',
+    path: ROUTES.DASHBOARD,
+    color: 'from-blue-400 to-blue-600'
+  },
+  {
+    title: 'Clientes',
+    icon: UserGroupIcon,
+    description: 'Gerencie seus clientes e contratos',
+    path: ROUTES.CLIENTES,
+    color: 'from-green-400 to-green-600'
+  },
+  {
+    title: 'Financeiro',
+    icon: CubeIcon,
+    description: 'Controle financeiro e faturamento',
+    path: ROUTES.FINANCEIRO,
+    color: 'from-yellow-400 to-yellow-600'
+  },
+  {
+    title: 'Planos',
+    icon: DocumentTextIcon,
+    description: 'Configure e gerencie planos',
+    path: ROUTES.PLANOS,
+    color: 'from-purple-400 to-purple-600'
+  },
+  {
+    title: 'Agenda',
+    icon: MapIcon,
+    description: 'Organize instalações e visitas',
+    path: ROUTES.AGENDA,
+    color: 'from-indigo-400 to-indigo-600'
+  },
+  {
+    title: 'Suporte Técnico',
+    icon: WrenchScrewdriverIcon,
+    description: 'Monitore e configure sua rede',
+    path: ROUTES.REDE,
+    color: 'from-teal-400 to-teal-600'
+  },
+  {
+    title: 'Caixa',
+    icon: BanknotesIcon,
+    description: 'Lançamentos diários de receitas e despesas',
+    path: ROUTES.CAIXA,
+    color: 'from-emerald-400 to-emerald-600'
+  },
+  {
+    title: 'ADM',
+    icon: Cog6ToothIcon,
+    description: 'Configurações administrativas',
+    path: ROUTES.ADM,
+    color: 'from-gray-400 to-gray-600'
+  },
+  {
+    title: 'Técnicos',
+    icon: BuildingStorefrontIcon,
+    description: 'Gerenciar técnicos',
+    path: ROUTES.TECNICOS,
+    color: 'from-orange-400 to-orange-600'
+  },
+  {
+    title: 'Estoque',
+    icon: DocumentDuplicateIcon,
+    description: 'Controle de estoque',
+    path: ROUTES.ESTOQUE,
+    color: 'from-red-400 to-red-600'
+  }
+];
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const [cards, setCards] = useCardOrder(initialMenuItems);
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
@@ -111,83 +195,6 @@ const Home: React.FC = () => {
     })
   );
 
-  const menuItems = [
-    {
-      title: 'Dashboard',
-      icon: ChartBarIcon,
-      description: 'Visualize métricas e indicadores importantes',
-      path: ROUTES.DASHBOARD,
-      color: 'from-blue-400 to-blue-600'
-    },
-    {
-      title: 'Clientes',
-      icon: UsersIcon,
-      description: 'Gerencie seus clientes e contratos',
-      path: ROUTES.CLIENTES,
-      color: 'from-green-400 to-green-600'
-    },
-    {
-      title: 'Financeiro',
-      icon: CurrencyDollarIcon,
-      description: 'Controle financeiro e faturamento',
-      path: ROUTES.FINANCEIRO,
-      color: 'from-yellow-400 to-yellow-600'
-    },
-    {
-      title: 'Planos',
-      icon: DocumentTextIcon,
-      description: 'Configure e gerencie planos',
-      path: ROUTES.PLANOS,
-      color: 'from-purple-400 to-purple-600'
-    },
-    {
-      title: 'Agenda',
-      icon: CalendarIcon,
-      description: 'Organize instalações e visitas',
-      path: ROUTES.AGENDA,
-      color: 'from-indigo-400 to-indigo-600'
-    },
-    {
-      title: 'Suporte Técnico',
-      icon: WrenchScrewdriverIcon,
-      description: 'Monitore e configure sua rede',
-      path: ROUTES.REDE,
-      color: 'from-teal-400 to-teal-600'
-    },
-    {
-      title: 'Caixa',
-      icon: BanknotesIcon,
-      description: 'Lançamentos diários de receitas e despesas',
-      path: ROUTES.CAIXA,
-      color: 'from-emerald-400 to-emerald-600'
-    },
-    {
-      title: 'ADM',
-      icon: Cog8ToothIcon,
-      description: 'Configurações administrativas',
-      path: ROUTES.ADM,
-      color: 'from-gray-400 to-gray-600'
-    },
-    {
-      title: 'Técnicos',
-      icon: WrenchScrewdriverIcon,
-      description: 'Gerenciar técnicos',
-      path: ROUTES.TECNICOS,
-      color: 'from-orange-400 to-orange-600'
-    },
-    {
-      title: 'Estoque',
-      icon: ArchiveBoxIcon,
-      description: 'Controle de estoque',
-      path: ROUTES.ESTOQUE,
-      color: 'from-red-400 to-red-600'
-    }
-  ] as const;
-
-  const { cards, reorder } = useCardOrder(menuItems);
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-  const activeCard = activeId ? cards.find(card => card.title === activeId) : null;
-
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -196,14 +203,19 @@ const Home: React.FC = () => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      reorder(active.id as string, over.id as string);
+      setCards((items) => {
+        const oldIndex = items.findIndex((item) => item.title === active.id);
+        const newIndex = items.findIndex((item) => item.title === over.id);
+
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
 
     setActiveId(null);
   };
 
-  const handleDragCancel = () => {
-    setActiveId(null);
+  const handleCardClick = (path: string) => {
+    navigate(path);
   };
 
   return (
@@ -224,7 +236,6 @@ const Home: React.FC = () => {
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
-              onDragCancel={handleDragCancel}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
                 <SortableContext 
@@ -235,20 +246,18 @@ const Home: React.FC = () => {
                     <SortableCard
                       key={card.title}
                       card={card}
-                      onClick={() => navigate(card.path)}
+                      onClick={() => handleCardClick(card.path)}
                     />
                   ))}
                 </SortableContext>
               </div>
 
               <DragOverlay>
-                {activeId && activeCard ? (
-                  <div className="opacity-50">
-                    <SortableCard
-                      card={activeCard}
-                      onClick={() => {}}
-                    />
-                  </div>
+                {activeId ? (
+                  <SortableCard
+                    card={cards.find((card) => card.title === activeId)!}
+                    onClick={() => {}}
+                  />
                 ) : null}
               </DragOverlay>
             </DndContext>

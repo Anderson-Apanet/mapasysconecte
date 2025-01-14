@@ -11,6 +11,7 @@ interface Material {
   tipo: string;
   id_modelo: number;
   etiqueta: string;
+  serial: string;
   observacoes: string;
   created_at: string;
   modelo?: ModeloMaterial; // Relacionamento com o modelo
@@ -25,6 +26,14 @@ interface ModeloMaterial {
 
 const Estoque: React.FC = () => {
   const navigate = useNavigate();
+  const tiposMaterial = [
+    'Roteador',
+    'Onu',
+    'Cabo',
+    'Switch',
+    'Outros'
+  ];
+
   const [materiais, setMateriais] = useState<Material[]>([]);
   const [modelos, setModelos] = useState<ModeloMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +54,7 @@ const Estoque: React.FC = () => {
     tipo: '',
     id_modelo: 0,
     etiqueta: '',
+    serial: '',
     observacoes: ''
   });
   const [modeloFormData, setModeloFormData] = useState({
@@ -69,52 +79,39 @@ const Estoque: React.FC = () => {
     try {
       let query = supabase
         .from('materiais')
-        .select(`
-          *,
-          modelo:modelo_materiais(id, nome, marca)
-        `)
+        .select('*, modelo:modelo_materiais(id, nome, marca)')
         .order('created_at', { ascending: false });
 
-      // Aplicar filtros
       if (filters.nome) {
         query = query.ilike('nome', `%${filters.nome}%`);
       }
+
       if (filters.tipo) {
-        query = query.ilike('tipo', `%${filters.tipo}%`);
+        query = query.eq('tipo', filters.tipo);
       }
+
+      if (filters.modelo) {
+        // Busca por nome do modelo ao invés do ID
+        query = query.textSearch('modelo_materiais.nome', filters.modelo);
+      }
+
       if (filters.etiqueta) {
         query = query.ilike('etiqueta', `%${filters.etiqueta}%`);
       }
-      if (filters.modelo) {
-        query = query.eq('id_modelo', filters.modelo);
-      }
 
-      // Aplicar paginação
+      // Paginação
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
-      
-      // Primeiro, pegar o total de registros
-      const { count } = await supabase
-        .from('materiais')
-        .select('*', { count: 'exact', head: true });
-      
-      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
 
-      // Depois, pegar os registros da página atual
-      const { data, error } = await query
+      const { data, error, count } = await query
         .range(from, to);
 
-      if (error) {
-        if (error.code === '42P01') {
-          console.error('Tabela não encontrada:', error);
-          toast.error('Erro ao carregar materiais: Tabela não encontrada');
-        } else {
-          console.error('Erro ao buscar materiais:', error);
-          toast.error('Erro ao carregar materiais');
-        }
-        return;
-      }
+      if (error) throw error;
+
       setMateriais(data || []);
+      if (count) {
+        setTotalPages(Math.ceil(count / itemsPerPage));
+      }
     } catch (error) {
       console.error('Erro ao buscar materiais:', error);
       toast.error('Erro ao carregar materiais');
@@ -165,19 +162,37 @@ const Estoque: React.FC = () => {
   // Funções do CRUD
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+
     try {
       if (editingMaterial) {
+        // Atualizar material existente
         const { error } = await supabase
           .from('materiais')
-          .update(formData)
+          .update({
+            nome: formData.nome,
+            tipo: formData.tipo,
+            id_modelo: formData.id_modelo,
+            etiqueta: formData.etiqueta,
+            serial: formData.serial,
+            observacoes: formData.observacoes
+          })
           .eq('id', editingMaterial.id);
 
         if (error) throw error;
         toast.success('Material atualizado com sucesso!');
       } else {
+        // Criar novo material
         const { error } = await supabase
           .from('materiais')
-          .insert([formData]);
+          .insert([{
+            nome: formData.nome,
+            tipo: formData.tipo,
+            id_modelo: formData.id_modelo,
+            etiqueta: formData.etiqueta,
+            serial: formData.serial,
+            observacoes: formData.observacoes
+          }]);
 
         if (error) throw error;
         toast.success('Material cadastrado com sucesso!');
@@ -185,11 +200,12 @@ const Estoque: React.FC = () => {
 
       setModalOpen(false);
       setEditingMaterial(null);
-      resetForm();
       fetchMateriais();
     } catch (error) {
       console.error('Erro ao salvar material:', error);
       toast.error('Erro ao salvar material');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -236,6 +252,7 @@ const Estoque: React.FC = () => {
       tipo: material.tipo,
       id_modelo: material.id_modelo,
       etiqueta: material.etiqueta,
+      serial: material.serial || '',
       observacoes: material.observacoes || ''
     });
     setModalOpen(true);
@@ -247,6 +264,7 @@ const Estoque: React.FC = () => {
       tipo: '',
       id_modelo: 0,
       etiqueta: '',
+      serial: '',
       observacoes: ''
     });
   };
@@ -265,86 +283,100 @@ const Estoque: React.FC = () => {
           {/* Título */}
           <h1 className="text-3xl font-bold text-white">Gestão de Estoque</h1>
 
-          {/* Card de Ações */}
-          <div className="bg-white shadow rounded-lg p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+          {/* Botões de Ação */}
+          <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow p-4 mb-6">
+            <div className="flex flex-wrap gap-4">
               <button
-                onClick={() => setModeloModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Novo Modelo
-              </button>
-              <button
-                onClick={() => {
-                  setEditingMaterial(null);
-                  resetForm();
-                  setModalOpen(true);
-                }}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setModalOpen(true)}
+                className="flex items-center px-4 py-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-md shadow-sm transition-colors duration-200"
               >
                 <PlusIcon className="h-5 w-5 mr-2" />
                 Novo Material
               </button>
+              <button
+                onClick={() => setModeloModalOpen(true)}
+                className="flex items-center px-4 py-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-md shadow-sm transition-colors duration-200"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Novo Modelo
+              </button>
             </div>
           </div>
 
-          {/* Card de Filtros */}
-          <div className="bg-white shadow rounded-lg p-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Card de Filtros Unificado */}
+          <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow p-6 mb-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Filtros</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Filtro por Nome */}
               <div>
-                <label htmlFor="nome" className="block text-sm font-medium text-gray-700">Nome</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Nome
+                </label>
                 <input
                   type="text"
-                  name="nome"
-                  id="nome"
                   value={filters.nome}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  onChange={(e) => setFilters({ ...filters, nome: e.target.value })}
+                  placeholder="Filtrar por nome..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
+
+              {/* Filtro por Tipo */}
               <div>
-                <label htmlFor="tipo" className="block text-sm font-medium text-gray-700">Tipo</label>
-                <input
-                  type="text"
-                  name="tipo"
-                  id="tipo"
-                  value={filters.tipo}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="modelo" className="block text-sm font-medium text-gray-700">Modelo</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tipo
+                </label>
                 <select
-                  name="modelo"
-                  id="modelo"
-                  value={filters.modelo}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={filters.tipo}
+                  onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">Todos</option>
-                  {modelos.map((modelo) => (
-                    <option key={modelo.id} value={modelo.id}>{modelo.nome}</option>
+                  {tiposMaterial.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
                   ))}
                 </select>
               </div>
+
+              {/* Filtro por Modelo */}
               <div>
-                <label htmlFor="etiqueta" className="block text-sm font-medium text-gray-700">Etiqueta</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Modelo
+                </label>
+                <select
+                  value={filters.modelo}
+                  onChange={(e) => setFilters({ ...filters, modelo: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="">Todos</option>
+                  {modelos.map((modelo) => (
+                    <option key={modelo.id} value={modelo.nome}>
+                      {modelo.nome} - {modelo.marca}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Etiqueta */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Etiqueta
+                </label>
                 <input
                   type="text"
-                  name="etiqueta"
-                  id="etiqueta"
                   value={filters.etiqueta}
-                  onChange={handleFilterChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  onChange={(e) => setFilters({ ...filters, etiqueta: e.target.value })}
+                  placeholder="Filtrar por etiqueta..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
             </div>
           </div>
 
           {/* Tabela de Materiais */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-700">
@@ -360,6 +392,9 @@ const Estoque: React.FC = () => {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Etiqueta
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Serial
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Ações
@@ -384,10 +419,13 @@ const Estoque: React.FC = () => {
                           {material.etiqueta}
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                        {material.serial}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
                           onClick={() => handleEdit(material)}
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                          className="text-[#2E7D32] hover:text-[#1B5E20] dark:text-[#1B5E20] dark:hover:text-[#2E7D32] mr-4"
                         >
                           <PencilIcon className="h-5 w-5" />
                         </button>
@@ -421,7 +459,7 @@ const Estoque: React.FC = () => {
                   onClick={() => handlePageChange(i + 1)}
                   className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
                     currentPage === i + 1
-                      ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
+                      ? 'z-10 bg-[#E8F5E9] border-[#2E7D32] text-[#2E7D32]'
                       : 'text-gray-500 hover:bg-gray-50'
                   }`}
                 >
@@ -441,8 +479,8 @@ const Estoque: React.FC = () => {
           {/* Modal de Cadastro/Edição de Material */}
           {modalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+              <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg max-w-2xl w-full p-6">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
                   {editingMaterial ? 'Editar Material' : 'Novo Material'}
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -455,7 +493,7 @@ const Estoque: React.FC = () => {
                         type="text"
                         value={formData.nome}
                         onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       />
                     </div>
@@ -466,15 +504,15 @@ const Estoque: React.FC = () => {
                       <select
                         value={formData.tipo}
                         onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       >
                         <option value="">Selecione um tipo</option>
-                        <option value="Roteador">Roteador</option>
-                        <option value="ONU">ONU</option>
-                        <option value="Cabo">Cabo</option>
-                        <option value="Switch">Switch</option>
-                        <option value="Outros">Outros</option>
+                        {tiposMaterial.map((tipo) => (
+                          <option key={tipo} value={tipo}>
+                            {tipo}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -484,7 +522,7 @@ const Estoque: React.FC = () => {
                       <select
                         value={formData.id_modelo || ''}
                         onChange={(e) => setFormData({ ...formData, id_modelo: Number(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       >
                         <option value="">Selecione um modelo</option>
@@ -503,7 +541,19 @@ const Estoque: React.FC = () => {
                         type="text"
                         value={formData.etiqueta}
                         onChange={(e) => setFormData({ ...formData, etiqueta: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Serial
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.serial}
+                        onChange={(e) => setFormData({ ...formData, serial: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       />
                     </div>
@@ -515,7 +565,7 @@ const Estoque: React.FC = () => {
                     <textarea
                       value={formData.observacoes}
                       onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       rows={3}
                     />
                   </div>
@@ -529,7 +579,7 @@ const Estoque: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      className="px-4 py-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-md shadow-sm transition-colors duration-200"
                     >
                       {editingMaterial ? 'Atualizar' : 'Cadastrar'}
                     </button>
@@ -542,8 +592,8 @@ const Estoque: React.FC = () => {
           {/* Modal de Cadastro de Modelo */}
           {modeloModalOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+              <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg max-w-md w-full p-6">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
                   Novo Modelo de Material
                 </h2>
                 <form onSubmit={handleModeloSubmit} className="space-y-4">
@@ -555,7 +605,7 @@ const Estoque: React.FC = () => {
                       type="text"
                       value={modeloFormData.nome}
                       onChange={(e) => setModeloFormData({ ...modeloFormData, nome: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
                     />
                   </div>
@@ -567,7 +617,7 @@ const Estoque: React.FC = () => {
                       type="text"
                       value={modeloFormData.marca}
                       onChange={(e) => setModeloFormData({ ...modeloFormData, marca: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       required
                     />
                   </div>
@@ -581,7 +631,7 @@ const Estoque: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      className="px-4 py-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-md shadow-sm transition-colors duration-200"
                     >
                       Cadastrar
                     </button>

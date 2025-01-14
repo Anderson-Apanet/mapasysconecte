@@ -11,7 +11,8 @@ export const ROUTES = {
   ADM: '/adm',
   TECNICOS: '/tecnicos',
   ESTOQUE: '/estoque',
-  ADM_BAIRROS: '/adm/bairros'
+  ADM_BAIRROS: '/adm/bairros',
+  ADM_VEICULOS: '/adm/veiculos'
 } as const;
 
 export type RouteKeys = keyof typeof ROUTES;

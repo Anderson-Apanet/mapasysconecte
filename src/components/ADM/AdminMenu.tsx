@@ -8,7 +8,8 @@ import {
   BuildingOfficeIcon,
   WrenchScrewdriverIcon,
   BanknotesIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  TruckIcon
 } from '@heroicons/react/24/solid';
 import classNames from 'classnames';
 import { ROUTES } from '@/constants/routes';
@@ -49,8 +50,24 @@ const menuItems: MenuItem[] = [
     name: 'Tipos de Usuários',
     icon: UserGroupIcon,
     href: '/adm/tipos-usuarios',
-    description: 'Gerenciar perfis de acesso',
+    description: 'Configurar tipos de usuários',
+    color: 'from-yellow-400 to-yellow-600'
+  },
+  {
+    id: 'bairros',
+    name: 'Bairros',
+    icon: MapPinIcon,
+    href: '/adm/bairros',
+    description: 'Gerenciar bairros atendidos',
     color: 'from-purple-400 to-purple-600'
+  },
+  {
+    id: 'veiculos',
+    name: 'Veículos',
+    icon: TruckIcon,
+    href: ROUTES.ADM_VEICULOS,
+    description: 'Gerenciar veículos da empresa',
+    color: 'from-orange-400 to-orange-600'
   },
   {
     id: 'configuracoes',
@@ -59,14 +76,6 @@ const menuItems: MenuItem[] = [
     href: '/adm/configuracoes',
     description: 'Configurações do sistema',
     color: 'from-gray-400 to-gray-600'
-  },
-  {
-    id: 'bairros',
-    name: 'Bairros',
-    icon: BuildingOfficeIcon,
-    href: ROUTES.ADM_BAIRROS,
-    description: 'Gerenciar bairros do sistema',
-    color: 'from-indigo-400 to-indigo-600'
   }
 ];
 

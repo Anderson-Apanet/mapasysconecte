@@ -15,6 +15,7 @@ import Caixa from './pages/Caixa';
 import Tecnicos from './pages/Tecnicos';
 import Estoque from './pages/Estoque';
 import Bairros from './pages/ADM/Bairros';
+import Veiculos from './pages/Veiculos';
 import PrivateRoute from './components/PrivateRoute';
 import { ROUTES } from './constants/routes';
 
@@ -91,6 +92,11 @@ const App: React.FC = () => {
           <Route path={ROUTES.ADM_BAIRROS} element={
             <PrivateRoute>
               <Bairros />
+            </PrivateRoute>
+          } />
+          <Route path={ROUTES.ADM_VEICULOS} element={
+            <PrivateRoute>
+              <Veiculos />
             </PrivateRoute>
           } />
 
