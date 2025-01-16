@@ -761,6 +761,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                   isOpen={isContratoModalOpen}
                   onClose={handleContratoModalClose}
                   contrato={selectedContrato}
+                  cliente={cliente}
                 />
               )}
 

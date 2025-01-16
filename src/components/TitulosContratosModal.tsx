@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog } from '@headlessui/react';
 import { supabase } from '../utils/supabaseClient';
 import { toast } from 'react-toastify';
 import { 
@@ -9,7 +8,8 @@ import {
   ArrowPathIcon,
   QrCodeIcon,
   DocumentTextIcon,
-  ClipboardDocumentIcon
+  ClipboardDocumentIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import { 
   findCustomerByCpfCnpj, 
@@ -29,118 +29,76 @@ interface TitulosContratosModalProps {
 }
 
 export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ isOpen, onClose, contrato, pppoe }) => {
-  const [asaasTitulos, setAsaasTitulos] = useState<AsaasPayment[]>([]);
-  const [loadingAsaas, setLoadingAsaas] = useState(false);
+  const [titulosLocais, setTitulosLocais] = useState<any[]>([]);
+  const [loadingTitulosLocais, setLoadingTitulosLocais] = useState(false);
   const [showLinhaDigitavel, setShowLinhaDigitavel] = useState(false);
   const [linhaDigitavel, setLinhaDigitavel] = useState('');
   const [loadingLinhaDigitavel, setLoadingLinhaDigitavel] = useState(false);
   const [showQrCode, setShowQrCode] = useState(false);
   const [qrCodeImage, setQrCodeImage] = useState('');
   const [loadingQrCode, setLoadingQrCode] = useState(false);
+  const [showCriarTitulosModal, setShowCriarTitulosModal] = useState(false);
+  const [dataInicialVencimento, setDataInicialVencimento] = useState('');
+  const [quantidadeTitulos, setQuantidadeTitulos] = useState(1);
+  const [cliente, setCliente] = useState<any>(null);
+  const [plano, setPlano] = useState<any>(null);
 
-  const buscarTitulosAsaas = async () => {
-    if (!contrato || !contrato.id_cliente) {
-      console.warn('Contrato ou ID do cliente não fornecido');
+  // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
+  const getDataMinima = () => {
+    const hoje = new Date();
+    return hoje.toISOString().split('T')[0];
+  };
+
+  // Função para formatar a data inicial com base no dia de vencimento do contrato
+  const getDataInicialPadrao = () => {
+    if (!contrato?.dia_vencimento) return '';
+    
+    const hoje = new Date();
+    const dataInicial = new Date(hoje.getFullYear(), hoje.getMonth(), contrato.dia_vencimento);
+    
+    // Se o dia de vencimento já passou este mês, usa o próximo mês
+    if (hoje.getDate() > contrato.dia_vencimento) {
+      dataInicial.setMonth(dataInicial.getMonth() + 1);
+    }
+    
+    return dataInicial.toISOString().split('T')[0];
+  };
+
+  const buscarTitulosLocais = async () => {
+    if (!contrato || !contrato.id) {
+      console.warn('Contrato não fornecido');
       return;
     }
 
+    setLoadingTitulosLocais(true);
     try {
-      setLoadingAsaas(true);
-      console.log('Buscando títulos do Asaas para o cliente:', contrato.id_cliente);
-      
-      // Buscar dados do cliente no banco local
-      const { data: cliente, error: clienteError } = await supabase
-        .from('clientes')
+      const { data: titulos, error } = await supabase
+        .from('titulos')
         .select('*')
-        .eq('id', contrato.id_cliente)
-        .single();
+        .eq('id_contrato', contrato.id)
+        .order('vencimento');
 
-      if (clienteError) {
-        console.error('Erro ao buscar dados do cliente:', clienteError);
-        toast.error('Erro ao buscar dados do cliente no banco');
-        return;
-      }
-
-      let asaasId = cliente?.idasaas;
-      let clienteAsaas;
-
-      if (!asaasId) {
-        // Remover caracteres especiais do CPF/CNPJ
-        const cpfCnpjLimpo = cliente.cpf_cnpj.replace(/[^\d]/g, '');
-        console.log('CPF/CNPJ limpo:', cpfCnpjLimpo);
-        
-        // Buscar cliente no Asaas
-        clienteAsaas = await findCustomerByCpfCnpj(cpfCnpjLimpo);
-        
-        // Se o cliente não existe no Asaas, criar
-        if (!clienteAsaas) {
-          try {
-            const customerData: CreateCustomerData = {
-              name: cliente.nome,
-              cpfCnpj: cpfCnpjLimpo,
-              email: cliente.email || `${cpfCnpjLimpo}@email.com`,
-              phone: cliente.telefone || undefined,
-              mobilePhone: cliente.celular || undefined,
-              address: cliente.endereco || undefined,
-              addressNumber: cliente.numero || undefined,
-              complement: cliente.complemento || undefined,
-              province: cliente.bairro || undefined,
-              postalCode: cliente.cep ? cliente.cep.replace(/[^\d]/g, '') : undefined,
-              city: cliente.cidade || undefined,
-              state: cliente.estado || undefined
-            };
-
-            clienteAsaas = await createCustomer(customerData);
-            toast.success(`Cliente ${cliente.nome} criado no Asaas com sucesso!`);
-          } catch (error: any) {
-            console.error('Erro ao criar cliente no Asaas:', error);
-            toast.error('Erro ao criar cliente no Asaas: ' + error.message);
-            return;
-          }
-        }
-
-        // Salvar o ID do Asaas no banco local
-        asaasId = clienteAsaas.id;
-        const { error: updateError } = await supabase
-          .from('clientes')
-          .update({ idasaas: asaasId })
-          .eq('id', contrato.id_cliente);
-
-        if (updateError) {
-          console.error('Erro ao atualizar ID do Asaas:', updateError);
-          toast.error('Erro ao atualizar ID do Asaas no banco');
-          return;
-        }
-
-        toast.success(`Cliente vinculado ao Asaas: ${clienteAsaas.name}`);
-      }
-
-      // Buscar cobranças usando o ID do Asaas
-      console.log('Buscando cobranças para o cliente Asaas:', asaasId);
-      const pagamentos = await getCustomerPayments(asaasId);
-      
-      // Ordenar pagamentos por data de vencimento (ascendente)
-      const pagamentosOrdenados = pagamentos.sort((a, b) => {
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      });
-      
-      setAsaasTitulos(pagamentosOrdenados);
-      
-    } catch (error: any) {
-      console.error('Erro ao buscar títulos no Asaas:', error);
-      toast.error(error.message || 'Erro ao buscar títulos no Asaas');
-      setAsaasTitulos([]);
+      if (error) throw error;
+      setTitulosLocais(titulos || []);
+    } catch (error) {
+      console.error('Erro ao buscar títulos:', error);
+      toast.error('Erro ao buscar títulos');
     } finally {
-      setLoadingAsaas(false);
+      setLoadingTitulosLocais(false);
     }
   };
 
   useEffect(() => {
-    if (isOpen && contrato) {
-      console.log('Modal aberto com contrato:', contrato);
-      buscarTitulosAsaas();
+    if (isOpen) {
+      buscarTitulosLocais();
     }
   }, [isOpen, contrato]);
+
+  useEffect(() => {
+    if (showCriarTitulosModal) {
+      setDataInicialVencimento(getDataInicialPadrao());
+    }
+  }, [showCriarTitulosModal, contrato?.dia_vencimento]);
 
   const handleVerLinhaDigitavel = async (paymentId: string) => {
     try {
@@ -173,216 +131,326 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     }
   };
 
+  // Buscar dados do cliente e plano
+  useEffect(() => {
+    const buscarDados = async () => {
+      if (!contrato?.id_cliente || !contrato?.id_plano) return;
+
+      const { data: clienteData } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', contrato.id_cliente)
+        .single();
+
+      const { data: planoData } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('id', contrato.id_plano)
+        .single();
+
+      setCliente(clienteData);
+      setPlano(planoData);
+    };
+
+    buscarDados();
+  }, [contrato]);
+
+  const enviarParaN8N = async () => {
+    if (!cliente || !plano || !contrato) {
+      toast.error('Dados incompletos para gerar títulos');
+      return;
+    }
+
+    const payload = {
+      nome: cliente.nome,
+      cpf_cnpj: cliente.cpf_cnpj,
+      valor: plano.valor,
+      idasaas: cliente.idasaas,
+      billingType: "BOLETO",
+      nextDueDate: dataInicialVencimento,
+      cycle: "MONTHLY",
+      maxPayments: quantidadeTitulos,
+      interest: 1.5,
+      fine: 2,
+      description: plano.nome,
+      externalReference: contrato.pppoe,
+      idcontrato: contrato.id,
+      idcliente: cliente.id
+    };
+
+    try {
+      const response = await fetch('https://workflows.apanet.tec.br/webhook-test/e4e61c7f-76a5-4d98-b725-d4fac879850b', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao enviar dados');
+      }
+
+      toast.success('Títulos enviados para geração');
+      setShowCriarTitulosModal(false);
+    } catch (error) {
+      console.error('Erro ao enviar dados:', error);
+      toast.error('Erro ao enviar dados para geração dos títulos');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <>
-      <Dialog 
-        open={isOpen} 
-        onClose={onClose}
-        className="fixed inset-0 z-10 overflow-y-auto"
-      >
-        <div className="flex items-center justify-center min-h-screen">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+      {isOpen && (
+        <div className="fixed inset-0 z-40 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black opacity-30" />
+            
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl p-6">
+              <div className="flex justify-between items-center border-b pb-4">
+                <h3 className="text-2xl font-bold text-gray-900">
+                  Títulos do Contrato - {pppoe}
+                </h3>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowCriarTitulosModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Criar Títulos
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-gray-500 focus:outline-none p-2"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
 
-          <div className="relative bg-white rounded-lg w-full max-w-4xl mx-4 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <Dialog.Title className="text-lg font-medium">
-                Títulos do Contrato {pppoe}
-              </Dialog.Title>
-              <button
-                onClick={onClose}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
+              <div className="space-y-6 mt-4">
+                {/* Loading States */}
+                {loadingTitulosLocais && (
+                  <div className="flex items-center justify-center py-8">
+                    <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
+                    <span className="ml-2 text-gray-600">Carregando títulos...</span>
+                  </div>
+                )}
+
+                {/* No Titles Message */}
+                {!loadingTitulosLocais && titulosLocais.length === 0 && (
+                  <div className="text-center py-8">
+                    <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 text-lg">Este contrato não possui títulos cadastrados.</p>
+                  </div>
+                )}
+
+                {/* Lista de Títulos */}
+                <div className="mt-4">
+                  <h3 className="text-lg font-medium text-gray-900">Títulos do Contrato</h3>
+                  {loadingTitulosLocais ? (
+                    <div className="flex justify-center items-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : titulosLocais.length > 0 ? (
+                    <div className="mt-2 max-h-60 overflow-y-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Data Vencimento
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Valor
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {titulosLocais.map((titulo) => (
+                            <tr key={titulo.id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {titulo.vencimento ? new Date(titulo.vencimento + 'T00:00:00').toLocaleDateString() : ''}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {new Intl.NumberFormat('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL'
+                                }).format(titulo.valor)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  titulo.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                  titulo.status === 'RECEIVED' ? 'bg-green-100 text-green-800' :
+                                  titulo.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {titulo.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm mt-2">Nenhum título encontrado para este contrato.</p>
+                  )}
+                </div>
+              </div>
             </div>
-
-            {loadingAsaas ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Vencimento
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Valor
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ações
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {asaasTitulos.map((titulo) => (
-                      <tr key={titulo.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(titulo.dueDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Intl.NumberFormat('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL'
-                          }).format(titulo.value)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            titulo.status === 'RECEIVED' ? 'bg-green-100 text-green-800' :
-                            titulo.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                            titulo.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {titulo.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex space-x-2">
-                            <button
-                              title="Editar"
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              title="Excluir"
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              title="Estornar"
-                              className="text-yellow-600 hover:text-yellow-900"
-                            >
-                              <ArrowPathIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              title="Ver linha digitável"
-                              className="text-gray-600 hover:text-gray-900"
-                              onClick={() => handleVerLinhaDigitavel(titulo.id)}
-                              disabled={loadingLinhaDigitavel}
-                            >
-                              <DocumentTextIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              title="Ver QR Code PIX"
-                              className="text-green-600 hover:text-green-900"
-                              onClick={() => handleVerQrCode(titulo.id)}
-                              disabled={loadingQrCode}
-                            >
-                              <QrCodeIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
-      </Dialog>
+      )}
 
-      {/* Modal da Linha Digitável */}
-      <Dialog
-        open={showLinhaDigitavel}
-        onClose={() => setShowLinhaDigitavel(false)}
-        className="fixed inset-0 z-20 overflow-y-auto"
-      >
-        <div className="flex items-center justify-center min-h-screen">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
-
-          <div className="relative bg-white rounded-lg w-full max-w-md mx-4 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <Dialog.Title className="text-lg font-medium">
-                Linha Digitável
-              </Dialog.Title>
-              <button
-                onClick={() => setShowLinhaDigitavel(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-mono break-all">{linhaDigitavel}</p>
+      {/* Modal de Criar Títulos */}
+      {showCriarTitulosModal && (
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+            
+            <div 
+              className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute top-4 right-4">
                 <button
-                  onClick={handleCopyLinhaDigitavel}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                  title="Copiar"
+                  onClick={() => setShowCriarTitulosModal(false)}
+                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
                 >
-                  <ClipboardDocumentIcon className="h-5 w-5" />
+                  <XMarkIcon className="h-6 w-6" />
                 </button>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowLinhaDigitavel(false)}
-                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      </Dialog>
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-gray-900">
+                  Criar Títulos
+                </h3>
 
-      {/* Modal do QR Code PIX */}
-      <Dialog
-        open={showQrCode}
-        onClose={() => setShowQrCode(false)}
-        className="fixed inset-0 z-20 overflow-y-auto"
-      >
-        <div className="flex items-center justify-center min-h-screen">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="dataInicial" className="block text-sm font-medium text-gray-700">
+                      Data Inicial de Vencimento
+                    </label>
+                    <input
+                      type="date"
+                      id="dataInicial"
+                      name="dataInicial"
+                      min={getDataMinima()}
+                      value={dataInicialVencimento}
+                      onChange={(e) => setDataInicialVencimento(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                  </div>
 
-          <div className="relative bg-white rounded-lg w-full max-w-md mx-4 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <Dialog.Title className="text-lg font-medium">
-                QR Code PIX
-              </Dialog.Title>
-              <button
-                onClick={() => setShowQrCode(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
+                  <div>
+                    <label htmlFor="quantidade" className="block text-sm font-medium text-gray-700">
+                      Quantidade de Títulos
+                    </label>
+                    <input
+                      type="number"
+                      id="quantidade"
+                      name="quantidade"
+                      min="1"
+                      max="12"
+                      value={quantidadeTitulos}
+                      onChange={(e) => setQuantidadeTitulos(Number(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Máximo de 12 títulos por vez</p>
+                  </div>
+                </div>
 
-            <div className="mt-4">
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
-                {qrCodeImage && (
-                  <img 
-                    src={`data:image/png;base64,${qrCodeImage}`} 
-                    alt="QR Code PIX" 
-                    className="w-64 h-64"
-                  />
-                )}
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowCriarTitulosModal(false)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={enviarParaN8N}
+                    disabled={!dataInicialVencimento || quantidadeTitulos < 1}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Gerar Títulos
+                  </button>
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowQrCode(false)}
-                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200"
-              >
-                Fechar
-              </button>
+      {/* QR Code Modal */}
+      {showQrCode && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+            
+            <div className="bg-white p-6 rounded-lg max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">QR Code PIX</h3>
+                <button onClick={() => setShowQrCode(false)} className="text-gray-500 hover:text-gray-700">
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              {loadingQrCode ? (
+                <div className="flex items-center justify-center py-4">
+                  <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="text-center">
+                  <img src={qrCodeImage} alt="QR Code PIX" className="mx-auto mb-4" />
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </Dialog>
+      )}
+
+      {/* Linha Digitável Modal */}
+      {showLinhaDigitavel && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+            
+            <div className="bg-white p-6 rounded-lg max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Linha Digitável</h3>
+                <button onClick={() => setShowLinhaDigitavel(false)} className="text-gray-500 hover:text-gray-700">
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              {loadingLinhaDigitavel ? (
+                <div className="flex items-center justify-center py-4">
+                  <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 mb-2">Clique para copiar:</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(linhaDigitavel);
+                      toast.success('Linha digitável copiada!');
+                    }}
+                    className="bg-gray-100 p-3 rounded-lg text-sm font-mono w-full text-left hover:bg-gray-200"
+                  >
+                    {linhaDigitavel}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
