@@ -155,9 +155,26 @@ export function transformEvents(events: AgendaEvent[]) {
         return null;
       }
 
-      // Define a cor de fundo com base no status e na cor do evento
+      // Define a cor de fundo com base no tipo de evento e status
       const isRealizada = event.realizada === true;
-      const eventColor = isRealizada ? '#E2E8F0' : event.cor;
+      let eventColor;
+      
+      if (isRealizada) {
+        eventColor = '#E2E8F0'; // Cinza para eventos realizados
+      } else {
+        // Define a cor com base no tipo de evento
+        switch (event.tipo_evento?.toLowerCase()) {
+          case 'instalação':
+            eventColor = '#3788d8'; // Azul para instalações
+            break;
+          case 'visita':
+            eventColor = '#10B981'; // Verde para visitas
+            break;
+          default:
+            eventColor = '#6B7280'; // Cinza escuro para outros tipos
+        }
+      }
+
       const textColor = isRealizada ? '#1F2937' : '#ffffff';
 
       // Verifica se o evento é para o dia todo
@@ -190,7 +207,8 @@ export function transformEvents(events: AgendaEvent[]) {
           event.parcial ? 'event-parcial' : '',
           event.prioritario ? 'event-prioritaria' : '',
           isAllDay ? 'event-all-day' : 'event-timed',
-          'custom-calendar-event' // Nova classe para estilização personalizada
+          'custom-calendar-event',
+          `event-type-${event.tipo_evento?.toLowerCase().replace(/\s+/g, '-') || 'outros'}` // Nova classe baseada no tipo
         ].filter(Boolean),
         extendedProps: {
           descricao: event.descricao,

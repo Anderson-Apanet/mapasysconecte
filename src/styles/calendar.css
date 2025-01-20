@@ -97,10 +97,38 @@
   min-height: 3em !important;
 }
 
+/* Cores específicas para cada tipo de evento */
+.event-type-instalação {
+  background-color: #3788d8 !important;
+  border-color: #3788d8 !important;
+}
+
+.event-type-visita {
+  background-color: #10B981 !important;
+  border-color: #10B981 !important;
+}
+
+/* Eventos realizados */
+.event-realizada {
+  background-color: #E2E8F0 !important;
+  border-color: #E2E8F0 !important;
+  color: #1F2937 !important;
+}
+
 /* Ajusta a altura dos eventos no modo mês */
 .fc-daygrid-event {
   min-height: 3em !important;
   max-height: none !important;
+}
+
+/* Garante que o texto não vaze para fora do evento */
+.fc-event-title {
+  white-space: pre-line !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
 }
 
 /* Ajusta o espaçamento interno dos eventos */
