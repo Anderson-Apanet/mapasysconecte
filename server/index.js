@@ -149,45 +149,59 @@ app.get('/api/support/connections', async (req, res) => {
         const params = [];
 
         if (search) {
-            whereClause += ' AND username LIKE ?';
+            whereClause += ' AND ra.username LIKE ?';
             params.push(`%${search}%`);
         }
 
         if (status === 'up') {
-            whereClause += ' AND acctstoptime IS NULL';
+            whereClause += ' AND ra.acctstoptime IS NULL';
         } else if (status === 'down') {
-            whereClause += ' AND acctstoptime IS NOT NULL';
+            whereClause += ' AND ra.acctstoptime IS NOT NULL';
         }
 
         if (nasip !== 'all') {
-            whereClause += ' AND nasipaddress = ?';
+            whereClause += ' AND ra.nasipaddress = ?';
             params.push(nasip);
         }
 
         // Count total records
         const [countRows] = await connection.execute(
-            `SELECT COUNT(*) as total FROM radacct WHERE 1=1${whereClause}`,
+            `WITH LastConnection AS (
+                SELECT username, MAX(radacctid) as last_id
+                FROM radacct
+                GROUP BY username
+            )
+            SELECT COUNT(*) as total 
+            FROM LastConnection lc
+            JOIN radacct ra ON ra.radacctid = lc.last_id
+            WHERE 1=1 ${whereClause}`,
             params
         );
         const totalRecords = countRows[0].total;
 
         // Get paginated records
         const query = `
+            WITH LastConnection AS (
+                SELECT username, MAX(radacctid) as last_id
+                FROM radacct
+                GROUP BY username
+            )
             SELECT 
-                radacctid,
-                username,
-                nasipaddress,
-                nasportid,
-                acctstarttime,
-                acctstoptime,
-                acctinputoctets,
-                acctoutputoctets,
-                acctterminatecause,
-                framedipaddress,
-                callingstationid
-            FROM radacct 
-            WHERE 1=1${whereClause}
-            ORDER BY acctstarttime DESC 
+                ra.radacctid,
+                ra.username,
+                ra.nasipaddress,
+                ra.nasportid,
+                ra.acctstarttime,
+                ra.acctstoptime,
+                ra.acctinputoctets,
+                ra.acctoutputoctets,
+                ra.acctterminatecause,
+                ra.framedipaddress,
+                ra.callingstationid
+            FROM LastConnection lc
+            JOIN radacct ra ON ra.radacctid = lc.last_id
+            WHERE 1=1 ${whereClause}
+            ORDER BY ra.acctstarttime DESC 
             LIMIT ? OFFSET ?`;
 
         const [rows] = await connection.execute(query, [...params, limit, offset]);
