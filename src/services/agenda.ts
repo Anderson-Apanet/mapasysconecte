@@ -127,6 +127,21 @@ export async function updateEventDates(eventId: number, start: string, end: stri
   }
 }
 
+export const updateContratoStatus = async (pppoe: string, status: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('contratos')
+      .update({ status })
+      .eq('pppoe', pppoe);
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Erro ao atualizar status do contrato:', error);
+    throw error;
+  }
+};
+
 export function transformEvents(events: AgendaEvent[]) {
   console.log('Transformando eventos - Total:', events.length);
   return events.map(event => {

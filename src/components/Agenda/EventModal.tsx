@@ -63,19 +63,6 @@ export function EventModal({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Nome do Evento
-                </label>
-                <input
-                  type="text"
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  value={event.nome || ''}
-                  onChange={(e) => onEventChange({ ...event, nome: e.target.value })}
-                  required
-                />
-              </div>
-
               {['Visita', 'Instalação', 'Retirada'].includes(event.tipo_evento || '') && (
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -87,8 +74,13 @@ export function EventModal({
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       value={event.pppoe || ''}
                       onChange={(e) => {
-                        onEventChange({ ...event, pppoe: e.target.value });
-                        onSearchPPPoE(e.target.value);
+                        const pppoe = e.target.value;
+                        onEventChange({ 
+                          ...event, 
+                          pppoe,
+                          nome: event.tipo_evento === 'Visita' ? `Visita - ${pppoe}` : event.nome
+                        });
+                        onSearchPPPoE(pppoe);
                       }}
                       placeholder="Pesquisar por PPPoE..."
                       required
@@ -110,7 +102,12 @@ export function EventModal({
                           key={contrato.id}
                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                           onClick={() => {
-                            onEventChange({ ...event, pppoe: contrato.pppoe });
+                            const pppoe = contrato.pppoe;
+                            onEventChange({ 
+                              ...event, 
+                              pppoe,
+                              nome: event.tipo_evento === 'Visita' ? `Visita - ${pppoe}` : event.nome
+                            });
                             onSearchPPPoE(''); // Limpa os resultados após selecionar
                           }}
                         >
@@ -121,6 +118,19 @@ export function EventModal({
                   )}
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Nome do Evento
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={event.nome || ''}
+                  onChange={(e) => onEventChange({ ...event, nome: e.target.value })}
+                  required
+                />
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

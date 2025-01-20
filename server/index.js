@@ -57,11 +57,17 @@ printRoutes(app._router.stack);
 // Função para criar conexão com o MySQL
 const createConnection = async () => {
     const config = {
-        host: process.env.MYSQL_HOST,
-        user: process.env.MYSQL_USER,
-        password: process.env.MYSQL_PASSWORD,
-        database: process.env.MYSQL_DATABASE
+        host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+        user: process.env.VITE_MYSQL_USER || 'root',
+        password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+        database: process.env.VITE_MYSQL_DATABASE || 'radius',
+        connectTimeout: 10000 // 10 segundos
     };
+    console.log('Conectando ao MySQL com:', {
+        host: config.host,
+        user: config.user,
+        database: config.database
+    });
     return await mysql.createConnection(config);
 };
 
@@ -122,80 +128,85 @@ app.get('/api/support/connections', async (req, res) => {
         const status = req.query.status || 'all';
         const nasip = req.query.nasip || 'all';
 
-        // Consulta para obter apenas o último registro de cada username
+        // Consulta para obter todos os usuários da radcheck e suas últimas conexões (se houverem)
         const query = `
             WITH LastRecords AS (
                 SELECT username, MAX(radacctid) as max_id
                 FROM radacct
                 GROUP BY username
             )
-            SELECT r.*
-            FROM radacct r
-            INNER JOIN LastRecords lr ON r.username = lr.username AND r.radacctid = lr.max_id
-            WHERE CASE 
-                WHEN ? = 'up' THEN r.acctstoptime IS NULL
-                WHEN ? = 'down' THEN r.acctstoptime IS NOT NULL
+            SELECT 
+                rc.username,
+                ra.radacctid,
+                ra.nasipaddress,
+                ra.nasportid,
+                ra.acctstarttime,
+                ra.acctstoptime,
+                ra.acctinputoctets,
+                ra.acctoutputoctets,
+                ra.acctterminatecause,
+                ra.framedipaddress,
+                ra.callingstationid
+            FROM radcheck rc
+            LEFT JOIN LastRecords lr ON rc.username = lr.username
+            LEFT JOIN radacct ra ON lr.max_id = ra.radacctid
+            WHERE (
+                rc.username LIKE ? OR
+                ra.callingstationid LIKE ? OR
+                ra.framedipaddress LIKE ?
+            )
+            AND CASE 
+                WHEN ? = 'up' THEN ra.acctstoptime IS NULL
+                WHEN ? = 'down' THEN ra.acctstoptime IS NOT NULL
                 ELSE TRUE
             END
             AND CASE 
-                WHEN ? != 'all' THEN r.nasipaddress = ?
+                WHEN ? != 'all' THEN ra.nasipaddress = ?
                 ELSE TRUE
             END
-            AND CASE 
-                WHEN ? != '' THEN 
-                    r.username LIKE CONCAT('%', ?, '%')
-                    OR r.framedipaddress LIKE CONCAT('%', ?, '%')
-                    OR r.callingstationid LIKE CONCAT('%', ?, '%')
-                ELSE TRUE
-            END
-            ORDER BY r.radacctid DESC
-            LIMIT ? OFFSET ?;
+            ORDER BY ra.acctstarttime DESC
+            LIMIT ? OFFSET ?
         `;
 
-        // Consulta para contar o total de usernames únicos
+        // Consulta para contar o total de registros
         const countQuery = `
-            SELECT COUNT(DISTINCT username) as total
-            FROM radacct r
-            WHERE CASE 
-                WHEN ? = 'up' THEN r.acctstoptime IS NULL
-                WHEN ? = 'down' THEN r.acctstoptime IS NOT NULL
+            SELECT COUNT(DISTINCT rc.username) as total
+            FROM radcheck rc
+            LEFT JOIN radacct ra ON rc.username = ra.username
+            WHERE (
+                rc.username LIKE ? OR
+                ra.callingstationid LIKE ? OR
+                ra.framedipaddress LIKE ?
+            )
+            AND CASE 
+                WHEN ? = 'up' THEN ra.acctstoptime IS NULL
+                WHEN ? = 'down' THEN ra.acctstoptime IS NOT NULL
                 ELSE TRUE
             END
             AND CASE 
-                WHEN ? != 'all' THEN r.nasipaddress = ?
+                WHEN ? != 'all' THEN ra.nasipaddress = ?
                 ELSE TRUE
             END
-            AND CASE 
-                WHEN ? != '' THEN 
-                    r.username LIKE CONCAT('%', ?, '%')
-                    OR r.framedipaddress LIKE CONCAT('%', ?, '%')
-                    OR r.callingstationid LIKE CONCAT('%', ?, '%')
-                ELSE TRUE
-            END;
         `;
 
-        // Log para debug
-        console.log('Executing support query with params:', {
-            status, nasip, search,
-            limit, offset
-        });
-
-        // Executar as consultas
+        const searchPattern = `%${search}%`;
         const [rows] = await connection.execute(query, [
+            searchPattern, searchPattern, searchPattern,
             status, status,
             nasip, nasip,
-            search, search, search, search,
             limit, offset
         ]);
 
-        const [countResult] = await connection.execute(countQuery, [
+        const [countRows] = await connection.execute(countQuery, [
+            searchPattern, searchPattern, searchPattern,
             status, status,
-            nasip, nasip,
-            search, search, search, search
+            nasip, nasip
         ]);
 
-        const total = countResult[0].total;
+        const total = countRows[0].total;
         const totalPages = Math.ceil(total / limit);
+
+        await connection.end();
 
         res.json({
             data: rows,
@@ -206,10 +217,8 @@ app.get('/api/support/connections', async (req, res) => {
                 recordsPerPage: limit
             }
         });
-
-        await connection.end();
     } catch (error) {
-        console.error('Error fetching support connections:', error);
+        console.error('Error in /api/support/connections:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

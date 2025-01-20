@@ -156,16 +156,16 @@ app.get('/api/connections', async (req, res) => {
 
     try {
         console.log('Tentando conectar ao MySQL com:', {
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            database: process.env.MYSQL_DATABASE
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius'
         });
         
         const connection = await mysql.createConnection({
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            password: process.env.MYSQL_PASSWORD,
-            database: process.env.MYSQL_DATABASE || 'radius',
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius',
             connectTimeout: 10000 // 10 segundos
         });
 
@@ -227,16 +227,16 @@ app.get('/api/connections', async (req, res) => {
 app.get('/api/concentrator-stats', async (req, res) => {
     try {
         console.log('Tentando conectar ao MySQL com:', {
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            database: process.env.MYSQL_DATABASE
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius'
         });
         
         const connection = await mysql.createConnection({
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            password: process.env.MYSQL_PASSWORD,
-            database: process.env.MYSQL_DATABASE || 'radius',
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius',
             connectTimeout: 10000 // 10 segundos
         });
 
@@ -259,16 +259,16 @@ app.get('/api/concentrator-stats', async (req, res) => {
 app.get('/api/user-consumption/:username', async (req, res) => {
     try {
         console.log('Tentando conectar ao MySQL com:', {
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            database: process.env.MYSQL_DATABASE
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius'
         });
         
         const connection = await mysql.createConnection({
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            password: process.env.MYSQL_PASSWORD,
-            database: process.env.MYSQL_DATABASE || 'radius',
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius',
             connectTimeout: 10000 // 10 segundos
         });
 
@@ -299,16 +299,16 @@ app.get('/radius/groups', async (req, res) => {
     
     try {
         console.log('Tentando conectar ao MySQL com:', {
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            database: process.env.MYSQL_DATABASE
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius'
         });
         
         const connection = await mysql.createConnection({
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            password: process.env.MYSQL_PASSWORD,
-            database: process.env.MYSQL_DATABASE || 'radius',
+            host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+            user: process.env.VITE_MYSQL_USER || 'root',
+            password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+            database: process.env.VITE_MYSQL_DATABASE || 'radius',
             connectTimeout: 10000 // 10 segundos
         });
 

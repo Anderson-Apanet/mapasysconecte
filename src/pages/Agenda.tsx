@@ -10,7 +10,7 @@ import Layout from '../components/Layout';
 import { EventModal } from '../components/Agenda/EventModal';
 import { MoreEventsPopover } from '../components/Agenda/MoreEventsPopover';
 import { AgendaEvent } from '../types/agenda';
-import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates } from '../services/agenda';
+import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates, updateContratoStatus } from '../services/agenda';
 import { debounce } from '../utils/date';
 
 export default function Agenda() {
@@ -20,7 +20,7 @@ export default function Agenda() {
   const [newEvent, setNewEvent] = useState<Partial<AgendaEvent>>({
     nome: '',
     descricao: '',
-    horamarcada: false,
+    horamarcada: true,
     prioritario: false,
     cor: '#3788d8'
   });
@@ -45,13 +45,17 @@ export default function Agenda() {
   };
 
   const handleDateSelect = (selectInfo: any) => {
+    const startDate = new Date(selectInfo.startStr);
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 1); // Adiciona 1 hora à data inicial
+
     setSelectedEvent(null);
     setNewEvent({
       nome: '',
       descricao: '',
-      datainicio: selectInfo.startStr,
-      datafinal: selectInfo.endStr,
-      horamarcada: !selectInfo.allDay,
+      datainicio: startDate.toISOString().slice(0, 16),
+      datafinal: endDate.toISOString().slice(0, 16),
+      horamarcada: true, // Sempre true
       prioritario: false,
       cor: '#3788d8'
     });
@@ -101,7 +105,7 @@ export default function Agenda() {
     setNewEvent({
       nome: '',
       descricao: '',
-      horamarcada: false,
+      horamarcada: true,
       prioritario: false,
       cor: '#3788d8'
     });
@@ -119,7 +123,18 @@ export default function Agenda() {
         return;
       }
 
-      const savedEvent = await saveEvent(newEvent, selectedEvent);
+      // Sempre define horamarcada como true
+      const eventToSave = {
+        ...newEvent,
+        horamarcada: true
+      };
+
+      const savedEvent = await saveEvent(eventToSave, selectedEvent);
+      
+      // Se for uma instalação, atualiza o status do contrato
+      if (eventToSave.tipo_evento === 'Instalação' && eventToSave.pppoe) {
+        await updateContratoStatus(eventToSave.pppoe, 'Agendado');
+      }
       
       toast.success(selectedEvent ? 'Evento atualizado!' : 'Evento criado!');
       setIsModalOpen(false);
@@ -135,7 +150,7 @@ export default function Agenda() {
       setNewEvent({
         nome: '',
         descricao: '',
-        horamarcada: false,
+        horamarcada: true, // Sempre true
         prioritario: false,
         cor: '#3788d8'
       });

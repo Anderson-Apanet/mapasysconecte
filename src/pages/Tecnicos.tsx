@@ -8,6 +8,16 @@ import { fetchEvents } from '../services/agenda';
 import { InstalacaoModal } from '../components/Tecnicos/InstalacaoModal';
 import { useNavigate } from 'react-router-dom';
 
+interface ContratoDetalhes {
+  endereco: string;
+  bairro: {
+    nome: string;
+  };
+  plano: {
+    nome: string;
+  };
+}
+
 export default function Tecnicos() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +25,7 @@ export default function Tecnicos() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [userName, setUserName] = useState<string>('');
+  const [contratosDetalhes, setContratosDetalhes] = useState<Record<string, ContratoDetalhes>>({});
   const navigate = useNavigate();
 
   // Memoize funções que não precisam ser recriadas a cada render
@@ -47,6 +58,45 @@ export default function Tecnicos() {
     }
   }, [navigate]);
 
+  const fetchContratosDetalhes = useCallback(async (events: AgendaEvent[]) => {
+    const pppoes = events
+      .filter(event => event.pppoe)
+      .map(event => event.pppoe);
+
+    if (pppoes.length === 0) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('contratos')
+        .select(`
+          pppoe,
+          endereco,
+          bairro:id_bairro (
+            nome
+          ),
+          plano:id_plano (
+            nome
+          )
+        `)
+        .in('pppoe', pppoes);
+
+      if (error) throw error;
+
+      const detalhes = (data || []).reduce((acc, contrato) => ({
+        ...acc,
+        [contrato.pppoe]: {
+          endereco: contrato.endereco,
+          bairro: contrato.bairro,
+          plano: contrato.plano
+        }
+      }), {});
+
+      setContratosDetalhes(detalhes);
+    } catch (error) {
+      console.error('Erro ao buscar detalhes dos contratos:', error);
+    }
+  }, []);
+
   const fetchDayEvents = useCallback(async (date: Date) => {
     try {
       setLoading(true);
@@ -61,6 +111,7 @@ export default function Tecnicos() {
           new Date(a.datainicio).getTime() - new Date(b.datainicio).getTime()
         );
         setEvents(sortedEvents);
+        fetchContratosDetalhes(sortedEvents);
       } else {
         setEvents([]);
       }
@@ -71,7 +122,7 @@ export default function Tecnicos() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchContratosDetalhes]);
 
   // Memoize funções de manipulação de data
   const handlePreviousDay = useCallback(() => {
@@ -276,39 +327,70 @@ export default function Tecnicos() {
           </div>
         ) : (
           <div className="space-y-3">
-            {events.map((event) => (
-              <div 
-                key={event.id}
-                onClick={() => handleEventClick(event)}
-                className={`bg-white rounded-lg shadow-sm p-4 border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-gray-50`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-gray-500">
-                    {format(new Date(event.datainicio), "HH:mm", { locale: ptBR })}
-                    {event.horamarcada ? ` - ${format(new Date(event.datafinal), "HH:mm", { locale: ptBR })}` : ''}
-                  </span>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(event)}`}>
-                    {getStatusText(event)}
-                  </span>
+            {events.map((event) => {
+              const contratoDetalhes = event.pppoe ? contratosDetalhes[event.pppoe] : null;
+              
+              return (
+                <div 
+                  key={event.id}
+                  onClick={() => handleEventClick(event)}
+                  className={`bg-white rounded-lg shadow-sm p-4 border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-gray-50`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-500">
+                      {format(new Date(event.datainicio), "HH:mm", { locale: ptBR })}
+                      {event.horamarcada ? ` - ${format(new Date(event.datafinal), "HH:mm", { locale: ptBR })}` : ''}
+                    </span>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(event)}`}>
+                      {getStatusText(event)}
+                    </span>
+                  </div>
+                  
+                  <h3 className="font-medium text-gray-900 mb-1">
+                    {event.nome}
+                  </h3>
+                  
+                  {event.descricao && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      {event.descricao}
+                    </p>
+                  )}
+
+                  {event.tipo_evento === 'Instalação' && event.pppoe && (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
+                          PPPoE: {event.pppoe}
+                        </span>
+                        {contratoDetalhes?.plano && (
+                          <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full">
+                            {contratoDetalhes.plano.nome}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {contratoDetalhes && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                          </svg>
+                          <span>
+                            {contratoDetalhes.endereco}, {contratoDetalhes.bairro?.nome}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex items-center">
+                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                      {event.tipo_evento}
+                    </span>
+                  </div>
                 </div>
-                <h3 className="font-medium text-gray-900 mb-1">
-                  {event.nome}
-                </h3>
-                <p className="text-sm text-gray-600 mb-2">
-                  {event.descricao}
-                </p>
-                {event.tipo_evento === 'Instalação' && event.pppoe && (
-                  <p className="text-xs text-gray-500">
-                    PPPoE: {event.pppoe}
-                  </p>
-                )}
-                <div className="mt-2 flex items-center">
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                    {event.tipo_evento}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
