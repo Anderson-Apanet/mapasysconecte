@@ -123,20 +123,14 @@ app.get('/api/concentrator-stats', async (req, res) => {
                     ELSE n.nasname = r.nasipaddress
                 END
             GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
-            ORDER BY n.nasname;
-        `;
+            ORDER BY n.nasname`;
 
-        console.log('Executando query de estatísticas dos concentradores');
         const [rows] = await connection.execute(query);
-        
-        // Log para debug
-        console.log('Resultados:', rows);
-
         await connection.end();
         res.json(rows);
     } catch (error) {
-        console.error('Erro ao buscar estatísticas dos concentradores:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+        console.error('Erro ao buscar estatísticas:', error);
+        res.status(500).json({ error: String(error) });
     }
 });
 
@@ -151,83 +145,52 @@ app.get('/api/support/connections', async (req, res) => {
         const status = req.query.status || 'all';
         const nasip = req.query.nasip || 'all';
 
-        // Consulta para obter todos os usuários da radcheck e suas últimas conexões (se houverem)
+        let whereClause = '';
+        const params = [];
+
+        if (search) {
+            whereClause += ' AND username LIKE ?';
+            params.push(`%${search}%`);
+        }
+
+        if (status === 'up') {
+            whereClause += ' AND acctstoptime IS NULL';
+        } else if (status === 'down') {
+            whereClause += ' AND acctstoptime IS NOT NULL';
+        }
+
+        if (nasip !== 'all') {
+            whereClause += ' AND nasipaddress = ?';
+            params.push(nasip);
+        }
+
+        // Count total records
+        const [countRows] = await connection.execute(
+            `SELECT COUNT(*) as total FROM radacct WHERE 1=1${whereClause}`,
+            params
+        );
+        const totalRecords = countRows[0].total;
+
+        // Get paginated records
         const query = `
-            WITH LastRecords AS (
-                SELECT username, MAX(radacctid) as max_id
-                FROM radacct
-                GROUP BY username
-            )
             SELECT 
-                rc.username,
-                ra.radacctid,
-                ra.nasipaddress,
-                ra.nasportid,
-                ra.acctstarttime,
-                ra.acctstoptime,
-                ra.acctinputoctets,
-                ra.acctoutputoctets,
-                ra.acctterminatecause,
-                ra.framedipaddress,
-                ra.callingstationid
-            FROM radcheck rc
-            LEFT JOIN LastRecords lr ON rc.username = lr.username
-            LEFT JOIN radacct ra ON lr.max_id = ra.radacctid
-            WHERE (
-                rc.username LIKE ? OR
-                ra.callingstationid LIKE ? OR
-                ra.framedipaddress LIKE ?
-            )
-            AND CASE 
-                WHEN ? = 'up' THEN ra.acctstoptime IS NULL
-                WHEN ? = 'down' THEN ra.acctstoptime IS NOT NULL
-                ELSE TRUE
-            END
-            AND CASE 
-                WHEN ? != 'all' THEN ra.nasipaddress = ?
-                ELSE TRUE
-            END
-            ORDER BY ra.acctstarttime DESC
-            LIMIT ? OFFSET ?
-        `;
+                radacctid,
+                username,
+                nasipaddress,
+                nasportid,
+                acctstarttime,
+                acctstoptime,
+                acctinputoctets,
+                acctoutputoctets,
+                acctterminatecause,
+                framedipaddress,
+                callingstationid
+            FROM radacct 
+            WHERE 1=1${whereClause}
+            ORDER BY acctstarttime DESC 
+            LIMIT ? OFFSET ?`;
 
-        // Consulta para contar o total de registros
-        const countQuery = `
-            SELECT COUNT(DISTINCT rc.username) as total
-            FROM radcheck rc
-            LEFT JOIN radacct ra ON rc.username = ra.username
-            WHERE (
-                rc.username LIKE ? OR
-                ra.callingstationid LIKE ? OR
-                ra.framedipaddress LIKE ?
-            )
-            AND CASE 
-                WHEN ? = 'up' THEN ra.acctstoptime IS NULL
-                WHEN ? = 'down' THEN ra.acctstoptime IS NOT NULL
-                ELSE TRUE
-            END
-            AND CASE 
-                WHEN ? != 'all' THEN ra.nasipaddress = ?
-                ELSE TRUE
-            END
-        `;
-
-        const searchPattern = `%${search}%`;
-        const [rows] = await connection.execute(query, [
-            searchPattern, searchPattern, searchPattern,
-            status, status,
-            nasip, nasip,
-            limit, offset
-        ]);
-
-        const [countRows] = await connection.execute(countQuery, [
-            searchPattern, searchPattern, searchPattern,
-            status, status,
-            nasip, nasip
-        ]);
-
-        const total = countRows[0].total;
-        const totalPages = Math.ceil(total / limit);
+        const [rows] = await connection.execute(query, [...params, limit, offset]);
 
         await connection.end();
 
@@ -235,14 +198,14 @@ app.get('/api/support/connections', async (req, res) => {
             data: rows,
             pagination: {
                 currentPage: page,
-                totalPages,
-                totalRecords: total,
+                totalPages: Math.ceil(totalRecords / limit),
+                totalRecords,
                 recordsPerPage: limit
             }
         });
     } catch (error) {
-        console.error('Error in /api/support/connections:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Erro ao buscar conexões:', error);
+        res.status(500).json({ error: String(error) });
     }
 });
 
@@ -285,41 +248,36 @@ app.get('/api/user-consumption/:username', async (req, res) => {
     }
 });
 
-// Rota para buscar histórico de conexões do usuário
+// Rota para buscar histórico de conexões de um usuário
 app.get('/api/connections/user/:username/history', async (req, res) => {
     try {
         const connection = await createConnection();
         const username = req.params.username;
 
-        // Query para buscar o histórico de conexões do usuário
         const query = `
             SELECT 
                 radacctid,
+                username,
+                nasipaddress,
+                nasportid,
                 acctstarttime,
                 acctstoptime,
-                acctsessiontime,
                 acctinputoctets,
                 acctoutputoctets,
-                callingstationid,
+                acctterminatecause,
                 framedipaddress,
-                nasipaddress
+                callingstationid
             FROM radacct 
             WHERE username = ?
-            ORDER BY acctstarttime DESC
-            LIMIT 10;
-        `;
+            ORDER BY acctstarttime DESC 
+            LIMIT 10`;
 
-        console.log('Executando query de histórico do usuário:', username);
         const [rows] = await connection.execute(query, [username]);
-        
-        // Log para debug
-        console.log('Resultados:', rows);
-
         await connection.end();
         res.json(rows);
     } catch (error) {
-        console.error('Erro ao buscar histórico do usuário:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+        console.error('Erro ao buscar histórico de conexões:', error);
+        res.status(500).json({ error: String(error) });
     }
 });
 
