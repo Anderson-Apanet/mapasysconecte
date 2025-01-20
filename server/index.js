@@ -57,18 +57,41 @@ printRoutes(app._router.stack);
 // Função para criar conexão com o MySQL
 const createConnection = async () => {
     const config = {
-        host: process.env.MYSQL_HOST || '201.76.1.124',
-        user: process.env.MYSQL_USER || 'root',
-        password: process.env.MYSQL_PASSWORD || 'bk134',
-        database: process.env.MYSQL_DATABASE || 'radius',
+        host: process.env.MYSQL_HOST,
+        user: process.env.MYSQL_USER,
+        password: process.env.MYSQL_PASSWORD,
+        database: process.env.MYSQL_DATABASE,
+        port: process.env.MYSQL_PORT || 3306,
         connectTimeout: 10000 // 10 segundos
     };
-    console.log('Conectando ao MySQL com:', {
+
+    // Log das configurações (ocultando a senha)
+    console.log('Tentando conectar ao MySQL com:', {
         host: config.host,
         user: config.user,
-        database: config.database
+        database: config.database,
+        port: config.port
     });
-    return await mysql.createConnection(config);
+
+    // Verificar se as variáveis de ambiente estão definidas
+    if (!config.host || !config.user || !config.password || !config.database) {
+        console.error('Erro: Variáveis de ambiente do MySQL não configuradas corretamente:', {
+            MYSQL_HOST: process.env.MYSQL_HOST,
+            MYSQL_USER: process.env.MYSQL_USER,
+            MYSQL_DATABASE: process.env.MYSQL_DATABASE,
+            MYSQL_PORT: process.env.MYSQL_PORT
+        });
+        throw new Error('Configuração do MySQL incompleta');
+    }
+
+    try {
+        const connection = await mysql.createConnection(config);
+        console.log('Conexão MySQL estabelecida com sucesso');
+        return connection;
+    } catch (error) {
+        console.error('Erro ao conectar ao MySQL:', error);
+        throw error;
+    }
 };
 
 // Rota para buscar estatísticas dos concentradores
@@ -300,6 +323,24 @@ app.get('/api/connections/user/:username/history', async (req, res) => {
     }
 });
 
+// Middleware de erro global
+app.use((err, req, res, next) => {
+    console.error('Erro na aplicação:', err);
+    res.status(500).json({
+        error: 'Erro interno do servidor',
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
+
+// Middleware para tratar rotas não encontradas
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Rota não encontrada',
+        path: req.path
+    });
+});
+
 // Iniciar o servidor
 app.listen(port, () => {
     console.log(`Servidor rodando na porta ${port}`);
@@ -308,23 +349,4 @@ app.listen(port, () => {
     console.log('- MYSQL_HOST:', process.env.MYSQL_HOST);
     console.log('- MYSQL_DATABASE:', process.env.MYSQL_DATABASE);
     console.log('- ASAAS_API_KEY:', process.env.ASAAS_API_KEY ? 'Configurado' : 'Não configurado');
-});
-
-// Tratamento de erros global
-app.use((err, req, res, next) => {
-    console.error('Erro na aplicação:', err);
-    res.status(500).json({ 
-        error: 'Erro interno do servidor',
-        message: err.message 
-    });
-});
-
-// Tratamento de rotas não encontradas
-app.use((req, res) => {
-    console.log('Rota não encontrada:', req.method, req.url);
-    res.status(404).json({ 
-        error: 'Rota não encontrada',
-        method: req.method,
-        url: req.url
-    });
 });
