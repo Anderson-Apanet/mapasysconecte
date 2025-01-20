@@ -4,14 +4,13 @@ const router = express.Router();
 require('dotenv').config();
 
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-const ASAAS_API_URL = 'https://api.asaas.com/v3';
+const ASAAS_API_URL = process.env.ASAAS_API_URL || 'https://api.asaas.com/v3';
 
 if (!ASAAS_API_KEY) {
-  console.error('ASAAS_API_KEY não configurada');
-  process.exit(1);
+  console.warn('AVISO: ASAAS_API_KEY não configurada. As rotas do Asaas estarão indisponíveis.');
+} else {
+  console.log('Configurando API do Asaas...');
 }
-
-console.log('Configurando API do Asaas...');
 
 // Configuração do axios exatamente como no curl
 const asaasApi = axios.create({
@@ -21,6 +20,17 @@ const asaasApi = axios.create({
     'access_token': ASAAS_API_KEY
   }
 });
+
+// Middleware para verificar se o Asaas está configurado
+const checkAsaasConfig = (req, res, next) => {
+  if (!ASAAS_API_KEY) {
+    return res.status(503).json({ 
+      error: 'Asaas API não está configurada',
+      message: 'O serviço do Asaas está temporariamente indisponível. Por favor, tente novamente mais tarde.'
+    });
+  }
+  next();
+};
 
 // Middleware para logging
 router.use((req, res, next) => {
@@ -33,7 +43,7 @@ router.use((req, res, next) => {
 });
 
 // Rota de teste
-router.get('/test', async (req, res) => {
+router.get('/test', checkAsaasConfig, async (req, res) => {
   try {
     console.log('Testando conexão com Asaas...');
     console.log('URL:', ASAAS_API_URL + '/customers');
@@ -58,7 +68,7 @@ router.get('/test', async (req, res) => {
 });
 
 // Buscar cliente por CPF/CNPJ
-router.get('/customers', async (req, res) => {
+router.get('/customers', checkAsaasConfig, async (req, res) => {
   try {
     const { cpfCnpj } = req.query;
     if (!cpfCnpj) {
@@ -72,7 +82,7 @@ router.get('/customers', async (req, res) => {
 });
 
 // Buscar pagamentos do cliente
-router.get('/payments/:customerId', async (req, res) => {
+router.get('/payments/:customerId', checkAsaasConfig, async (req, res) => {
   try {
     const { customerId } = req.params;
     console.log('Buscando pagamentos para cliente:', customerId);
@@ -94,7 +104,7 @@ router.get('/payments/:customerId', async (req, res) => {
 });
 
 // Buscar linha digitável
-router.get('/payments/:id/identificationField', async (req, res) => {
+router.get('/payments/:id/identificationField', checkAsaasConfig, async (req, res) => {
   try {
     const { id } = req.params;
     console.log('Buscando linha digitável para pagamento:', id);
