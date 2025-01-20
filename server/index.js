@@ -1,10 +1,23 @@
-require('dotenv').config();
+// Carregar variáveis de ambiente
+const dotenv = require('dotenv');
+const path = require('path');
+
+// Em produção, usar .env.production
+if (process.env.NODE_ENV === 'production') {
+    dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
+} else {
+    dotenv.config();
+}
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const mysql = require('mysql2/promise');
 
-console.log('Iniciando servidor...');
+console.log('Iniciando servidor com configuração:', {
+    nodeEnv: process.env.NODE_ENV,
+    mysqlHost: process.env.MYSQL_HOST,
+    port: process.env.PORT
+});
 
 // Importar rotas do Asaas
 const asaasRouter = require('./routes/asaas');
@@ -35,7 +48,14 @@ console.log('Rotas do Asaas registradas');
 
 // Rota de teste para verificar se o servidor está funcionando
 app.get('/api/test', (req, res) => {
-    res.json({ message: 'Servidor funcionando!' });
+    res.json({ 
+        message: 'Servidor funcionando!',
+        config: {
+            nodeEnv: process.env.NODE_ENV,
+            mysqlHost: process.env.MYSQL_HOST,
+            port: process.env.PORT
+        }
+    });
 });
 
 // Listar todas as rotas registradas
