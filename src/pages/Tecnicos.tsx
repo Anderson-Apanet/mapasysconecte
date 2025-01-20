@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import { AgendaEvent } from '../types/agenda';
 import { fetchEvents } from '../services/agenda';
 import { InstalacaoModal } from '../components/Tecnicos/InstalacaoModal';
+import { VisitaModal } from '../components/Agenda/VisitaModal';
 import { useNavigate } from 'react-router-dom';
 
 interface ContratoDetalhes {
@@ -22,7 +23,8 @@ export default function Tecnicos() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInstalacaoModalOpen, setIsInstalacaoModalOpen] = useState(false);
+  const [isVisitaModalOpen, setIsVisitaModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [contratosDetalhes, setContratosDetalhes] = useState<Record<string, ContratoDetalhes>>({});
@@ -148,13 +150,26 @@ export default function Tecnicos() {
   // Memoize funções de manipulação de eventos
   const handleEventClick = useCallback((event: AgendaEvent) => {
     setSelectedEvent(event);
-    setIsModalOpen(true);
+    if (event.tipo_evento === 'Instalação') {
+      setIsInstalacaoModalOpen(true);
+    } else if (event.tipo_evento === 'Visita') {
+      setIsVisitaModalOpen(true);
+    }
   }, []);
 
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
+  const handleCloseInstalacaoModal = useCallback(() => {
+    setIsInstalacaoModalOpen(false);
     setSelectedEvent(null);
   }, []);
+
+  const handleCloseVisitaModal = useCallback(() => {
+    setIsVisitaModalOpen(false);
+    setSelectedEvent(null);
+  }, []);
+
+  const handleVisitaRegistered = useCallback(() => {
+    fetchDayEvents(selectedDate);
+  }, [selectedDate, fetchDayEvents]);
 
   // Memoize funções de estilo
   const getStatusColor = useMemo(() => (event: AgendaEvent) => {
@@ -356,7 +371,7 @@ export default function Tecnicos() {
                     </p>
                   )}
 
-                  {event.tipo_evento === 'Instalação' && event.pppoe && (
+                  {(event.tipo_evento === 'Instalação' || event.tipo_evento === 'Visita') && event.pppoe && (
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
                         <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
@@ -395,12 +410,22 @@ export default function Tecnicos() {
         )}
       </div>
 
+      {/* Modais */}
       <InstalacaoModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
+        isOpen={isInstalacaoModalOpen}
+        onClose={handleCloseInstalacaoModal}
         event={selectedEvent}
         onEventUpdated={() => fetchDayEvents(selectedDate)}
       />
+
+      {selectedEvent && (
+        <VisitaModal
+          isOpen={isVisitaModalOpen}
+          onClose={handleCloseVisitaModal}
+          event={selectedEvent}
+          onVisitaRegistered={handleVisitaRegistered}
+        />
+      )}
     </div>
   );
 }
