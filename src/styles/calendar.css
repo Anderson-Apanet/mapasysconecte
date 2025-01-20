@@ -78,6 +78,35 @@
 
 .fc-event-title {
   font-weight: 500;
+  white-space: pre-line !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
+}
+
+/* Estilos personalizados para eventos do calendário */
+.custom-calendar-event {
+  white-space: pre-line !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 0.85em !important;
+  line-height: 1.3 !important;
+  padding: 2px 4px !important;
+  min-height: 3em !important;
+}
+
+/* Ajusta a altura dos eventos no modo mês */
+.fc-daygrid-event {
+  min-height: 3em !important;
+  max-height: none !important;
+}
+
+/* Ajusta o espaçamento interno dos eventos */
+.fc-daygrid-event-harness {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
 }
 
 /* Estilos da visualização em lista */

@@ -155,17 +155,6 @@ export function transformEvents(events: AgendaEvent[]) {
         return null;
       }
 
-      // Log para debug
-      console.log('Processando evento:', {
-        id: event.id,
-        nome: event.nome,
-        horamarcada: event.horamarcada,
-        datainicio: event.datainicio,
-        datafinal: event.datafinal,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
-      });
-
       // Define a cor de fundo com base no status e na cor do evento
       const isRealizada = event.realizada === true;
       const eventColor = isRealizada ? '#E2E8F0' : event.cor;
@@ -174,15 +163,22 @@ export function transformEvents(events: AgendaEvent[]) {
       // Verifica se o evento é para o dia todo
       const isAllDay = !event.horamarcada;
 
-      // Formata as datas mantendo o horário para eventos com hora marcada
-      const formattedStart = event.datainicio;
-      const formattedEnd = event.datafinal;
+      // Formata a hora para exibição
+      const startTime = new Date(event.datainicio).toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+
+      // Formata o título do evento para mostrar apenas informações essenciais
+      const title = event.horamarcada
+        ? `${startTime}\n${event.tipo_evento}\n${event.usuario_resp || 'Sem responsável'}`
+        : `${event.tipo_evento}\n${event.usuario_resp || 'Sem responsável'}`;
 
       const transformedEvent = {
         id: event.id.toString(),
-        title: `[${event.tipo_evento}] ${event.nome || 'Sem título'}`,
-        start: formattedStart,
-        end: formattedEnd,
+        title: title,
+        start: event.datainicio,
+        end: event.datafinal,
         backgroundColor: eventColor,
         borderColor: eventColor,
         textColor: textColor,
@@ -193,7 +189,8 @@ export function transformEvents(events: AgendaEvent[]) {
           event.cancelado ? 'event-cancelada' : '',
           event.parcial ? 'event-parcial' : '',
           event.prioritario ? 'event-prioritaria' : '',
-          isAllDay ? 'event-all-day' : 'event-timed'
+          isAllDay ? 'event-all-day' : 'event-timed',
+          'custom-calendar-event' // Nova classe para estilização personalizada
         ].filter(Boolean),
         extendedProps: {
           descricao: event.descricao,
@@ -207,9 +204,6 @@ export function transformEvents(events: AgendaEvent[]) {
           pppoe: event.pppoe
         }
       };
-
-      // Log do evento transformado
-      console.log('Evento transformado:', transformedEvent);
 
       return transformedEvent;
     } catch (error) {
