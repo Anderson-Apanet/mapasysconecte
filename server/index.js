@@ -57,10 +57,10 @@ printRoutes(app._router.stack);
 // Função para criar conexão com o MySQL
 const createConnection = async () => {
     const config = {
-        host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
-        user: process.env.VITE_MYSQL_USER || 'root',
-        password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-        database: process.env.VITE_MYSQL_DATABASE || 'radius',
+        host: process.env.MYSQL_HOST || '201.76.1.124',
+        user: process.env.MYSQL_USER || 'root',
+        password: process.env.MYSQL_PASSWORD || 'bk134',
+        database: process.env.MYSQL_DATABASE || 'radius',
         connectTimeout: 10000 // 10 segundos
     };
     console.log('Conectando ao MySQL com:', {
