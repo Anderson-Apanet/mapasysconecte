@@ -41,6 +41,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// Servir arquivos estáticos do frontend em produção
+if (process.env.NODE_ENV === 'production') {
+    console.log('Configurando arquivos estáticos do frontend...');
+    const distPath = path.resolve(__dirname, '../dist');
+    console.log('Caminho do dist:', distPath);
+    app.use(express.static(distPath));
+}
+
 // Registrar as rotas do Asaas
 console.log('Registrando rotas do Asaas em /api/asaas');
 app.use('/api/asaas', asaasRouter);
@@ -332,6 +340,14 @@ app.use((req, res) => {
         path: req.path
     });
 });
+
+// Rota para todas as outras requisições em produção
+if (process.env.NODE_ENV === 'production') {
+    app.get('*', (req, res) => {
+        console.log('Servindo index.html para:', req.url);
+        res.sendFile(path.resolve(__dirname, '../dist/index.html'));
+    });
+}
 
 // Iniciar o servidor
 app.listen(port, () => {
