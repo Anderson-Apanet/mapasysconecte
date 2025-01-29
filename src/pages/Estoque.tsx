@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface Material {
   id: number;
-  nome: string;
+  serialnb: string;
   tipo: string;
   id_modelo: number;
   etiqueta: string;
@@ -43,6 +43,7 @@ const Estoque: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('materiais');
   const [materiais, setMateriais] = useState<Material[]>([]);
   const [modelos, setModelos] = useState<ModeloMaterial[]>([]);
+  const [modelosPorTipo, setModelosPorTipo] = useState<ModeloMaterial[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modeloModalOpen, setModeloModalOpen] = useState(false);
@@ -54,7 +55,7 @@ const Estoque: React.FC = () => {
   const [modelosTotalPages, setModelosTotalPages] = useState(1);
   const itemsPerPage = 10;
   const [filters, setFilters] = useState({
-    nome: '',
+    serialnb: '',
     tipo: '',
     modelo: '',
     etiqueta: ''
@@ -64,7 +65,7 @@ const Estoque: React.FC = () => {
     marca: ''
   });
   const [formData, setFormData] = useState({
-    nome: '',
+    serialnb: '',
     tipo: '',
     id_modelo: 0,
     etiqueta: '',
@@ -110,12 +111,44 @@ const Estoque: React.FC = () => {
     try {
       const { from, to } = getPaginationRange(currentPage, itemsPerPage);
       
-      // Primeiro, buscar os materiais
-      const { data: materiaisData, error: materiaisError, count } = await supabase
+      // Construir a query base
+      let query = supabase
         .from('materiais')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          modelo:modelo_materiais(id, nome, marca)
+        `, { count: 'exact' });
+
+      // Aplicar filtros
+      if (filters.serialnb) {
+        query = query.ilike('serialnb', `%${filters.serialnb}%`);
+      }
+      if (filters.tipo) {
+        query = query.eq('tipo', filters.tipo);
+      }
+      if (filters.etiqueta) {
+        query = query.ilike('etiqueta', `%${filters.etiqueta}%`);
+      }
+      if (filters.modelo) {
+        // Primeiro buscar o ID do modelo pelo nome
+        const { data: modeloData } = await supabase
+          .from('modelo_materiais')
+          .select('id')
+          .ilike('nome', `%${filters.modelo}%`)
+          .limit(1)
+          .single();
+
+        if (modeloData) {
+          query = query.eq('id_modelo', modeloData.id);
+        }
+      }
+
+      // Aplicar paginação e ordenação
+      query = query
         .range(from, to)
         .order('created_at', { ascending: false });
+
+      const { data: materiaisData, error: materiaisError, count } = await query;
 
       if (materiaisError) throw materiaisError;
 
@@ -160,7 +193,7 @@ const Estoque: React.FC = () => {
         .select('*', { count: 'exact' })
         .range(from, to)
         .order('nome');
-
+    
       if (modeloFilters.nome) {
         query = query.ilike('nome', `%${modeloFilters.nome}%`);
       }
@@ -224,7 +257,7 @@ const Estoque: React.FC = () => {
         const { error } = await supabase
           .from('materiais')
           .update({
-            nome: formData.nome,
+            serialnb: formData.serialnb,
             tipo: formData.tipo,
             id_modelo: formData.id_modelo,
             etiqueta: formData.etiqueta,
@@ -239,7 +272,7 @@ const Estoque: React.FC = () => {
         const { data: newMaterial, error: materialError } = await supabase
           .from('materiais')
           .insert([{
-            nome: formData.nome,
+            serialnb: formData.serialnb,
             tipo: formData.tipo,
             id_modelo: formData.id_modelo,
             etiqueta: formData.etiqueta,
@@ -355,7 +388,7 @@ const Estoque: React.FC = () => {
   const handleEdit = (material: Material) => {
     setEditingMaterial(material);
     setFormData({
-      nome: material.nome,
+      serialnb: material.serialnb,
       tipo: material.tipo,
       id_modelo: material.id_modelo,
       etiqueta: material.etiqueta,
@@ -375,7 +408,7 @@ const Estoque: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      nome: '',
+      serialnb: '',
       tipo: '',
       id_modelo: 0,
       etiqueta: '',
@@ -545,6 +578,69 @@ const Estoque: React.FC = () => {
     }
   }, [selectedMaterial]);
 
+  // Função para buscar modelos por tipo
+  const fetchModelosPorTipo = async (tipo: string) => {
+    if (!tipo) {
+      setModelosPorTipo([]);
+      return;
+    }
+
+    try {
+      // Primeiro buscar todos os materiais deste tipo para pegar os IDs dos modelos usados
+      const { data: materiaisTipo, error: materiaisError } = await supabase
+        .from('materiais')
+        .select('id_modelo')
+        .eq('tipo', tipo)
+        .not('id_modelo', 'is', null);
+
+      if (materiaisError) throw materiaisError;
+
+      // Extrair IDs únicos dos modelos
+      const modeloIds = [...new Set(materiaisTipo?.map(m => m.id_modelo) || [])];
+
+      if (modeloIds.length > 0) {
+        // Buscar os modelos correspondentes
+        const { data: modelosData, error: modelosError } = await supabase
+          .from('modelo_materiais')
+          .select('*')
+          .in('id', modeloIds)
+          .order('nome');
+
+        if (modelosError) throw modelosError;
+        setModelosPorTipo(modelosData || []);
+      } else {
+        // Se não houver materiais deste tipo, buscar todos os modelos
+        const { data: todosModelos, error: todosModelosError } = await supabase
+          .from('modelo_materiais')
+          .select('*')
+          .order('nome');
+
+        if (todosModelosError) throw todosModelosError;
+        setModelosPorTipo(todosModelos || []);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar modelos por tipo:', error);
+      toast.error('Erro ao carregar modelos');
+    }
+  };
+
+  // Atualizar modelos quando o tipo mudar
+  useEffect(() => {
+    if (modalOpen) {
+      fetchModelosPorTipo(formData.tipo);
+    }
+  }, [formData.tipo, modalOpen]);
+
+  // No formulário de material, atualizar o campo tipo
+  const handleTipoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const novoTipo = e.target.value;
+    setFormData({
+      ...formData,
+      tipo: novoTipo,
+      id_modelo: 0 // Resetar o modelo quando mudar o tipo
+    });
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -624,16 +720,16 @@ const Estoque: React.FC = () => {
             <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow p-6 mb-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Filtros</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Filtro por Nome */}
+                {/* Filtro por SerialNB */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Nome
+                    SerialNB
                   </label>
                   <input
                     type="text"
-                    value={filters.nome}
-                    onChange={(e) => setFilters({ ...filters, nome: e.target.value })}
-                    placeholder="Filtrar por nome..."
+                    value={filters.serialnb}
+                    onChange={(e) => setFilters({ ...filters, serialnb: e.target.value })}
+                    placeholder="Filtrar por SerialNB..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
@@ -732,7 +828,7 @@ const Estoque: React.FC = () => {
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Nome
+                        SerialNB
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Tipo
@@ -755,7 +851,7 @@ const Estoque: React.FC = () => {
                     {materiais.map((material) => (
                       <tr key={material.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                          {material.nome}
+                          {material.serialnb}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                           {material.tipo}
@@ -986,12 +1082,12 @@ const Estoque: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nome
+                        SerialNB
                       </label>
                       <input
                         type="text"
-                        value={formData.nome}
-                        onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                        value={formData.serialnb}
+                        onChange={(e) => setFormData({ ...formData, serialnb: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       />
@@ -1002,7 +1098,7 @@ const Estoque: React.FC = () => {
                       </label>
                       <select
                         value={formData.tipo}
-                        onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                        onChange={handleTipoChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
                       >
@@ -1019,13 +1115,14 @@ const Estoque: React.FC = () => {
                         Modelo
                       </label>
                       <select
-                        value={formData.id_modelo || ''}
+                        value={formData.id_modelo}
                         onChange={(e) => setFormData({ ...formData, id_modelo: Number(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         required
+                        disabled={!formData.tipo} // Desabilitar se não houver tipo selecionado
                       >
                         <option value="">Selecione um modelo</option>
-                        {modelos.map((modelo) => (
+                        {modelosPorTipo.map((modelo) => (
                           <option key={modelo.id} value={modelo.id}>
                             {modelo.nome} - {modelo.marca}
                           </option>
@@ -1133,7 +1230,7 @@ const Estoque: React.FC = () => {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  Movimentar Material: {selectedMaterial.nome}
+                  Movimentar Material: {selectedMaterial.serialnb}
                 </h3>
 
                 {/* Localização Atual */}
