@@ -44,6 +44,7 @@ const Estoque: React.FC = () => {
   const [materiais, setMateriais] = useState<Material[]>([]);
   const [modelos, setModelos] = useState<ModeloMaterial[]>([]);
   const [modelosPorTipo, setModelosPorTipo] = useState<ModeloMaterial[]>([]);
+  const [filtroModelosPorTipo, setFiltroModelosPorTipo] = useState<ModeloMaterial[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modeloModalOpen, setModeloModalOpen] = useState(false);
@@ -631,6 +632,67 @@ const Estoque: React.FC = () => {
     }
   }, [formData.tipo, modalOpen]);
 
+  // Função para buscar modelos por tipo para o filtro
+  const fetchFiltroModelosPorTipo = async (tipo: string) => {
+    if (!tipo) {
+      setFiltroModelosPorTipo([]);
+      return;
+    }
+
+    try {
+      // Primeiro buscar todos os materiais deste tipo para pegar os IDs dos modelos usados
+      const { data: materiaisTipo, error: materiaisError } = await supabase
+        .from('materiais')
+        .select('id_modelo')
+        .eq('tipo', tipo)
+        .not('id_modelo', 'is', null);
+
+      if (materiaisError) throw materiaisError;
+
+      // Extrair IDs únicos dos modelos
+      const modeloIds = [...new Set(materiaisTipo?.map(m => m.id_modelo) || [])];
+
+      if (modeloIds.length > 0) {
+        // Buscar os modelos correspondentes
+        const { data: modelosData, error: modelosError } = await supabase
+          .from('modelo_materiais')
+          .select('*')
+          .in('id', modeloIds)
+          .order('nome');
+
+        if (modelosError) throw modelosError;
+        setFiltroModelosPorTipo(modelosData || []);
+      } else {
+        // Se não houver materiais deste tipo, buscar todos os modelos
+        const { data: todosModelos, error: todosModelosError } = await supabase
+          .from('modelo_materiais')
+          .select('*')
+          .order('nome');
+
+        if (todosModelosError) throw todosModelosError;
+        setFiltroModelosPorTipo(todosModelos || []);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar modelos por tipo:', error);
+      toast.error('Erro ao carregar modelos');
+    }
+  };
+
+  // Atualizar modelos quando o tipo do filtro mudar
+  useEffect(() => {
+    fetchFiltroModelosPorTipo(filters.tipo);
+  }, [filters.tipo]);
+
+  // Handler para mudança do tipo no filtro
+  const handleFiltroTipoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const novoTipo = e.target.value;
+    setFilters({
+      ...filters,
+      tipo: novoTipo,
+      modelo: '' // Resetar o modelo quando mudar o tipo
+    });
+  };
+
   // No formulário de material, atualizar o campo tipo
   const handleTipoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const novoTipo = e.target.value;
@@ -741,10 +803,10 @@ const Estoque: React.FC = () => {
                   </label>
                   <select
                     value={filters.tipo}
-                    onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}
+                    onChange={handleFiltroTipoChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
-                    <option value="">Todos</option>
+                    <option value="">Todos os tipos</option>
                     {tiposMaterial.map((tipo) => (
                       <option key={tipo} value={tipo}>
                         {tipo}
@@ -762,10 +824,11 @@ const Estoque: React.FC = () => {
                     value={filters.modelo}
                     onChange={(e) => setFilters({ ...filters, modelo: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    disabled={!filters.tipo}
                   >
-                    <option value="">Todos</option>
-                    {modelos.map((modelo) => (
-                      <option key={modelo.id} value={modelo.nome}>
+                    <option value="">Todos os modelos</option>
+                    {filtroModelosPorTipo.map((modelo) => (
+                      <option key={modelo.id} value={modelo.id}>
                         {modelo.nome} - {modelo.marca}
                       </option>
                     ))}
