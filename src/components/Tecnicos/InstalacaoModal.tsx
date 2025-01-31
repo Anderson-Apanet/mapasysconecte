@@ -14,7 +14,8 @@ interface InstalacaoModalProps {
 
 interface Material {
   id: number;
-  serial: string;
+  serialnb: string;
+  tipo: string;
 }
 
 interface Cliente {
@@ -77,13 +78,21 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
 
     setIsSearching(true);
     try {
+      console.log('Buscando ONUs com termo:', term);
+      
       const { data, error } = await supabase
         .from('materiais')
-        .select('id, serial')
-        .ilike('serial', `%${term}%`)
-        .limit(10);
+        .select('id, serialnb')
+        .eq('tipo', 'Onu') 
+        .ilike('serialnb', `%${term}%`)
+        .order('serialnb');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na query:', error);
+        throw error;
+      }
+
+      console.log('Resultados encontrados:', data);
       setSearchResults(data || []);
     } catch (error) {
       console.error('Erro ao buscar materiais:', error);
@@ -94,6 +103,19 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
   };
 
   const debouncedSearch = debounce(searchMaterials, 300);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    console.log('Valor digitado:', value);
+    setSearchOnu(value);
+    debouncedSearch(value);
+  };
+
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,45 +340,58 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
               </div>
 
               <div className="relative">
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="onu" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   ONU (Serial)
                 </label>
                 <div className="relative">
                   <input
                     type="text"
+                    id="onu"
                     value={searchOnu}
-                    onChange={(e) => {
-                      setSearchOnu(e.target.value);
-                      debouncedSearch(e.target.value);
-                    }}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Buscar por serial..."
-                    disabled={loading}
+                    onChange={handleSearchChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Digite o serial da ONU"
                   />
                   {isSearching && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-indigo-500"></div>
+                    </div>
+                  )}
+                  {searchResults.length > 0 && !selectedOnu && (
+                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 rounded-md shadow-lg">
+                      <ul className="max-h-60 overflow-auto rounded-md py-1 text-base">
+                        {searchResults.map((material) => (
+                          <li
+                            key={material.id}
+                            onClick={() => {
+                              setSelectedOnu(material);
+                              setSearchOnu(material.serialnb);
+                              setSearchResults([]);
+                            }}
+                            className="cursor-pointer px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            {material.serialnb}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
-                {searchResults.length > 0 && searchOnu && !selectedOnu && (
-                  <div className="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-auto">
-                    {searchResults.map((onu) => (
-                      <div
-                        key={onu.id}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => {
-                          setSelectedOnu(onu);
-                          setSearchOnu(onu.serial);
-                          setSearchResults([]);
-                        }}
-                      >
-                        {onu.serial}
-                      </div>
-                    ))}
+                {selectedOnu && (
+                  <div className="mt-2 flex items-center space-x-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      ONU selecionada: {selectedOnu.serialnb}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedOnu(null);
+                        setSearchOnu('');
+                      }}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Remover
+                    </button>
                   </div>
                 )}
               </div>

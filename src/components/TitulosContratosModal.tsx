@@ -138,7 +138,10 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
 
       const { data: clienteData } = await supabase
         .from('clientes')
-        .select('*')
+        .select(`
+          *,
+          bairro:bairros(nome)
+        `)
         .eq('id', contrato.id_cliente)
         .single();
 
@@ -175,7 +178,11 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       description: plano.nome,
       externalReference: contrato.pppoe,
       idcontrato: contrato.id,
-      idcliente: cliente.id
+      idcliente: cliente.id,
+      logradouro: cliente.logradouro,
+      nrlogradouro: cliente.nrlogradouro,
+      cep: cliente.cep,
+      bairro: cliente.bairro?.nome
     };
 
     try {

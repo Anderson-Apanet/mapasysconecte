@@ -66,31 +66,12 @@ export default function Rede() {
   const [connectionHistory, setConnectionHistory] = useState<Connection[]>([]);
   const [showModal, setShowModal] = useState(false);
 
-  const fetchConcentratorStats = async () => {
-    try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await fetch(`${baseUrl}/api/concentrator-stats`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch concentrator stats');
-      }
-      const data = await response.json();
-      console.log('Dados dos concentradores:', data);
-      setConcentrators(data);
-      
-      // Atualiza a lista de IPs dos concentradores para o filtro
-      const ips = data.map((concentrator: ConcentratorStats) => concentrator.nasname);
-      setAllNasIps(ips);
-    } catch (err) {
-      console.error('Error fetching concentrator stats:', err);
-    }
-  };
-
   const fetchConnections = async (page: number = 1, search: string = '') => {
     setLoading(true);
     setError(null);
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const url = new URL(`${baseUrl}/api/support/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
@@ -99,7 +80,7 @@ export default function Rede() {
 
       const response = await fetch(url.toString());
       if (!response.ok) {
-        throw new Error('Failed to fetch connections');
+        throw new Error(`Failed to fetch connections: ${response.statusText}`);
       }
       const data = await response.json();
       console.log('Raw server response:', data);
@@ -122,9 +103,28 @@ export default function Rede() {
     }
   };
 
+  const fetchConcentratorStats = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${baseUrl}/api/concentrator-stats`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch concentrator stats');
+      }
+      const data = await response.json();
+      console.log('Dados dos concentradores:', data);
+      setConcentrators(data);
+      
+      // Atualiza a lista de IPs dos concentradores para o filtro
+      const ips = data.map((concentrator: ConcentratorStats) => concentrator.nasname);
+      setAllNasIps(ips);
+    } catch (err) {
+      console.error('Error fetching concentrator stats:', err);
+    }
+  };
+
   const fetchUserConsumption = async (username: string) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const response = await fetch(`${baseUrl}/api/user-consumption/${username}`);
       if (!response.ok) {
         throw new Error('Failed to fetch user consumption');
@@ -149,7 +149,7 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const response = await fetch(`${baseUrl}/api/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');

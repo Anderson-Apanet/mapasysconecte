@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
-import { format, startOfDay, endOfDay, isToday } from 'date-fns';
+import { format, startOfDay, endOfDay, isToday, startOfWeek, endOfWeek, addDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AgendaEvent } from '../types/agenda';
 import { fetchEvents } from '../services/agenda';
 import { InstalacaoModal } from '../components/Tecnicos/InstalacaoModal';
 import { VisitaModal } from '../components/Agenda/VisitaModal';
 import { useNavigate } from 'react-router-dom';
+import { Dialog } from '@headlessui/react';
 
 interface ContratoDetalhes {
   endereco: string;
@@ -19,13 +20,111 @@ interface ContratoDetalhes {
   };
 }
 
+interface EventCardProps {
+  event: AgendaEvent;
+  contratoDetalhes: ContratoDetalhes | null;
+  onClick: (event: AgendaEvent) => void;
+  getEventTypeColor: (tipo: string) => string;
+  getStatusColor: (event: AgendaEvent) => string;
+  getStatusText: (event: AgendaEvent) => string;
+  compact?: boolean;
+}
+
+interface VisitaInfo {
+  id: number;
+  data: string;
+  relato: string | null;
+  acompanhante: string | null;
+  tecnico: string;
+  id_agenda: number;
+  id_contrato: number | null;
+}
+
+interface InstalacaoInfo {
+  id: number;
+  data_instalacao: string;
+  relato: string | null;
+  acompanhante: string | null;
+  id_user: string;
+  id_agenda: number;
+  id_contrato: number | null;
+}
+
+const EventCard: React.FC<EventCardProps> = ({
+  event,
+  contratoDetalhes,
+  onClick,
+  getEventTypeColor,
+  getStatusColor,
+  getStatusText,
+  compact = false
+}) => (
+  <div 
+    onClick={() => onClick(event)}
+    className={`bg-white rounded-lg shadow-sm p-4 border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-gray-50 ${
+      compact ? 'text-sm' : ''
+    } ${event.realizada ? 'opacity-60 filter blur-[0.3px]' : ''}`}
+  >
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-xs font-medium text-gray-500">
+        {format(new Date(event.datainicio), "HH:mm", { locale: ptBR })}
+        {event.horamarcada ? ` - ${format(new Date(event.datafinal), "HH:mm", { locale: ptBR })}` : ''}
+      </span>
+      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(event)}`}>
+        {getStatusText(event)}
+      </span>
+    </div>
+    
+    <h3 className={`font-medium text-gray-900 mb-1 ${compact ? 'text-sm' : ''}`}>
+      {event.nome}
+    </h3>
+    
+    {!compact && event.descricao && (
+      <p className="text-sm text-gray-600 mb-2">
+        {event.descricao}
+      </p>
+    )}
+
+    {(event.tipo_evento === 'Instalação' || event.tipo_evento === 'Visita') && event.pppoe && (
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
+            PPPoE: {event.pppoe}
+          </span>
+          {contratoDetalhes?.plano && !compact && (
+            <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full">
+              {contratoDetalhes.plano.nome}
+            </span>
+          )}
+        </div>
+        
+        {contratoDetalhes && !compact && (
+          <div className="flex items-center text-sm text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            <span>
+              {contratoDetalhes.endereco}, {contratoDetalhes.bairro?.nome}
+            </span>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+);
+
 export default function Tecnicos() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [isInstalacaoModalOpen, setIsInstalacaoModalOpen] = useState(false);
   const [isVisitaModalOpen, setIsVisitaModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [selectedVisitaInfo, setSelectedVisitaInfo] = useState<VisitaInfo | null>(null);
+  const [selectedInstalacaoInfo, setSelectedInstalacaoInfo] = useState<InstalacaoInfo | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [contratosDetalhes, setContratosDetalhes] = useState<Record<string, ContratoDetalhes>>({});
   const navigate = useNavigate();
@@ -126,7 +225,32 @@ export default function Tecnicos() {
     }
   }, [fetchContratosDetalhes]);
 
-  // Memoize funções de manipulação de data
+  const fetchWeekEvents = useCallback(async (date: Date) => {
+    try {
+      setLoading(true);
+      const start = startOfWeek(date, { locale: ptBR });
+      const end = endOfWeek(date, { locale: ptBR });
+      
+      const data = await fetchEvents(start, end);
+      
+      if (Array.isArray(data)) {
+        const sortedEvents = data.sort((a, b) => 
+          new Date(a.datainicio).getTime() - new Date(b.datainicio).getTime()
+        );
+        setEvents(sortedEvents);
+        fetchContratosDetalhes(sortedEvents);
+      } else {
+        setEvents([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar eventos:', error);
+      toast.error('Erro ao carregar eventos');
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchContratosDetalhes]);
+
   const handlePreviousDay = useCallback(() => {
     setSelectedDate(prev => {
       const newDate = new Date(prev);
@@ -147,14 +271,83 @@ export default function Tecnicos() {
     setSelectedDate(new Date());
   }, []);
 
+  const handlePreviousWeek = useCallback(() => {
+    setSelectedDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() - 7);
+      return newDate;
+    });
+  }, []);
+
+  const handleNextWeek = useCallback(() => {
+    setSelectedDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + 7);
+      return newDate;
+    });
+  }, []);
+
   // Memoize funções de manipulação de eventos
-  const handleEventClick = useCallback((event: AgendaEvent) => {
+  const handleEventClick = useCallback(async (event: AgendaEvent) => {
     setSelectedEvent(event);
-    if (event.tipo_evento === 'Instalação') {
-      setIsInstalacaoModalOpen(true);
-    } else if (event.tipo_evento === 'Visita') {
-      setIsVisitaModalOpen(true);
+
+    if (event.realizada) {
+      try {
+        if (event.tipo_evento === 'Instalação') {
+          const { data, error } = await supabase
+            .from('instalacao')
+            .select(`
+              id,
+              data_instalacao,
+              relato,
+              acompanhante,
+              id_user,
+              id_agenda,
+              id_contrato
+            `)
+            .eq('id_agenda', event.id)
+            .single();
+
+          if (error) throw error;
+          setSelectedInstalacaoInfo(data);
+          setIsInfoModalOpen(true);
+        } else if (event.tipo_evento === 'Visita') {
+          const { data, error } = await supabase
+            .from('visitas')
+            .select(`
+              id,
+              data,
+              relato,
+              acompanhante,
+              tecnico,
+              id_agenda,
+              id_contrato
+            `)
+            .eq('id_agenda', event.id)
+            .single();
+
+          if (error) throw error;
+          setSelectedVisitaInfo(data);
+          setIsInfoModalOpen(true);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar informações:', error);
+        toast.error('Erro ao carregar informações do evento');
+      }
+    } else {
+      if (event.tipo_evento === 'Instalação') {
+        setIsInstalacaoModalOpen(true);
+      } else if (event.tipo_evento === 'Visita') {
+        setIsVisitaModalOpen(true);
+      }
     }
+  }, []);
+
+  const handleCloseInfoModal = useCallback(() => {
+    setIsInfoModalOpen(false);
+    setSelectedVisitaInfo(null);
+    setSelectedInstalacaoInfo(null);
+    setSelectedEvent(null);
   }, []);
 
   const handleCloseInstalacaoModal = useCallback(() => {
@@ -206,9 +399,7 @@ export default function Tecnicos() {
       if (!mounted) return;
 
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           const { error: refreshError } = await supabase.auth.refreshSession();
           if (refreshError) throw refreshError;
@@ -254,7 +445,11 @@ export default function Tecnicos() {
 
     const loadInitialData = async () => {
       if (!mounted) return;
-      await fetchDayEvents(selectedDate);
+      if (viewMode === 'day') {
+        await fetchDayEvents(selectedDate);
+      } else {
+        await fetchWeekEvents(selectedDate);
+      }
       await fetchUserName();
     };
 
@@ -263,7 +458,7 @@ export default function Tecnicos() {
     return () => {
       mounted = false;
     };
-  }, [selectedDate, fetchDayEvents, fetchUserName]);
+  }, [selectedDate, viewMode, fetchDayEvents, fetchWeekEvents, fetchUserName]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -291,25 +486,49 @@ export default function Tecnicos() {
 
       {/* Conteúdo principal */}
       <div className="pt-16 pb-6 px-4">
-        {/* Controles de data */}
+        {/* Controles de data e visualização */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="flex items-center justify-between">
-            <button
-              onClick={handleToday}
-              className={`flex items-center px-3 py-1.5 text-sm rounded-full ${
-                isToday(selectedDate)
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-              </svg>
-              Hoje
-            </button>
             <div className="flex items-center space-x-2">
               <button
-                onClick={handlePreviousDay}
+                onClick={handleToday}
+                className={`flex items-center px-3 py-1.5 text-sm rounded-full ${
+                  isToday(selectedDate)
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+                Hoje
+              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setViewMode('day')}
+                  className={`px-3 py-1.5 text-sm rounded-full ${
+                    viewMode === 'day'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Dia
+                </button>
+                <button
+                  onClick={() => setViewMode('week')}
+                  className={`px-3 py-1.5 text-sm rounded-full ${
+                    viewMode === 'week'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Semana
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={viewMode === 'day' ? handlePreviousDay : handlePreviousWeek}
                 className="p-1.5 rounded-full hover:bg-gray-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-600">
@@ -317,10 +536,13 @@ export default function Tecnicos() {
                 </svg>
               </button>
               <h2 className="text-base font-medium text-gray-900">
-                {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+                {viewMode === 'day' 
+                  ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR })
+                  : `${format(startOfWeek(selectedDate, { locale: ptBR }), "dd 'de' MMMM", { locale: ptBR })} - ${format(endOfWeek(selectedDate, { locale: ptBR }), "dd 'de' MMMM", { locale: ptBR })}`
+                }
               </h2>
               <button
-                onClick={handleNextDay}
+                onClick={viewMode === 'day' ? handleNextDay : handleNextWeek}
                 className="p-1.5 rounded-full hover:bg-gray-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-600">
@@ -338,94 +560,166 @@ export default function Tecnicos() {
           </div>
         ) : events.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500">
-            Nenhum evento agendado para hoje.
+            Nenhum evento agendado para {viewMode === 'day' ? 'hoje' : 'esta semana'}.
+          </div>
+        ) : viewMode === 'day' ? (
+          <div className="space-y-3">
+            {events.map((event) => (
+              <EventCard 
+                key={event.id} 
+                event={event} 
+                contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
+                onClick={handleEventClick}
+                getEventTypeColor={getEventTypeColor}
+                getStatusColor={getStatusColor}
+                getStatusText={getStatusText}
+              />
+            ))}
           </div>
         ) : (
-          <div className="space-y-3">
-            {events.map((event) => {
-              const contratoDetalhes = event.pppoe ? contratosDetalhes[event.pppoe] : null;
-              
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 7 }).map((_, index) => {
+              const currentDate = addDays(startOfWeek(selectedDate, { locale: ptBR }), index);
+              const dayEvents = events.filter(event => 
+                isSameDay(new Date(event.datainicio), currentDate)
+              );
+
               return (
-                <div 
-                  key={event.id}
-                  onClick={() => handleEventClick(event)}
-                  className={`bg-white rounded-lg shadow-sm p-4 border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-gray-50`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-gray-500">
-                      {format(new Date(event.datainicio), "HH:mm", { locale: ptBR })}
-                      {event.horamarcada ? ` - ${format(new Date(event.datafinal), "HH:mm", { locale: ptBR })}` : ''}
-                    </span>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(event)}`}>
-                      {getStatusText(event)}
-                    </span>
-                  </div>
-                  
-                  <h3 className="font-medium text-gray-900 mb-1">
-                    {event.nome}
+                <div key={index} className="bg-white rounded-lg shadow-sm p-4">
+                  <h3 className={`text-sm font-medium mb-3 ${
+                    isToday(currentDate) ? 'text-indigo-600' : 'text-gray-600'
+                  }`}>
+                    {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </h3>
                   
-                  {event.descricao && (
-                    <p className="text-sm text-gray-600 mb-2">
-                      {event.descricao}
+                  {dayEvents.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      Nenhum evento
                     </p>
-                  )}
-
-                  {(event.tipo_evento === 'Instalação' || event.tipo_evento === 'Visita') && event.pppoe && (
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
-                          PPPoE: {event.pppoe}
-                        </span>
-                        {contratoDetalhes?.plano && (
-                          <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full">
-                            {contratoDetalhes.plano.nome}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {contratoDetalhes && (
-                        <div className="flex items-center text-sm text-gray-600">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                          </svg>
-                          <span>
-                            {contratoDetalhes.endereco}, {contratoDetalhes.bairro?.nome}
-                          </span>
-                        </div>
-                      )}
+                  ) : (
+                    <div className="space-y-3">
+                      {dayEvents.map((event) => (
+                        <EventCard 
+                          key={event.id} 
+                          event={event} 
+                          contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
+                          onClick={handleEventClick}
+                          getEventTypeColor={getEventTypeColor}
+                          getStatusColor={getStatusColor}
+                          getStatusText={getStatusText}
+                          compact
+                        />
+                      ))}
                     </div>
                   )}
-
-                  <div className="mt-2 flex items-center">
-                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                      {event.tipo_evento}
-                    </span>
-                  </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
 
-      {/* Modais */}
-      <InstalacaoModal
-        isOpen={isInstalacaoModalOpen}
-        onClose={handleCloseInstalacaoModal}
-        event={selectedEvent}
-        onEventUpdated={() => fetchDayEvents(selectedDate)}
-      />
-
-      {selectedEvent && (
-        <VisitaModal
-          isOpen={isVisitaModalOpen}
-          onClose={handleCloseVisitaModal}
+        {/* Modais */}
+        <InstalacaoModal
+          isOpen={isInstalacaoModalOpen}
+          onClose={handleCloseInstalacaoModal}
           event={selectedEvent}
-          onVisitaRegistered={handleVisitaRegistered}
+          onEventUpdated={() => fetchDayEvents(selectedDate)}
         />
-      )}
+
+        {selectedEvent && (
+          <VisitaModal
+            isOpen={isVisitaModalOpen}
+            onClose={handleCloseVisitaModal}
+            event={selectedEvent}
+            onVisitaRegistered={handleVisitaRegistered}
+          />
+        )}
+
+        {/* Modal de Informações */}
+        <Dialog
+          open={isInfoModalOpen}
+          onClose={handleCloseInfoModal}
+          className="fixed inset-0 z-50 overflow-y-auto"
+        >
+          <div className="flex items-center justify-center min-h-screen">
+            <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full mx-4 p-6">
+              <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Detalhes do {selectedEvent?.tipo_evento}
+              </Dialog.Title>
+
+              {selectedInstalacaoInfo && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Instalação</h3>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      {format(new Date(selectedInstalacaoInfo.data_instalacao), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+
+                  {selectedInstalacaoInfo.acompanhante && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.acompanhante}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedInstalacaoInfo.relato && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.relato}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedVisitaInfo && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Visita</h3>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      {format(new Date(selectedVisitaInfo.data), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+
+                  {selectedVisitaInfo.acompanhante && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.acompanhante}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedVisitaInfo.relato && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.relato}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCloseInfoModal}
+                  className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-transparent rounded-md hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </Dialog>
+      </div>
     </div>
   );
 }
