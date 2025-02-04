@@ -4,8 +4,8 @@ FROM node:20-alpine as build
 WORKDIR /app
 
 # Install dependencies
-COPY package*.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source files
 COPY . .
@@ -23,8 +23,8 @@ FROM node:20-alpine as production
 WORKDIR /app
 
 # Copy package files and install production dependencies
-COPY package*.json ./
-RUN npm install --production
+COPY package.json package-lock.json ./
+RUN npm ci --only=production
 
 # Copy built frontend files and server
 COPY --from=build /app/dist ./dist
