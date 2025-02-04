@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Dialog } from '@headlessui/react';
-import { XMarkIcon, DocumentTextIcon, DocumentIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, DocumentTextIcon, DocumentIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import DocumentEditor from './DocumentEditor';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import html2pdf from 'html2pdf.js';
-import { PrinterIcon } from '@heroicons/react/24/outline';
 
 interface Contrato {
   id: number;
@@ -255,12 +253,40 @@ Arroio do Sal, ${currentDate}
 </div>`;
   };
 
+  const handleGeneratePDF = () => {
+    try {
+      const editorContent = document.querySelector('.ql-editor')?.innerHTML;
+      if (!editorContent) {
+        console.error('No content found in the editor');
+        return;
+      }
+
+      const styledContent = `<style>
+        .ql-editor p { text-align: justify; }
+      </style>${editorContent}`;
+
+      const options = {
+        margin: 1,
+        filename: `contrato_${documentType}_${contrato.pppoe}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+
+      html2pdf().from(styledContent).set(options).save();
+      console.log('PDF generated successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    }
+  };
+
   return (
     <>
       <Dialog
+        as="div"
+        className="fixed inset-0 z-[60] overflow-y-auto"
         open={isOpen}
         onClose={onClose}
-        className="fixed inset-0 z-50 overflow-y-auto"
       >
         <div className="flex items-center justify-center min-h-screen px-4">
           <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
@@ -294,6 +320,9 @@ Arroio do Sal, ${currentDate}
                         <span className="font-medium">CPF/CNPJ:</span> {cliente?.cpf_cnpj}
                       </p>
                       <p className="text-sm text-gray-600">
+                        <span className="font-medium">RG:</span> {cliente?.rg}
+                      </p>
+                      <p className="text-sm text-gray-600">
                         <span className="font-medium">Email:</span> {cliente?.email}
                       </p>
                       <p className="text-sm text-gray-600">
@@ -314,10 +343,31 @@ Arroio do Sal, ${currentDate}
                         <span className="font-medium">Valor:</span> R$ {contrato.planos?.valor}
                       </p>
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Download:</span> {contrato.planos?.download} Mbps
+                        <span className="font-medium">PPPoE:</span> {contrato.pppoe}
                       </p>
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Upload:</span> {contrato.planos?.upload} Mbps
+                        <span className="font-medium">Dia Vencimento:</span> {contrato.dia_vencimento}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Data de Instalação:</span> {formatDate(contrato.data_instalacao)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Status:</span> {contrato.status}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg shadow p-4">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-3">Endereço</h3>
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Endereço:</span> {contrato.endereco}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Bairro:</span> {contrato.bairros?.nome}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Cidade:</span> {contrato.bairros?.cidade}
                       </p>
                     </div>
                   </div>
@@ -326,23 +376,32 @@ Arroio do Sal, ${currentDate}
 
               <div className="bg-white rounded-lg shadow p-4 mt-6">
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Documentos do Contrato</h3>
-                <div className="flex space-x-4">
+                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200 bg-white">
                   <button
-                    onClick={() => handleOpenDocument('adesao')}
+                    onClick={() => {
+                      setDocumentType('adesao');
+                      setShowDocumentEditor((prev) => !prev);
+                    }}
                     className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
                   >
                     <DocumentIcon className="h-5 w-5 mr-2" />
                     Contrato de Adesão
                   </button>
                   <button
-                    onClick={() => handleOpenDocument('permanencia')}
+                    onClick={() => {
+                      setDocumentType('permanencia');
+                      setShowDocumentEditor((prev) => !prev);
+                    }}
                     className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
                   >
                     <DocumentIcon className="h-5 w-5 mr-2" />
                     Contrato de Permanência
                   </button>
                   <button
-                    onClick={() => handleOpenDocument('rescisao')}
+                    onClick={() => {
+                      setDocumentType('rescisao');
+                      setShowDocumentEditor((prev) => !prev);
+                    }}
                     className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
                   >
                     <DocumentIcon className="h-5 w-5 mr-2" />
@@ -351,106 +410,36 @@ Arroio do Sal, ${currentDate}
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow p-4">
-                <h3 className="text-lg font-semibold text-gray-700 mb-3">Informações Adicionais</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Data de Vencimento:</span> {contrato.dia_vencimento}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Status:</span>{" "}
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        contrato.status === "Ativo" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      }`}>
-                        {contrato.status}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Endereço:</span> {contrato.endereco}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Bairro:</span> {contrato.bairros?.nome}
-                    </p>
-                  </div>
+              {showDocumentEditor && (
+                <div className="bg-white rounded-lg shadow p-4 mt-6" style={{ minHeight: '600px', height: 'auto' }}>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center justify-between">
+                    Editor de Documento
+                    <button
+                      onClick={() => handleGeneratePDF()}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                    >
+                      <PrinterIcon className="h-5 w-5 mr-2" />
+                      Gerar PDF
+                    </button>
+                  </h3>
+                  <ReactQuill
+                    value={documentType === 'adesao' ? generateAdesaoTemplate(contractData) : documentType === 'permanencia' ? generatePermanenciaTemplate(contractData) : generateRescisaoTemplate(contractData)}
+                    onChange={() => {}}
+                    modules={{
+                      toolbar: [
+                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ align: [] }],
+                        ['link', 'image'],
+                        ['clean'],
+                      ],
+                    }}
+                    className="h-auto"
+                    style={{ minHeight: '500px', height: 'auto' }}
+                  />
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Dialog>
-
-      <Dialog
-        open={showDocumentEditor}
-        onClose={() => setShowDocumentEditor(false)}
-        className="fixed inset-0 z-50 overflow-y-auto"
-      >
-        <div className="flex items-center justify-center min-h-screen px-4">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
-
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl p-6">
-            <div className="absolute top-4 right-4">
-              <button
-                onClick={() => setShowDocumentEditor(false)}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <Dialog.Title className="text-xl font-bold text-gray-900">
-                Editor de Documento
-              </Dialog.Title>
-
-              <div className="h-[600px]">
-                <ReactQuill
-                  value={documentType === 'adesao' ? generateAdesaoTemplate(contractData) : documentType === 'permanencia' ? generatePermanenciaTemplate(contractData) : generateRescisaoTemplate(contractData)}
-                  onChange={() => {}}
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                      ["bold", "italic", "underline", "strike"],
-                      [{ list: "ordered" }, { list: "bullet" }],
-                      [{ align: [] }],
-                      ["link", "image"],
-                      ["clean"],
-                    ],
-                  }}
-                  className="h-full"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-4 mt-4">
-                <button
-                  onClick={() => setShowDocumentEditor(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    const element = document.querySelector('.ql-editor');
-                    if (!element) return;
-
-                    const opt = {
-                      margin: 1,
-                      filename: `contrato_${documentType}_${contractData.clientName}.pdf`,
-                      image: { type: 'jpeg', quality: 0.98 },
-                      html2canvas: { scale: 2 },
-                      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-                    };
-
-                    html2pdf().set(opt).from(element).save();
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  <PrinterIcon className="h-5 w-5 mr-2" />
-                  Gerar PDF
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

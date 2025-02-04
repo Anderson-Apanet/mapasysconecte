@@ -34,6 +34,7 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
   const [searchResults, setSearchResults] = useState<Material[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [contratoAssinado, setContratoAssinado] = useState<boolean | null>(null);
 
   useEffect(() => {
     const fetchCliente = async () => {
@@ -121,6 +122,12 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
     e.preventDefault();
     if (!event) return;
 
+    // Validar se o usuário escolheu o status do contrato assinado
+    if (contratoAssinado === null) {
+      toast.error('Por favor, informe se o contrato está assinado ou não');
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('Iniciando salvamento da instalação...');
@@ -141,7 +148,11 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
           .from('contratos')
           .select(`
             id,
-            id_cliente
+            id_cliente,
+            senha,
+            planos (
+              radius
+            )
           `)
           .eq('pppoe', event.pppoe)
           .single();
@@ -155,6 +166,29 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
           id_contrato = contratoData.id;
           id_cliente = contratoData.id_cliente;
           console.log('Contrato encontrado:', id_contrato, 'Cliente:', id_cliente);
+
+          // Enviar dados para o endpoint do N8N
+          try {
+            const response = await fetch('https://webhooks.apanet.tec.br/webhook/registrapppoeradius', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                username: event.pppoe,
+                password: contratoData.senha,
+                profile: contratoData.planos?.radius || ''
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error('Erro ao enviar dados para o endpoint do N8N');
+            }
+
+            console.log('Dados enviados para o endpoint do N8N com sucesso');
+          } catch (error) {
+            console.error('Erro ao enviar dados para o endpoint do N8N:', error);
+          }
 
           // Atualizar o status do cliente para Ativo
           if (id_cliente) {
@@ -179,7 +213,8 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
               .update({
                 id_material: selectedOnu.id,
                 data_instalacao: new Date().toISOString(),
-                status: 'Ativo'
+                status: 'Ativo',
+                contratoassinado: contratoAssinado
               })
               .eq('id', id_contrato);
 
@@ -195,7 +230,8 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
               .from('contratos')
               .update({
                 data_instalacao: new Date().toISOString(),
-                status: 'Ativo'
+                status: 'Ativo',
+                contratoassinado: contratoAssinado
               })
               .eq('id', id_contrato);
 
@@ -267,6 +303,7 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
       setPorta('');
       setSearchOnu('');
       setSelectedOnu(null);
+      setContratoAssinado(null);
     } catch (error) {
       console.error('Erro ao salvar instalação:', error);
       if (error instanceof Error) {
@@ -394,6 +431,42 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Contrato assinado
+                </label>
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setContratoAssinado(prev => prev === null ? true : !prev)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
+                      contratoAssinado === null 
+                        ? 'bg-gray-200' 
+                        : contratoAssinado 
+                          ? 'bg-indigo-600' 
+                          : 'bg-red-600'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        contratoAssinado === null 
+                          ? 'translate-x-2' 
+                          : contratoAssinado 
+                            ? 'translate-x-5' 
+                            : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                  <span className="ml-3 text-sm text-gray-500">
+                    {contratoAssinado === null 
+                      ? 'Selecione se o contrato está assinado' 
+                      : contratoAssinado 
+                        ? 'Contrato assinado' 
+                        : 'Contrato não assinado'}
+                  </span>
+                </div>
               </div>
 
               <div>
