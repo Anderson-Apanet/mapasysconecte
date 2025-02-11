@@ -1,187 +1,161 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../utils/supabaseClient';
 import { AgendaEvent } from '../../types/agenda';
+import { saveEvent } from '../../services/agenda';
+import { format } from 'date-fns';
+import Modal from '../Modal';
 
 interface VisitaModalProps {
   isOpen: boolean;
   onClose: () => void;
   event: AgendaEvent;
-  onVisitaRegistered: () => void;
 }
 
-interface ClienteInfo {
-  nome: string;
-  pppoe: string;
-}
-
-export function VisitaModal({ isOpen, onClose, event, onVisitaRegistered }: VisitaModalProps) {
+export default function VisitaModal({ isOpen, onClose, event }: VisitaModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [observacao, setObservacao] = useState('');
   const [acompanhante, setAcompanhante] = useState('');
-  const [relato, setRelato] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
 
-  useEffect(() => {
-    if (event?.pppoe) {
-      loadClienteInfo();
-    }
-  }, [event]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const loadClienteInfo = async () => {
     try {
-      const { data: contratoData, error: contratoError } = await supabase
-        .from('contratos')
-        .select('id, pppoe, id_cliente')
-        .eq('pppoe', event.pppoe)
-        .single();
+      // Atualiza o evento como realizado
+      await saveEvent({
+        ...event,
+        realizada: true
+      });
 
-      if (contratoError) throw contratoError;
-
-      if (contratoData) {
-        const { data: clienteData, error: clienteError } = await supabase
-          .from('clientes')
-          .select('nome')
-          .eq('id', contratoData.id_cliente)
+      // Busca o ID do contrato pelo PPPoE
+      let id_contrato = null;
+      if (event.pppoe) {
+        const { data: contrato, error: contratoError } = await supabase
+          .from('contratos')
+          .select('id')
+          .eq('pppoe', event.pppoe)
           .single();
 
-        if (clienteError) throw clienteError;
-
-        if (clienteData) {
-          setClienteInfo({
-            nome: clienteData.nome,
-            pppoe: contratoData.pppoe
-          });
+        if (contratoError) {
+          console.error('Erro ao buscar contrato:', contratoError);
+        } else if (contrato) {
+          id_contrato = contrato.id;
         }
       }
-    } catch (error) {
-      console.error('Erro ao carregar informações do cliente:', error);
-      toast.error('Erro ao carregar informações do cliente');
-    }
-  };
 
-  const handleSubmit = async () => {
-    try {
-      setIsLoading(true);
-
-      // Buscar ID do contrato
-      const { data: contratoData, error: contratoError } = await supabase
-        .from('contratos')
-        .select('id')
-        .eq('pppoe', event.pppoe)
-        .single();
-
-      if (contratoError) throw contratoError;
-
-      // Registrar a visita
-      const { error: visitaError } = await supabase
+      // Registra a visita
+      const { data: visita, error: visitaError } = await supabase
         .from('visitas')
         .insert({
-          acompanhante,
-          relato,
-          data: event.datainicio,
           id_agenda: event.id,
-          id_contrato: contratoData.id
-        });
+          data: event.datainicio,
+          relato: observacao,
+          acompanhante: acompanhante || null,
+          id_contrato: id_contrato
+        })
+        .select()
+        .single();
 
       if (visitaError) throw visitaError;
 
-      // Marcar o evento como realizado
-      const { error: agendaError } = await supabase
-        .from('agenda')
-        .update({ realizada: true })
-        .eq('id', event.id);
+      // Registra os técnicos responsáveis
+      if (event.responsaveis && event.responsaveis.length > 0) {
+        const tecnicosInsert = event.responsaveis.map(resp => ({
+          visita_id: visita.id,
+          tecnico_id: resp.id
+        }));
 
-      if (agendaError) throw agendaError;
+        const { error: tecnicosError } = await supabase
+          .from('visitas_tecnicos')
+          .insert(tecnicosInsert);
 
-      toast.success('Visita registrada com sucesso');
-      onVisitaRegistered();
+        if (tecnicosError) throw tecnicosError;
+      }
+
+      toast.success('Visita registrada com sucesso!');
       onClose();
     } catch (error) {
       console.error('Erro ao registrar visita:', error);
       toast.error('Erro ao registrar visita');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">
-            Registrar Visita
-          </h3>
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+          Registrar Visita
+        </h3>
+
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            <strong>Nome:</strong> {event.nome}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            <strong>Data:</strong> {format(new Date(event.datainicio), 'dd/MM/yyyy HH:mm')}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            <strong>Responsáveis:</strong>{' '}
+            {event.responsaveis?.map(resp => resp.nome).join(', ') || 'Nenhum responsável definido'}
+          </p>
+          {event.descricao && (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              <strong>Descrição:</strong> {event.descricao}
+            </p>
+          )}
         </div>
 
-        <div className="px-6 py-4 space-y-4">
-          {clienteInfo && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Cliente
-                </label>
-                <p className="mt-1 text-sm text-gray-900">{clienteInfo.nome}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  PPPoE
-                </label>
-                <p className="mt-1 text-sm text-gray-900">{clienteInfo.pppoe}</p>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="acompanhante" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Acompanhante
             </label>
             <input
               type="text"
+              id="acompanhante"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               value={acompanhante}
               onChange={(e) => setAcompanhante(e.target.value)}
               placeholder="Nome de quem acompanhou a visita"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Relato
+          <div className="mb-4">
+            <label htmlFor="observacao" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Observações
             </label>
             <textarea
-              value={relato}
-              onChange={(e) => setRelato(e.target.value)}
-              placeholder="Descreva o que foi feito durante a visita"
+              id="observacao"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               rows={4}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              required
             />
           </div>
-        </div>
 
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3 rounded-b-lg">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isLoading || !acompanhante || !relato}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-              isLoading || !acompanhante || !relato
-                ? 'bg-indigo-300 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
-          >
-            {isLoading ? 'Registrando...' : 'Registrar Visita'}
-          </button>
-        </div>
+          <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:col-start-2 sm:text-sm disabled:opacity-50"
+            >
+              {loading ? 'Registrando...' : 'Registrar Visita'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:col-start-1 sm:mt-0 sm:text-sm dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
       </div>
-    </div>
+    </Modal>
   );
 }

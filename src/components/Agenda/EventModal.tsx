@@ -134,21 +134,32 @@ export function EventModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Colaborador Responsável
+                  Colaboradores Responsáveis
                 </label>
-                <select
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  value={event.usuario_resp || ''}
-                  onChange={(e) => onEventChange({ ...event, usuario_resp: e.target.value })}
-                  required
-                >
-                  <option value="">Selecione um colaborador</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.nome}>
-                      {user.nome}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative mt-1">
+                  <select
+                    multiple
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    value={(event.responsaveis || []).map(r => r.id)}
+                    onChange={(e) => {
+                      const selectedIds = Array.from(e.target.selectedOptions, option => option.value);
+                      const selectedUsers = users
+                        .filter(user => selectedIds.includes(user.id.toString()))
+                        .map(user => ({ id: user.id.toString(), nome: user.nome }));
+                      onEventChange({ ...event, responsaveis: selectedUsers });
+                    }}
+                    required
+                  >
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos colaboradores
+                  </p>
+                </div>
               </div>
 
               <div>

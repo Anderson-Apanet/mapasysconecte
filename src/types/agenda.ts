@@ -6,7 +6,7 @@ export interface AgendaEvent {
   datafinal: string;
   cor: string;
   tipo_evento: string;
-  usuario_resp: string;
+  responsaveis: Array<{ id: string; nome: string }>;
   horamarcada: boolean;
   prioritario: boolean;
   realizada: boolean;

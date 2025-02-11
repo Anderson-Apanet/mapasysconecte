@@ -325,6 +325,111 @@ app.get('/radius/groups', async (req, res) => {
     }
 });
 
+// Configuração do MySQL para o RADIUS
+const createRadiusConnection = async () => {
+  return await mysql.createConnection({
+    host: process.env.VITE_MYSQL_HOST,
+    port: Number(process.env.VITE_MYSQL_PORT),
+    user: process.env.VITE_MYSQL_USER,
+    password: process.env.VITE_MYSQL_PASSWORD,
+    database: process.env.VITE_MYSQL_DATABASE
+  });
+};
+
+// Rota para buscar conexões
+app.get('/api/support/connections', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const search = req.query.search as string || '';
+    const status = req.query.status as string || 'all';
+    const nasip = req.query.nasip as string || 'all';
+    const limit = 10;
+    const offset = (page - 1) * limit;
+
+    const connection = await createRadiusConnection();
+
+    let query = `
+      SELECT SQL_CALC_FOUND_ROWS 
+        radacctid, username, nasipaddress, nasportid, 
+        acctstarttime, acctstoptime, acctinputoctets, 
+        acctoutputoctets, acctterminatecause, 
+        framedipaddress, callingstationid
+      FROM radacct
+      WHERE 1=1
+    `;
+
+    const queryParams: any[] = [];
+
+    if (search) {
+      query += ` AND (username LIKE ? OR framedipaddress LIKE ? OR nasipaddress LIKE ?)`;
+      queryParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (status !== 'all') {
+      if (status === 'up') {
+        query += ` AND acctstoptime IS NULL`;
+      } else {
+        query += ` AND acctstoptime IS NOT NULL`;
+      }
+    }
+
+    if (nasip !== 'all') {
+      query += ` AND nasipaddress = ?`;
+      queryParams.push(nasip);
+    }
+
+    query += ` ORDER BY acctstarttime DESC LIMIT ? OFFSET ?`;
+    queryParams.push(limit, offset);
+
+    const [rows] = await connection.execute(query, queryParams);
+    const [countResult] = await connection.execute('SELECT FOUND_ROWS() as total');
+    const total = (countResult as any)[0].total;
+
+    await connection.end();
+
+    res.json({
+      data: rows,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalRecords: total,
+        recordsPerPage: limit
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar conexões:', error);
+    res.status(500).json({ error: 'Erro ao buscar conexões' });
+  }
+});
+
+// Rota para buscar estatísticas dos concentradores
+app.get('/api/concentrator-stats', async (req, res) => {
+  try {
+    const connection = await createRadiusConnection();
+
+    const query = `
+      SELECT 
+        n.nasname,
+        n.shortname,
+        n.type,
+        n.ports,
+        n.description,
+        COUNT(DISTINCT r.username) as user_count
+      FROM nas n
+      LEFT JOIN radacct r ON n.nasname = r.nasipaddress AND r.acctstoptime IS NULL
+      GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
+    `;
+
+    const [rows] = await connection.execute(query);
+    await connection.end();
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas dos concentradores:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas dos concentradores' });
+  }
+});
+
 const port = 3001;
 app.listen(port, () => {
     console.log(`Servidor rodando em http://localhost:${port}`);

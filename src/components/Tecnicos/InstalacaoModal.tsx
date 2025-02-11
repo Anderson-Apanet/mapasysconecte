@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog } from '@headlessui/react';
-import { AgendaEvent } from '../../types/agenda';
-import { supabase } from '../../utils/supabaseClient';
 import toast from 'react-hot-toast';
+import { supabase } from '../../utils/supabaseClient';
+import { saveEvent } from '../../services/agenda';
+import { format } from 'date-fns';
+import Modal from '../Modal';
+import { Dialog } from '@headlessui/react';
 import { debounce } from 'lodash';
 
 interface InstalacaoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  event: AgendaEvent | null;
-  onEventUpdated: () => void;
+  event: AgendaEvent;
 }
 
 interface Material {
@@ -23,18 +24,19 @@ interface Cliente {
   nome: string;
 }
 
-export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: InstalacaoModalProps) {
+export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoModalProps) {
   const [loading, setLoading] = useState(false);
+  const [observacao, setObservacao] = useState('');
   const [acompanhante, setAcompanhante] = useState('');
   const [relato, setRelato] = useState('');
   const [cto, setCto] = useState('');
-  const [porta, setPorta] = useState('');
+  const [portaCto, setPortaCto] = useState('');
   const [searchOnu, setSearchOnu] = useState('');
   const [selectedOnu, setSelectedOnu] = useState<Material | null>(null);
   const [searchResults, setSearchResults] = useState<Material[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [contratoAssinado, setContratoAssinado] = useState<boolean | null>(null);
+  const [contratoAssinado, setContratoAssinado] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchCliente = async () => {
@@ -120,36 +122,27 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!event) return;
-
-    // Validar se o usuário escolheu o status do contrato assinado
-    if (contratoAssinado === null) {
-      toast.error('Por favor, informe se o contrato está assinado ou não');
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-      console.log('Iniciando salvamento da instalação...');
+      // Atualiza o evento como realizado
+      await saveEvent({
+        ...event,
+        realizada: true
+      });
 
-      // Buscar o usuário logado
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('Usuário não autenticado');
-      }
-      console.log('Usuário autenticado:', session.user.id);
-
-      // Se tiver PPPoE, buscar o id do contrato e o cliente
+      // Busca o ID do contrato e informações do plano pelo PPPoE
       let id_contrato = null;
+      let plano_radius = null;
       let id_cliente = null;
+      
       if (event.pppoe) {
-        console.log('Buscando contrato para PPPoE:', event.pppoe);
+        // Busca contrato e plano
         const { data: contratoData, error: contratoError } = await supabase
           .from('contratos')
           .select(`
             id,
             id_cliente,
-            senha,
             planos (
               radius
             )
@@ -159,158 +152,105 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
 
         if (contratoError) {
           console.error('Erro ao buscar contrato:', contratoError);
-          throw contratoError;
-        }
-
-        if (contratoData) {
+        } else if (contratoData) {
           id_contrato = contratoData.id;
           id_cliente = contratoData.id_cliente;
-          console.log('Contrato encontrado:', id_contrato, 'Cliente:', id_cliente);
+          plano_radius = contratoData.planos?.radius;
 
-          // Enviar dados para o endpoint do N8N
-          try {
-            const response = await fetch('https://webhooks.apanet.tec.br/webhook/registrapppoeradius', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                username: event.pppoe,
-                password: contratoData.senha,
-                profile: contratoData.planos?.radius || ''
-              }),
-            });
+          // Atualiza os campos do contrato
+          const { error: updateError } = await supabase
+            .from('contratos')
+            .update({
+              status: 'Ativo',
+              data_instalacao: event.datainicio,
+              contratoassinado: contratoAssinado
+            })
+            .eq('id', contratoData.id);
 
-            if (!response.ok) {
-              throw new Error('Erro ao enviar dados para o endpoint do N8N');
-            }
-
-            console.log('Dados enviados para o endpoint do N8N com sucesso');
-          } catch (error) {
-            console.error('Erro ao enviar dados para o endpoint do N8N:', error);
+          if (updateError) {
+            console.error('Erro ao atualizar contrato:', updateError);
+            throw updateError;
           }
 
-          // Atualizar o status do cliente para Ativo
+          // Atualiza o status do cliente para Ativo
           if (id_cliente) {
-            console.log('Atualizando status do cliente para Ativo');
-            const { error: clienteUpdateError } = await supabase
+            const { error: clienteError } = await supabase
               .from('clientes')
               .update({ status: 'Ativo' })
               .eq('id', id_cliente);
 
-            if (clienteUpdateError) {
-              console.error('Erro ao atualizar status do cliente:', clienteUpdateError);
-              throw clienteUpdateError;
+            if (clienteError) {
+              console.error('Erro ao atualizar status do cliente:', clienteError);
+              throw clienteError;
             }
-            console.log('Status do cliente atualizado com sucesso');
           }
-
-          // Atualizar o id_material no contrato se uma ONU foi selecionada
-          if (selectedOnu) {
-            console.log('Atualizando material no contrato:', selectedOnu.id);
-            const { error: contratoUpdateError } = await supabase
-              .from('contratos')
-              .update({
-                id_material: selectedOnu.id,
-                data_instalacao: new Date().toISOString(),
-                status: 'Ativo',
-                contratoassinado: contratoAssinado
-              })
-              .eq('id', id_contrato);
-
-            if (contratoUpdateError) {
-              console.error('Erro ao atualizar material no contrato:', contratoUpdateError);
-              throw contratoUpdateError;
-            }
-            console.log('Material atualizado no contrato com sucesso');
-          } else {
-            // Se não tiver ONU selecionada, atualiza apenas o status e a data
-            console.log('Atualizando status do contrato para Ativo');
-            const { error: contratoUpdateError } = await supabase
-              .from('contratos')
-              .update({
-                data_instalacao: new Date().toISOString(),
-                status: 'Ativo',
-                contratoassinado: contratoAssinado
-              })
-              .eq('id', id_contrato);
-
-            if (contratoUpdateError) {
-              console.error('Erro ao atualizar status do contrato:', contratoUpdateError);
-              throw contratoUpdateError;
-            }
-            console.log('Status do contrato atualizado com sucesso');
-          }
-        } else {
-          console.error('Contrato não encontrado para PPPoE:', event.pppoe);
-          throw new Error('Contrato não encontrado');
         }
       }
 
-      // Preparar dados para inserção
-      const instalacaoData = {
-        id_agenda: event.id,
-        data_instalacao: new Date().toISOString(),
-        id_user: session.user.id,
-        acompanhante: acompanhante || null,
-        relato: relato || null
-      };
-
-      // Adicionar id_contrato apenas se existir
-      if (id_contrato) {
-        instalacaoData['id_contrato'] = id_contrato;
-      }
-
-      console.log('Dados da instalação a serem salvos:', instalacaoData);
-
-      // Inserir na tabela instalacao
-      const { data: instalacaoResult, error: instalacaoError } = await supabase
+      // Registra a instalação
+      const { data: instalacao, error: instalacaoError } = await supabase
         .from('instalacao')
-        .insert([instalacaoData])
+        .insert({
+          id_agenda: event.id,
+          data_instalacao: event.datainicio,
+          relato: observacao,
+          acompanhante: acompanhante || null,
+          id_contrato: id_contrato
+        })
         .select()
         .single();
 
-      if (instalacaoError) {
-        console.error('Erro ao salvar instalação:', instalacaoError);
-        throw instalacaoError;
+      if (instalacaoError) throw instalacaoError;
+
+      // Registra os técnicos responsáveis
+      if (event.responsaveis && event.responsaveis.length > 0) {
+        const tecnicosInsert = event.responsaveis.map(resp => ({
+          instalacao_id: instalacao.id,
+          tecnico_id: resp.id
+        }));
+
+        const { error: tecnicosError } = await supabase
+          .from('instalacao_tecnicos')
+          .insert(tecnicosInsert);
+
+        if (tecnicosError) throw tecnicosError;
       }
-      console.log('Instalação salva com sucesso:', instalacaoResult);
 
-      // Atualizar o evento na agenda como realizado
-      console.log('Atualizando evento na agenda:', event.id);
-      const { error: agendaUpdateError } = await supabase
-        .from('agenda')
-        .update({
-          realizada: true,
-          parcial: false
-        })
-        .eq('id', event.id);
+      // Envia dados para o webhook do N8N
+      if (event.pppoe && plano_radius) {
+        try {
+          // Extrai apenas os números do PPPoE e inverte para gerar a senha
+          const numeros = event.pppoe.replace(/\D/g, ''); // Remove não-dígitos
+          const senha = numeros.split('').reverse().join(''); // Inverte os números
 
-      if (agendaUpdateError) {
-        console.error('Erro ao atualizar agenda:', agendaUpdateError);
-        throw agendaUpdateError;
+          const response = await fetch('https://webhooks.apanet.tec.br/webhook/registrapppoeradius', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pppoe: event.pppoe,
+              radius: plano_radius,
+              senha: senha
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('Erro ao registrar PPPoE no Radius');
+          }
+
+          console.log('PPPoE registrado no Radius com sucesso');
+        } catch (error) {
+          console.error('Erro ao enviar dados para o webhook:', error);
+          toast.error('Erro ao registrar PPPoE no Radius');
+        }
       }
-      console.log('Evento atualizado na agenda com sucesso');
 
-      toast.success('Instalação salva com sucesso!');
-      onEventUpdated();
+      toast.success('Instalação registrada com sucesso!');
       onClose();
-      
-      // Limpar os campos
-      setAcompanhante('');
-      setRelato('');
-      setCto('');
-      setPorta('');
-      setSearchOnu('');
-      setSelectedOnu(null);
-      setContratoAssinado(null);
     } catch (error) {
-      console.error('Erro ao salvar instalação:', error);
-      if (error instanceof Error) {
-        toast.error(`Erro ao salvar instalação: ${error.message}`);
-      } else {
-        toast.error('Erro ao salvar instalação');
-      }
+      console.error('Erro ao registrar instalação:', error);
+      toast.error('Erro ao registrar instalação');
     } finally {
       setLoading(false);
     }
@@ -335,19 +275,34 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
           <form onSubmit={handleSubmit} className="mt-4">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Cliente
-                </label>
-                <p className="mt-1 text-sm text-gray-500">
-                  {cliente ? cliente.nome : 'Cliente não encontrado'}
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>Nome:</strong> {event.nome}
                 </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>Data:</strong> {event.datainicio}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <strong>Responsáveis:</strong>{' '}
+                  {event.responsaveis?.map(resp => resp.nome).join(', ') || 'Nenhum responsável definido'}
+                </p>
+                {event.descricao && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <strong>Descrição:</strong> {event.descricao}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  PPPoE
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Observações
                 </label>
-                <p className="mt-1 text-sm text-gray-500">{event.pppoe || 'Não informado'}</p>
+                <textarea
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  rows={4}
+                  value={observacao}
+                  onChange={(e) => setObservacao(e.target.value)}
+                  required
+                />
               </div>
 
               <div>
@@ -369,8 +324,8 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
                 </label>
                 <input
                   type="text"
-                  value={porta}
-                  onChange={(e) => setPorta(e.target.value)}
+                  value={portaCto}
+                  onChange={(e) => setPortaCto(e.target.value)}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   disabled={loading}
                 />
@@ -386,7 +341,7 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
                     id="onu"
                     value={searchOnu}
                     onChange={handleSearchChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     placeholder="Digite o serial da ONU"
                   />
                   {isSearching && (
@@ -425,7 +380,7 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
                         setSelectedOnu(null);
                         setSearchOnu('');
                       }}
-                      className="text-sm text-red-600 hover:text-red-800"
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Remover
                     </button>
@@ -433,57 +388,41 @@ export function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: Inst
                 )}
               </div>
 
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Contrato assinado
-                </label>
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setContratoAssinado(prev => prev === null ? true : !prev)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-                      contratoAssinado === null 
-                        ? 'bg-gray-200' 
-                        : contratoAssinado 
-                          ? 'bg-indigo-600' 
-                          : 'bg-red-600'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        contratoAssinado === null 
-                          ? 'translate-x-2' 
-                          : contratoAssinado 
-                            ? 'translate-x-5' 
-                            : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                  <span className="ml-3 text-sm text-gray-500">
-                    {contratoAssinado === null 
-                      ? 'Selecione se o contrato está assinado' 
-                      : contratoAssinado 
-                        ? 'Contrato assinado' 
-                        : 'Contrato não assinado'}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+              <div className="mb-4">
+                <label htmlFor="acompanhante" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Acompanhante
                 </label>
                 <input
                   type="text"
+                  id="acompanhante"
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   value={acompanhante}
                   onChange={(e) => setAcompanhante(e.target.value)}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  disabled={loading}
+                  placeholder="Nome de quem acompanhou a instalação"
                 />
               </div>
 
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Contrato Assinado
+                </label>
+                <div className="mt-1">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      checked={contratoAssinado}
+                      onChange={(e) => setContratoAssinado(e.target.checked)}
+                    />
+                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-300">
+                      Sim, o contrato foi assinado
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Relato
                 </label>
                 <textarea

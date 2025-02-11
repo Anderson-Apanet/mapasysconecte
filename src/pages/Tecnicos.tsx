@@ -5,8 +5,8 @@ import { format, startOfDay, endOfDay, isToday, startOfWeek, endOfWeek, addDays,
 import { ptBR } from 'date-fns/locale';
 import { AgendaEvent } from '../types/agenda';
 import { fetchEvents } from '../services/agenda';
-import { InstalacaoModal } from '../components/Tecnicos/InstalacaoModal';
-import { VisitaModal } from '../components/Agenda/VisitaModal';
+import InstalacaoModal from '../components/Tecnicos/InstalacaoModal';
+import VisitaModal from '../components/Agenda/VisitaModal';
 import { useNavigate } from 'react-router-dom';
 import { Dialog } from '@headlessui/react';
 
@@ -30,14 +30,20 @@ interface EventCardProps {
   compact?: boolean;
 }
 
+interface Tecnico {
+  id: string;
+  nome: string;
+  email: string;
+}
+
 interface VisitaInfo {
   id: number;
   data: string;
   relato: string | null;
   acompanhante: string | null;
-  tecnico: string;
   id_agenda: number;
   id_contrato: number | null;
+  tecnicos: Tecnico[];
 }
 
 interface InstalacaoInfo {
@@ -45,9 +51,9 @@ interface InstalacaoInfo {
   data_instalacao: string;
   relato: string | null;
   acompanhante: string | null;
-  id_user: string;
   id_agenda: number;
   id_contrato: number | null;
+  tecnicos: Tecnico[];
 }
 
 const EventCard: React.FC<EventCardProps> = ({
@@ -290,45 +296,128 @@ export default function Tecnicos() {
   // Memoize funções de manipulação de eventos
   const handleEventClick = useCallback(async (event: AgendaEvent) => {
     setSelectedEvent(event);
+    console.log('Evento clicado:', event);
 
     if (event.realizada) {
       try {
         if (event.tipo_evento === 'Instalação') {
-          const { data, error } = await supabase
+          console.log('Buscando detalhes da instalação...');
+          // Buscar instalação
+          const { data: instalacao, error: instalacaoError } = await supabase
             .from('instalacao')
             .select(`
               id,
               data_instalacao,
               relato,
               acompanhante,
-              id_user,
               id_agenda,
               id_contrato
             `)
             .eq('id_agenda', event.id)
-            .single();
+            .maybeSingle();
 
-          if (error) throw error;
-          setSelectedInstalacaoInfo(data);
-          setIsInfoModalOpen(true);
+          if (instalacaoError) throw instalacaoError;
+          console.log('Dados da instalação:', instalacao);
+          
+          if (instalacao) {
+            try {
+              // Buscar técnicos da instalação - Simplificando a consulta
+              const { data: tecnicosData, error: tecnicosError } = await supabase
+                .from('instalacao_tecnicos')
+                .select(`
+                  tecnico_id,
+                  users!tecnico_id (
+                    id,
+                    email,
+                    raw_user_meta_data->nome
+                  )
+                `)
+                .eq('instalacao_id', instalacao.id);
+
+              console.log('Dados dos técnicos da instalação:', tecnicosData);
+              console.log('Erro ao buscar técnicos da instalação:', tecnicosError);
+
+              // Se houver erro ou não houver dados, apenas define tecnicos como array vazio
+              const tecnicos = tecnicosError || !tecnicosData ? [] : 
+                tecnicosData.map(t => ({
+                  id: t.users.id,
+                  email: t.users.email,
+                  nome: t.users.raw_user_meta_data?.nome || 'Nome não informado'
+                }));
+
+              setSelectedInstalacaoInfo({
+                ...instalacao,
+                tecnicos
+              });
+            } catch (error) {
+              console.warn('Erro ao buscar técnicos da instalação:', error);
+              setSelectedInstalacaoInfo({
+                ...instalacao,
+                tecnicos: []
+              });
+            }
+            setIsInfoModalOpen(true);
+          }
         } else if (event.tipo_evento === 'Visita') {
-          const { data, error } = await supabase
+          console.log('Buscando detalhes da visita...');
+          // Buscar visita
+          const { data: visita, error: visitaError } = await supabase
             .from('visitas')
             .select(`
               id,
               data,
               relato,
               acompanhante,
-              tecnico,
               id_agenda,
               id_contrato
             `)
             .eq('id_agenda', event.id)
-            .single();
+            .maybeSingle();
 
-          if (error) throw error;
-          setSelectedVisitaInfo(data);
-          setIsInfoModalOpen(true);
+          if (visitaError) throw visitaError;
+          console.log('Dados da visita:', visita);
+          
+          if (visita) {
+            try {
+              // Buscar técnicos da visita - Simplificando a consulta
+              const { data: tecnicosData, error: tecnicosError } = await supabase
+                .from('visitas_tecnicos')
+                .select(`
+                  tecnico_id,
+                  users!tecnico_id (
+                    id,
+                    email,
+                    raw_user_meta_data->nome
+                  )
+                `)
+                .eq('visita_id', visita.id);
+
+              console.log('Dados dos técnicos da visita:', tecnicosData);
+              console.log('Erro ao buscar técnicos da visita:', tecnicosError);
+
+              // Se houver erro ou não houver dados, apenas define tecnicos como array vazio
+              const tecnicos = tecnicosError || !tecnicosData ? [] : 
+                tecnicosData.map(t => ({
+                  id: t.users.id,
+                  email: t.users.email,
+                  nome: t.users.raw_user_meta_data?.nome || 'Nome não informado'
+                }));
+
+              setSelectedVisitaInfo({
+                ...visita,
+                tecnicos
+              });
+            } catch (error) {
+              console.warn('Erro ao buscar técnicos da visita:', error);
+              setSelectedVisitaInfo({
+                ...visita,
+                tecnicos: []
+              });
+            }
+            setIsInfoModalOpen(true);
+          } else {
+            console.warn('Nenhum dado de visita encontrado para o evento:', event);
+          }
         }
       } catch (error) {
         console.error('Erro ao buscar informações:', error);
@@ -347,7 +436,6 @@ export default function Tecnicos() {
     setIsInfoModalOpen(false);
     setSelectedVisitaInfo(null);
     setSelectedInstalacaoInfo(null);
-    setSelectedEvent(null);
   }, []);
 
   const handleCloseInstalacaoModal = useCallback(() => {
@@ -499,7 +587,7 @@ export default function Tecnicos() {
                 }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0121 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                 </svg>
                 Hoje
               </button>
@@ -641,7 +729,7 @@ export default function Tecnicos() {
           onClose={handleCloseInfoModal}
           className="fixed inset-0 z-50 overflow-y-auto"
         >
-          <div className="flex items-center justify-center min-h-screen">
+          <div className="flex items-center justify-center min-h-screen p-4">
             <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
 
             <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full mx-4 p-6">
@@ -675,6 +763,17 @@ export default function Tecnicos() {
                       </p>
                     </div>
                   )}
+
+                  {selectedInstalacaoInfo.tecnicos && selectedInstalacaoInfo.tecnicos.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
+                      <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.tecnicos.map(tecnico => (
+                          <li key={tecnico.id}>{tecnico.nome}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -704,14 +803,25 @@ export default function Tecnicos() {
                       </p>
                     </div>
                   )}
+
+                  {selectedVisitaInfo.tecnicos && selectedVisitaInfo.tecnicos.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
+                      <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.tecnicos.map(tecnico => (
+                          <li key={tecnico.id}>{tecnico.nome}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="mt-6 flex justify-end">
                 <button
                   type="button"
+                  className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
                   onClick={handleCloseInfoModal}
-                  className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-transparent rounded-md hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-500"
                 >
                   Fechar
                 </button>

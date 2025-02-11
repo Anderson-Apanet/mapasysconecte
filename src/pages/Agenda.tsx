@@ -22,7 +22,8 @@ export default function Agenda() {
     descricao: '',
     horamarcada: true,
     prioritario: false,
-    cor: '#3788d8'
+    cor: '#3788d8',
+    responsaveis: []
   });
   const [selectedMoreEvents, setSelectedMoreEvents] = useState<{
     events: any[];
@@ -55,9 +56,10 @@ export default function Agenda() {
       descricao: '',
       datainicio: startDate.toISOString().slice(0, 16),
       datafinal: endDate.toISOString().slice(0, 16),
-      horamarcada: true, // Sempre true
+      horamarcada: true,
       prioritario: false,
-      cor: '#3788d8'
+      cor: '#3788d8',
+      responsaveis: []
     });
     setIsModalOpen(true);
   };
@@ -78,7 +80,7 @@ export default function Agenda() {
           datainicio: event.datainicio,
           datafinal: event.datafinal,
           tipo_evento: event.tipo_evento,
-          usuario_resp: event.usuario_resp,
+          responsaveis: event.responsaveis || [],
           horamarcada: event.horamarcada,
           prioritario: event.prioritario,
           realizada: event.realizada,
@@ -107,7 +109,8 @@ export default function Agenda() {
       descricao: '',
       horamarcada: true,
       prioritario: false,
-      cor: '#3788d8'
+      cor: '#3788d8',
+      responsaveis: []
     });
   };
 
@@ -150,9 +153,10 @@ export default function Agenda() {
       setNewEvent({
         nome: '',
         descricao: '',
-        horamarcada: true, // Sempre true
+        horamarcada: true,
         prioritario: false,
-        cor: '#3788d8'
+        cor: '#3788d8',
+        responsaveis: []
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar evento';

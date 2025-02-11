@@ -132,11 +132,13 @@ export const CriarTituloModal: React.FC<CriarTituloModalProps> = ({
       };
 
       // Enviar dados para o N8N
-      const response = await fetch('https://workflows.apanet.tec.br/webhook-test/asaasnovo', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/e4e61c7f-76a5-4d98-b725-d4fac879850b', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
+        mode: 'cors',
         body: JSON.stringify(payload)
       });
 
