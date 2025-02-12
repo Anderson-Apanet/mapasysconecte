@@ -3,7 +3,83 @@ import { AgendaEvent } from '../types/agenda';
 
 export async function fetchEvents(start?: Date | number | string, end?: Date | number | string) {
   try {
-    // Converte as datas para o formato ISO
+    // Se start for um número, assume que é um ID de evento
+    if (typeof start === 'number') {
+      const { data: eventData, error: eventError } = await supabase
+        .from('agenda')
+        .select(`
+          id,
+          nome,
+          descricao,
+          datainicio,
+          datafinal,
+          tipo_evento,
+          horamarcada,
+          prioritario,
+          realizada,
+          parcial,
+          cancelado,
+          pppoe,
+          cor,
+          data_cad_evento,
+          criador
+        `)
+        .eq('id', start)
+        .single();
+
+      if (eventError) {
+        console.error('Erro ao buscar evento:', eventError);
+        throw eventError;
+      }
+
+      if (!eventData) {
+        return null;
+      }
+
+      // Busca os responsáveis para o evento
+      const { data: respData, error: respError } = await supabase
+        .from('agenda_responsaveis')
+        .select(`user_id`)
+        .eq('agenda_id', eventData.id);
+
+      if (respError) {
+        console.error('Erro ao buscar responsáveis:', respError);
+        throw respError;
+      }
+
+      // Se encontrou responsáveis, busca os dados dos usuários
+      if (respData && respData.length > 0) {
+        const userIds = respData.map(r => r.user_id);
+        
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id_user, nome')
+          .in('id_user', userIds);
+
+        if (userError) {
+          console.error('Erro ao buscar dados dos usuários:', userError);
+          throw userError;
+        }
+
+        // Mapeia os dados dos usuários para o formato esperado
+        const responsaveis = userData.map(user => ({
+          id: user.id_user,
+          nome: user.nome
+        }));
+
+        return {
+          ...eventData,
+          responsaveis
+        };
+      }
+
+      return {
+        ...eventData,
+        responsaveis: []
+      };
+    }
+
+    // Caso contrário, continua com a lógica de buscar eventos por período
     const startDate = start instanceof Date ? start.toISOString() : start;
     const endDate = end instanceof Date ? end.toISOString() : end;
 
@@ -52,9 +128,7 @@ export async function fetchEvents(start?: Date | number | string, end?: Date | n
         // Busca os responsáveis
         const { data: respData, error: respError } = await supabase
           .from('agenda_responsaveis')
-          .select(`
-            user_id
-          `)
+          .select(`user_id`)
           .eq('agenda_id', eventData.id);
 
         if (respError) {
