@@ -571,23 +571,19 @@ export default function Tecnicos() {
   }, [selectedDate, viewMode, fetchDayEvents, fetchWeekEvents, fetchUserName]);
 
   return (
-    <div className="w-full min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen" style={{ backgroundColor: '#1E4620' }}>
       {/* Cabeçalho */}
-      <div className="w-full bg-white dark:bg-gray-800 shadow">
-        <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      <div className="bg-white shadow">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-              >
-                <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-              </button>
-              <h1 className="ml-4 text-2xl font-semibold text-gray-900 dark:text-white">Técnicos</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">
+                {userName ? `Olá, ${userName}` : 'Área do Técnico'}
+              </h1>
             </div>
 
-            {/* Menu Dropdown */}
             <div className="flex items-center space-x-4">
+              {/* Menu Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -595,9 +591,10 @@ export default function Tecnicos() {
                 >
                   <Bars3Icon className="h-6 w-6" />
                 </button>
-                
+
+                {/* Menu dropdown */}
                 {isMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                  <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
                     <div className="py-1">
                       <button
                         onClick={() => {
@@ -656,7 +653,7 @@ export default function Tecnicos() {
       </div>
 
       {/* Conteúdo principal */}
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+      <div className="px-4 sm:px-6 lg:px-8 py-4">
         {/* Conteúdo baseado na aba ativa */}
         {activeTab === 'agenda' && (
           <div className="space-y-4">
