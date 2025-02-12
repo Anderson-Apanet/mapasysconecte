@@ -25,7 +25,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: https: blob:",
-      "connect-src 'self' http://localhost:* https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://187.103.249.49:3306 https://*.google.com https://maps.googleapis.com",
+      "connect-src 'self' http://localhost:* https://*.supabase.co https://aunfucsmyfbdyxfgvpha.supabase.co https://201.76.1.124:3306 https://*.google.com https://maps.googleapis.com",
       "frame-src 'self' https://*.google.com",
       "worker-src 'self' blob:"
     ].join('; ')
@@ -49,11 +49,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // MySQL connection configuration
 const dbConfig = {
-  host: '187.103.249.49',
-  port: 3306,
-  user: 'root',
-  password: 'bk134',
-  database: 'radius',
+  host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
+  port: process.env.VITE_MYSQL_PORT || 3306,
+  user: process.env.VITE_MYSQL_USER || 'root',
+  password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
+  database: process.env.VITE_MYSQL_DATABASE || 'radius',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0

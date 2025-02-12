@@ -72,7 +72,7 @@ export default function Rede() {
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
       const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
-      const url = new URL(`${baseUrl}/api/support/connections`);
+      const url = new URL(`${baseUrl}/api/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
       url.searchParams.set('status', statusFilter);
