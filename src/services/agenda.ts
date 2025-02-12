@@ -430,9 +430,10 @@ export function transformEvents(events: AgendaEvent[]) {
       });
 
       // Formata o título do evento para mostrar apenas informações essenciais
+      const responsaveisNomes = event.responsaveis?.map(r => r.nome).join(', ') || 'Sem responsável';
       const title = event.horamarcada
-        ? `${startTime}\n${event.tipo_evento}\n${event.usuario_resp || 'Sem responsável'}`
-        : `${event.tipo_evento}\n${event.usuario_resp || 'Sem responsável'}`;
+        ? `${startTime}\n${event.tipo_evento}\n${responsaveisNomes}`
+        : `${event.tipo_evento}\n${responsaveisNomes}`;
 
       const transformedEvent = {
         id: event.id.toString(),
@@ -456,7 +457,7 @@ export function transformEvents(events: AgendaEvent[]) {
         extendedProps: {
           descricao: event.descricao,
           tipo_evento: event.tipo_evento,
-          usuario_resp: event.usuario_resp,
+          responsaveis: event.responsaveis || [],
           horamarcada: event.horamarcada,
           prioritario: event.prioritario,
           realizada: event.realizada,
