@@ -83,108 +83,68 @@ export default function UserModal({ isOpen, onClose, user, onSuccess }: UserModa
     try {
       // Se for um novo usuário
       if (!user) {
-        // Verificar se o email já existe
-        const { data: existingUsers, error: searchError } = await supabase
-          .from('users')
-          .select('email')
-          .eq('email', email)
-          .limit(1);
-
-        if (searchError) {
-          throw searchError;
-        }
-
-        if (existingUsers && existingUsers.length > 0) {
-          toast.error('Este email já está cadastrado no sistema.');
-          setLoading(false);
-          return;
-        }
-
-        const password = generateRandomPassword();
-        
-        // 1. Criar usuário no auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // 1. Criar usuário no Auth
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email,
-          password,
+          password: generateRandomPassword(),
+          phone,
           options: {
             data: {
-              nome,
-              phone
-            },
-            emailRedirectTo: `${window.location.origin}/login`
+              nome
+            }
           }
         });
 
-        if (authError) {
-          if (authError.message === 'User already registered') {
-            toast.error('Este email já está registrado no sistema.');
-            setLoading(false);
-            return;
-          }
-          throw authError;
+        if (signUpError) {
+          console.error('Erro ao criar usuário no Auth:', signUpError);
+          throw signUpError;
         }
 
         if (!authData.user) {
-          throw new Error('Erro ao criar usuário no auth');
+          throw new Error('Usuário não foi criado no Auth');
         }
 
-        // 2. Criar usuário na tabela public.users
+        // 2. Criar usuário na tabela users
         const { error: userError } = await supabase
           .from('users')
-          .insert([{
+          .insert({
             id_user: authData.user.id,
             nome,
-            email,
             id_user_tipo: userTipoId
-          }]);
+          });
 
         if (userError) {
           console.error('Erro ao criar usuário na tabela users:', userError);
-          toast.error('Erro ao criar usuário. Por favor, tente novamente.');
-          return;
+          throw userError;
         }
 
-        // 3. Mostrar senha temporária e instruções
-        toast.success(
-          'Usuário criado com sucesso!\n\n' +
-          'Senha temporária: ' + password + '\n\n' +
-          'Por favor, anote esta senha e forneça ao usuário de forma segura. ' +
-          'Um email de confirmação será enviado para o usuário.',
-          { duration: 10000 } // Mostrar por 10 segundos
-        );
-
-        onSuccess();
-        onClose();
+        toast.success('Usuário criado com sucesso!');
       } else {
-        // Atualizar usuário existente
-        const updates = {
-          nome,
-          id_user_tipo: userTipoId
-        };
-
-        // 1. Atualizar na tabela public.users
+        // 1. Atualizar na tabela users
         const { error: updateError } = await supabase
           .from('users')
-          .update(updates)
+          .update({
+            nome,
+            id_user_tipo: userTipoId
+          })
           .eq('id_user', user.id_user);
 
-        if (updateError) throw updateError;
-
-        // 2. Atualizar dados do auth user
-        const authUpdates: any = {
-          data: {
-            nome
-          }
-        };
-
-        if (phone !== user.auth_user?.phone) {
-          authUpdates.phone = phone;
+        if (updateError) {
+          console.error('Erro ao atualizar usuário:', updateError);
+          throw updateError;
         }
 
-        const { error: authUpdateError } = await supabase.auth.updateUser(authUpdates);
+        // 2. Atualizar no Auth se o email ou telefone mudaram
+        if (email !== user.auth_user?.email || phone !== user.auth_user?.phone) {
+          const { error: authUpdateError } = await supabase.auth.updateUser({
+            email,
+            phone
+          });
 
-        if (authUpdateError) {
-          console.warn('Erro ao atualizar dados do auth:', authUpdateError);
+          if (authUpdateError) {
+            console.error('Erro ao atualizar usuário no Auth:', authUpdateError);
+            throw authUpdateError;
+          }
         }
 
         toast.success('Usuário atualizado com sucesso!');

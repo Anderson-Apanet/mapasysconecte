@@ -3,23 +3,58 @@ import { AgendaEvent } from '../types/agenda';
 
 export async function fetchEvents(start?: Date | number | string, end?: Date | number | string) {
   try {
-    let query = supabase.from('agenda').select('*');
+    // Converte as datas para o formato ISO
+    const startDate = start instanceof Date ? start.toISOString() : start;
+    const endDate = end instanceof Date ? end.toISOString() : end;
 
-    // Se for um ID, busca apenas o evento específico
-    if (typeof start === 'number') {
-      console.log('Buscando evento por ID:', start);
-      const { data: eventData, error: eventError } = await query.eq('id', start).single();
-      
-      if (eventError) {
-        console.error('Erro ao buscar evento por ID:', eventError);
-        throw eventError;
-      }
+    console.log('Buscando eventos entre:', startDate, 'e', endDate);
 
-      if (eventData) {
+    // Busca os eventos
+    const { data: eventData, error: eventError } = await supabase
+      .from('agenda')
+      .select(`
+        id,
+        nome,
+        descricao,
+        datainicio,
+        datafinal,
+        tipo_evento,
+        horamarcada,
+        prioritario,
+        realizada,
+        parcial,
+        cancelado,
+        pppoe,
+        cor,
+        data_cad_evento,
+        criador
+      `);
+
+    if (eventError) {
+      console.error('Erro ao buscar eventos:', eventError);
+      throw eventError;
+    }
+
+    // Filtra os eventos pelo período
+    const filteredEvents = eventData.filter(event => {
+      const eventStart = new Date(event.datainicio);
+      const eventEnd = new Date(event.datafinal);
+      const filterStart = startDate ? new Date(startDate) : null;
+      const filterEnd = endDate ? new Date(endDate) : null;
+
+      return (!filterStart || eventStart >= filterStart) && 
+             (!filterEnd || eventEnd <= filterEnd);
+    });
+
+    // Para cada evento, busca os responsáveis
+    const eventsWithResponsaveis = await Promise.all(filteredEvents.map(async (eventData) => {
+      try {
         // Busca os responsáveis
         const { data: respData, error: respError } = await supabase
           .from('agenda_responsaveis')
-          .select('user_id')
+          .select(`
+            user_id
+          `)
           .eq('agenda_id', eventData.id);
 
         if (respError) {
@@ -30,88 +65,46 @@ export async function fetchEvents(start?: Date | number | string, end?: Date | n
         // Se encontrou responsáveis, busca os dados dos usuários
         if (respData && respData.length > 0) {
           const userIds = respData.map(r => r.user_id);
+          
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('id_user, nome')
             .in('id_user', userIds);
 
           if (userError) {
-            console.error('Erro ao buscar usuários:', userError);
+            console.error('Erro ao buscar dados dos usuários:', userError);
             throw userError;
           }
 
-          // Monta o array de responsáveis
-          eventData.responsaveis = userData?.map(user => ({
+          // Mapeia os dados dos usuários para o formato esperado
+          const responsaveis = userData.map(user => ({
             id: user.id_user,
-            nome: user.nome || ''
-          })) || [];
-        } else {
-          eventData.responsaveis = [];
-        }
-      }
-      
-      console.log('Evento encontrado:', eventData);
-      return eventData;
-    }
+            nome: user.nome
+          }));
 
-    // Se for uma data, busca eventos no período
-    if (start instanceof Date) {
-      query = query.gte('datainicio', start.toISOString());
-    }
-
-    if (end instanceof Date) {
-      query = query.lte('datafinal', end.toISOString());
-    }
-
-    const { data: eventsData, error: eventsError } = await query.order('datainicio', { ascending: true });
-
-    if (eventsError) {
-      console.error('Erro ao buscar eventos:', eventsError);
-      throw eventsError;
-    }
-
-    // Para cada evento, busca seus responsáveis
-    const formattedData = await Promise.all((eventsData || []).map(async (event) => {
-      // Busca os responsáveis do evento
-      const { data: respData, error: respError } = await supabase
-        .from('agenda_responsaveis')
-        .select('user_id')
-        .eq('agenda_id', event.id);
-
-      if (respError) {
-        console.error('Erro ao buscar responsáveis do evento:', event.id, respError);
-        return { ...event, responsaveis: [] };
-      }
-
-      // Se encontrou responsáveis, busca os dados dos usuários
-      if (respData && respData.length > 0) {
-        const userIds = respData.map(r => r.user_id);
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('id_user, nome')
-          .in('id_user', userIds);
-
-        if (userError) {
-          console.error('Erro ao buscar usuários dos responsáveis:', userError);
-          return { ...event, responsaveis: [] };
+          return {
+            ...eventData,
+            responsaveis
+          };
         }
 
-        // Monta o array de responsáveis
+        // Se não encontrou responsáveis, retorna o evento sem responsáveis
         return {
-          ...event,
-          responsaveis: userData?.map(user => ({
-            id: user.id_user,
-            nome: user.nome || ''
-          })) || []
+          ...eventData,
+          responsaveis: []
+        };
+      } catch (error) {
+        console.error('Erro ao processar responsáveis do evento:', error);
+        return {
+          ...eventData,
+          responsaveis: []
         };
       }
-
-      return { ...event, responsaveis: [] };
     }));
 
-    return formattedData;
+    return eventsWithResponsaveis;
   } catch (error) {
-    console.error('Erro ao carregar eventos:', error);
+    console.error('Erro ao buscar eventos:', error);
     throw error;
   }
 }
@@ -149,25 +142,34 @@ export async function saveEvent(event: Partial<AgendaEvent>) {
 
       // Se tem responsáveis, insere na tabela de relacionamento
       if (event.responsaveis && event.responsaveis.length > 0) {
-        const responsaveisData = event.responsaveis.map(resp => ({
-          agenda_id: newEvent.id,
-          user_id: resp.id
-        }));
+        console.log('Responsáveis a serem inseridos:', event.responsaveis);
+        
+        // Filtra apenas responsáveis válidos (com id)
+        const responsaveisValidos = event.responsaveis.filter(resp => resp && resp.id);
+        
+        if (responsaveisValidos.length > 0) {
+          const responsaveisInsert = responsaveisValidos.map(resp => ({
+            agenda_id: newEvent.id,
+            user_id: resp.id
+          }));
 
-        const { error: respError } = await supabase
-          .from('agenda_responsaveis')
-          .insert(responsaveisData);
+          console.log('Dados preparados para inserção:', responsaveisInsert);
 
-        if (respError) {
-          console.error('Erro ao inserir responsáveis:', respError);
-          throw respError;
+          const { error: responsaveisError } = await supabase
+            .from('agenda_responsaveis')
+            .insert(responsaveisInsert);
+
+          if (responsaveisError) {
+            console.error('Erro ao inserir responsáveis. Detalhes:', responsaveisError);
+            throw new Error(`Erro ao inserir responsáveis: ${JSON.stringify(responsaveisError)}`);
+          }
         }
       }
 
       return newEvent;
     } else {
       // Atualiza o evento existente
-      const { data: updatedEvent, error: eventError } = await supabase
+      const { data: updatedEvent, error: updateError } = await supabase
         .from('agenda')
         .update({
           nome: event.nome,
@@ -187,43 +189,55 @@ export async function saveEvent(event: Partial<AgendaEvent>) {
         .select()
         .single();
 
-      if (eventError) {
-        console.error('Erro ao atualizar evento:', eventError);
-        throw eventError;
+      if (updateError) {
+        console.error('Erro ao atualizar evento:', updateError);
+        throw updateError;
       }
 
-      // Remove todos os responsáveis antigos
-      const { error: deleteError } = await supabase
-        .from('agenda_responsaveis')
-        .delete()
-        .eq('agenda_id', event.id);
-
-      if (deleteError) {
-        console.error('Erro ao remover responsáveis antigos:', deleteError);
-        throw deleteError;
-      }
-
-      // Se tem novos responsáveis, insere
-      if (event.responsaveis && event.responsaveis.length > 0) {
-        const responsaveisData = event.responsaveis.map(resp => ({
-          agenda_id: event.id,
-          user_id: resp.id
-        }));
-
-        const { error: respError } = await supabase
+      // Atualiza os responsáveis
+      if (event.responsaveis) {
+        console.log('Atualizando responsáveis para o evento:', event.id);
+        
+        // Primeiro remove todos os responsáveis antigos
+        const { error: deleteError } = await supabase
           .from('agenda_responsaveis')
-          .insert(responsaveisData);
+          .delete()
+          .eq('agenda_id', event.id);
 
-        if (respError) {
-          console.error('Erro ao inserir novos responsáveis:', respError);
-          throw respError;
+        if (deleteError) {
+          console.error('Erro ao remover responsáveis antigos:', deleteError);
+          throw new Error(`Erro ao remover responsáveis antigos: ${JSON.stringify(deleteError)}`);
+        }
+
+        // Se tem novos responsáveis, insere
+        if (event.responsaveis.length > 0) {
+          // Filtra apenas responsáveis válidos (com id)
+          const responsaveisValidos = event.responsaveis.filter(resp => resp && resp.id);
+          
+          if (responsaveisValidos.length > 0) {
+            const responsaveisInsert = responsaveisValidos.map(resp => ({
+              agenda_id: event.id,
+              user_id: resp.id
+            }));
+
+            console.log('Dados preparados para inserção:', responsaveisInsert);
+
+            const { error: responsaveisError } = await supabase
+              .from('agenda_responsaveis')
+              .insert(responsaveisInsert);
+
+            if (responsaveisError) {
+              console.error('Erro ao inserir novos responsáveis. Detalhes:', responsaveisError);
+              throw new Error(`Erro ao inserir novos responsáveis: ${JSON.stringify(responsaveisError)}`);
+            }
+          }
         }
       }
 
       return updatedEvent;
     }
   } catch (error) {
-    console.error('Erro ao salvar evento:', error);
+    console.error('Erro ao salvar evento. Detalhes completos:', error);
     throw error;
   }
 }

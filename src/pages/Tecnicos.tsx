@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../utils/supabaseClient';
-import toast from 'react-hot-toast';
-import { format, startOfDay, endOfDay, isToday, startOfWeek, endOfWeek, addDays, isSameDay } from 'date-fns';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Bars3Icon } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import { format, addDays, startOfWeek, endOfWeek, isToday, isSameDay, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AgendaEvent } from '../types/agenda';
-import { fetchEvents } from '../services/agenda';
+import { supabase } from '../utils/supabaseClient';
 import InstalacaoModal from '../components/Tecnicos/InstalacaoModal';
 import VisitaModal from '../components/Agenda/VisitaModal';
-import { useNavigate } from 'react-router-dom';
 import { Dialog } from '@headlessui/react';
-import { Bars3Icon } from '@heroicons/react/24/outline';
+import { AgendaEvent } from '../types/Agenda';
+import { toast } from 'react-hot-toast';
 
 interface ContratoDetalhes {
   endereco: string;
@@ -64,11 +63,11 @@ const EventCard: React.FC<EventCardProps> = ({
   getEventTypeColor,
   getStatusColor,
   getStatusText,
-  compact = false
+  compact
 }) => (
   <div 
     onClick={() => onClick(event)}
-    className={`bg-[#F3F6F4] hover:bg-[#E9EDE9] rounded-lg shadow-sm p-4 border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-[#DFE3E0] ${
+    className={`bg-[#F3F6F4] hover:bg-[#E9EDE9] shadow-sm p-4 w-full border-l-4 ${getEventTypeColor(event.tipo_evento)} active:bg-[#DFE3E0] ${
       compact ? 'text-sm' : ''
     } ${event.realizada ? 'opacity-60' : ''}`}
   >
@@ -144,12 +143,17 @@ export default function Tecnicos() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data, error } = await supabase
-          .from('public.users')
+          .from('users')
           .select('nome')
-          .eq('id', session.user.id)
+          .eq('id_user', session.user.id)
           .single();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Erro ao buscar nome do usuário:', error);
+          return;
+        }
+
+        if (data) {
           setUserName(data.nome);
         }
       }
@@ -167,6 +171,23 @@ export default function Tecnicos() {
       toast.error('Erro ao fazer logout');
     }
   }, [navigate]);
+
+  const fetchEvents = useCallback(async (start: Date, end: Date) => {
+    try {
+      const { data, error } = await supabase
+        .from('agenda')
+        .select('*')
+        .gte('datainicio', start.toISOString())
+        .lte('datainicio', end.toISOString())
+        .order('datainicio', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar eventos:', error);
+      throw error;
+    }
+  }, []);
 
   const fetchContratosDetalhes = useCallback(async (events: AgendaEvent[]) => {
     const pppoes = events
@@ -454,19 +475,19 @@ export default function Tecnicos() {
   }, [selectedDate, fetchDayEvents]);
 
   // Memoize funções de estilo
-  const getStatusColor = useMemo(() => (event: AgendaEvent) => {
+  const getStatusColor = useCallback((event: AgendaEvent) => {
     if (event.realizada) return 'bg-green-50 text-green-700';
     if (event.parcial) return 'bg-amber-50 text-amber-700';
     return 'bg-sky-50 text-sky-700';
   }, []);
 
-  const getStatusText = useMemo(() => (event: AgendaEvent) => {
+  const getStatusText = useCallback((event: AgendaEvent) => {
     if (event.realizada) return 'Concluída';
     if (event.parcial) return 'Parcial';
     return 'Pendente';
   }, []);
 
-  const getEventTypeColor = useMemo(() => (tipo: string) => {
+  const getEventTypeColor = useCallback((tipo: string) => {
     switch (tipo) {
       case 'Instalação':
         return 'border-sky-500';
@@ -550,22 +571,23 @@ export default function Tecnicos() {
   }, [selectedDate, viewMode, fetchDayEvents, fetchWeekEvents, fetchUserName]);
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header com menu hamburguer */}
-      <div className="bg-white shadow z-50 relative">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 justify-between">
-            <div className="flex">
-              <div className="flex flex-shrink-0 items-center">
-                <img 
-                  src="https://aunfucsmyfbdyxfgvpha.supabase.co/storage/v1/object/public/assets-mapasys/Nostranet/logosemfundo.PNG" 
-                  alt="Logo" 
-                  className="h-10 w-auto"
-                />
-              </div>
+    <div className="w-full min-h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Cabeçalho */}
+      <div className="w-full bg-white dark:bg-gray-800 shadow">
+        <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+              >
+                <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+              </button>
+              <h1 className="ml-4 text-2xl font-semibold text-gray-900 dark:text-white">Técnicos</h1>
             </div>
+
+            {/* Menu Dropdown */}
             <div className="flex items-center space-x-4">
-              {/* Menu Hamburguer */}
               <div className="relative">
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -574,7 +596,6 @@ export default function Tecnicos() {
                   <Bars3Icon className="h-6 w-6" />
                 </button>
                 
-                {/* Menu Dropdown */}
                 {isMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                     <div className="py-1">
@@ -622,7 +643,7 @@ export default function Tecnicos() {
                 )}
               </div>
 
-              {/* Botão Sair (existente) */}
+              {/* Botão Sair */}
               <button
                 onClick={() => navigate('/logout')}
                 className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
@@ -635,287 +656,286 @@ export default function Tecnicos() {
       </div>
 
       {/* Conteúdo principal */}
-      <div className="py-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Conteúdo baseado na aba ativa */}
-          {activeTab === 'agenda' && (
-            <>
-              {/* Controles de data e visualização */}
-              <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4">
-                {/* Linha superior com data e navegação */}
-                <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:items-center sm:justify-between">
-                  {/* Data atual e botões de navegação */}
-                  <div className="flex items-center justify-between sm:justify-start sm:space-x-2">
-                    <button
-                      onClick={viewMode === 'day' ? handlePreviousDay : handlePreviousWeek}
-                      className="p-1.5 hover:bg-gray-100 rounded-full"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                      </svg>
-                    </button>
-                    
-                    <span className="text-sm font-medium">
-                      {viewMode === 'day' 
-                        ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR })
-                        : `${format(startOfWeek(selectedDate, { locale: ptBR }), "dd/MM", { locale: ptBR })} - ${format(endOfWeek(selectedDate, { locale: ptBR }), "dd/MM", { locale: ptBR })}`
-                      }
-                    </span>
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+        {/* Conteúdo baseado na aba ativa */}
+        {activeTab === 'agenda' && (
+          <div className="space-y-4">
+            {/* Controles de data e visualização */}
+            <div className="bg-white shadow-sm p-4 rounded-lg">
+              {/* Linha superior com data e navegação */}
+              <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:items-center sm:justify-between">
+                {/* Data atual e botões de navegação */}
+                <div className="flex items-center justify-between sm:justify-start sm:space-x-2">
+                  <button
+                    onClick={viewMode === 'day' ? handlePreviousDay : handlePreviousWeek}
+                    className="p-1.5 hover:bg-gray-100 rounded-full"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                  </button>
+                  
+                  <span className="text-sm font-medium">
+                    {viewMode === 'day' 
+                      ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR })
+                      : `${format(startOfWeek(selectedDate, { locale: ptBR }), "dd/MM", { locale: ptBR })} - ${format(endOfWeek(selectedDate, { locale: ptBR }), "dd/MM", { locale: ptBR })}`
+                    }
+                  </span>
 
-                    <button
-                      onClick={viewMode === 'day' ? handleNextDay : handleNextWeek}
-                      className="p-1.5 hover:bg-gray-100 rounded-full"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
-                  </div>
+                  <button
+                    onClick={viewMode === 'day' ? handleNextDay : handleNextWeek}
+                    className="p-1.5 hover:bg-gray-100 rounded-full"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+                </div>
 
-                  {/* Botões de visualização */}
-                  <div className="flex items-center justify-between sm:justify-end space-x-2">
-                    <button
-                      onClick={handleToday}
-                      className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-full ${
-                        isToday(selectedDate)
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                      </svg>
-                      Hoje
-                    </button>
-                    <button
-                      onClick={() => setViewMode('day')}
-                      className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-full ${
-                        viewMode === 'day'
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Dia
-                    </button>
-                    <button
-                      onClick={() => setViewMode('week')}
-                      className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-full ${
-                        viewMode === 'week'
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Semana
-                    </button>
-                  </div>
+                {/* Botões de visualização */}
+                <div className="flex items-center justify-between sm:justify-end space-x-2">
+                  <button
+                    onClick={handleToday}
+                    className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-full ${
+                      isToday(selectedDate)
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0121 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    Hoje
+                  </button>
+                  <button
+                    onClick={() => setViewMode('day')}
+                    className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-full ${
+                      viewMode === 'day'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Dia
+                  </button>
+                  <button
+                    onClick={() => setViewMode('week')}
+                    className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-full ${
+                      viewMode === 'week'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Semana
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {/* Lista de eventos */}
-              {loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
-                </div>
-              ) : events.length === 0 ? (
-                <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500">
-                  Nenhum evento agendado para {viewMode === 'day' ? 'hoje' : 'esta semana'}.
-                </div>
-              ) : viewMode === 'day' ? (
-                <div className="space-y-3">
-                  {events.map((event) => (
-                    <div key={event.id} className="bg-[#F8FAF9] rounded-lg shadow-sm">
-                      <EventCard 
-                        event={event} 
-                        contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
-                        onClick={handleEventClick}
-                        getEventTypeColor={getEventTypeColor}
-                        getStatusColor={getStatusColor}
-                        getStatusText={getStatusText}
-                      />
+            {/* Lista de eventos */}
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+              </div>
+            ) : events.length === 0 ? (
+              <div className="bg-white shadow-sm p-4 text-center text-gray-500 rounded-lg">
+                Nenhum evento agendado para {viewMode === 'day' ? 'hoje' : 'esta semana'}.
+              </div>
+            ) : viewMode === 'day' ? (
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <div key={event.id} className="bg-[#F8FAF9] shadow-sm rounded-lg">
+                    <EventCard 
+                      event={event} 
+                      contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
+                      onClick={handleEventClick}
+                      getEventTypeColor={getEventTypeColor}
+                      getStatusColor={getStatusColor}
+                      getStatusText={getStatusText}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 7 }).map((_, index) => {
+                  const currentDate = addDays(startOfWeek(selectedDate, { locale: ptBR }), index);
+                  const dayEvents = events.filter(event => 
+                    isSameDay(new Date(event.datainicio), currentDate)
+                  );
+                  const dateKey = format(currentDate, 'yyyy-MM-dd');
+
+                  return (
+                    <div key={dateKey} className="bg-white rounded-lg shadow-sm p-4">
+                      <h3 className={`text-sm font-medium mb-3 ${
+                        isToday(currentDate) ? 'text-indigo-600' : 'text-gray-600'
+                      }`}>
+                        {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                      </h3>
+                      
+                      {dayEvents.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-4">
+                          Nenhum evento
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {dayEvents.map((event) => (
+                            <EventCard 
+                              key={event.id} 
+                              event={event} 
+                              contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
+                              onClick={handleEventClick}
+                              getEventTypeColor={getEventTypeColor}
+                              getStatusColor={getStatusColor}
+                              getStatusText={getStatusText}
+                              compact
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {Array.from({ length: 7 }).map((_, index) => {
-                    const currentDate = addDays(startOfWeek(selectedDate, { locale: ptBR }), index);
-                    const dayEvents = events.filter(event => 
-                      isSameDay(new Date(event.datainicio), currentDate)
-                    );
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {activeTab === 'contratos' && (
+          <div className="text-center py-12">
+            <h2 className="text-xl text-gray-600">Página de Contratos em desenvolvimento</h2>
+          </div>
+        )}
+        
+        {activeTab === 'ctos' && (
+          <div className="text-center py-12">
+            <h2 className="text-xl text-gray-600">Página de CTOs em desenvolvimento</h2>
+          </div>
+        )}
 
-                    return (
-                      <div key={index} className="bg-white rounded-lg shadow-sm p-4">
-                        <h3 className={`text-sm font-medium mb-3 ${
-                          isToday(currentDate) ? 'text-indigo-600' : 'text-gray-600'
-                        }`}>
-                          {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                        </h3>
-                        
-                        {dayEvents.length === 0 ? (
-                          <p className="text-sm text-gray-500 text-center py-4">
-                            Nenhum evento
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {dayEvents.map((event) => (
-                              <EventCard 
-                                key={event.id} 
-                                event={event} 
-                                contratoDetalhes={event.pppoe ? contratosDetalhes[event.pppoe] : null}
-                                onClick={handleEventClick}
-                                getEventTypeColor={getEventTypeColor}
-                                getStatusColor={getStatusColor}
-                                getStatusText={getStatusText}
-                                compact
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+        {/* Modais */}
+        <InstalacaoModal
+          isOpen={isInstalacaoModalOpen}
+          onClose={handleCloseInstalacaoModal}
+          event={selectedEvent}
+          onEventUpdated={() => fetchDayEvents(selectedDate)}
+        />
+
+        {selectedEvent && (
+          <VisitaModal
+            isOpen={isVisitaModalOpen}
+            onClose={handleCloseVisitaModal}
+            event={selectedEvent}
+            onVisitaRegistered={handleVisitaRegistered}
+          />
+        )}
+
+        {/* Modal de Informações */}
+        <Dialog
+          open={isInfoModalOpen}
+          onClose={handleCloseInfoModal}
+          className="fixed inset-0 z-50 overflow-y-auto"
+        >
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full mx-4 p-6">
+              <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Detalhes do {selectedEvent?.tipo_evento}
+              </Dialog.Title>
+
+              {selectedInstalacaoInfo && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Instalação</h3>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      {format(new Date(selectedInstalacaoInfo.data_instalacao), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+
+                  {selectedInstalacaoInfo.acompanhante && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.acompanhante}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedInstalacaoInfo.relato && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.relato}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedInstalacaoInfo.tecnicos && selectedInstalacaoInfo.tecnicos.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
+                      <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedInstalacaoInfo.tecnicos.map(tecnico => (
+                          <li key={tecnico.id}>{tecnico.nome}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
-            </>
-          )}
-          
-          {activeTab === 'contratos' && (
-            <div className="text-center py-12">
-              <h2 className="text-xl text-gray-600">Página de Contratos em desenvolvimento</h2>
-            </div>
-          )}
-          
-          {activeTab === 'ctos' && (
-            <div className="text-center py-12">
-              <h2 className="text-xl text-gray-600">Página de CTOs em desenvolvimento</h2>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Modais existentes */}
-      <InstalacaoModal
-        isOpen={isInstalacaoModalOpen}
-        onClose={handleCloseInstalacaoModal}
-        event={selectedEvent}
-        onEventUpdated={() => fetchDayEvents(selectedDate)}
-      />
+              {selectedVisitaInfo && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Visita</h3>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      {format(new Date(selectedVisitaInfo.data), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
 
-      {selectedEvent && (
-        <VisitaModal
-          isOpen={isVisitaModalOpen}
-          onClose={handleCloseVisitaModal}
-          event={selectedEvent}
-          onVisitaRegistered={handleVisitaRegistered}
-        />
-      )}
+                  {selectedVisitaInfo.acompanhante && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.acompanhante}
+                      </p>
+                    </div>
+                  )}
 
-      {/* Modal de Informações */}
-      <Dialog
-        open={isInfoModalOpen}
-        onClose={handleCloseInfoModal}
-        className="fixed inset-0 z-50 overflow-y-auto"
-      >
-        <div className="flex items-center justify-center min-h-screen p-4">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+                  {selectedVisitaInfo.relato && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.relato}
+                      </p>
+                    </div>
+                  )}
 
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full mx-4 p-6">
-            <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Detalhes do {selectedEvent?.tipo_evento}
-            </Dialog.Title>
-
-            {selectedInstalacaoInfo && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Instalação</h3>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {format(new Date(selectedInstalacaoInfo.data_instalacao), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                  </p>
+                  {selectedVisitaInfo.tecnicos && selectedVisitaInfo.tecnicos.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
+                      <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {selectedVisitaInfo.tecnicos.map(tecnico => (
+                          <li key={tecnico.id}>{tecnico.nome}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {selectedInstalacaoInfo.acompanhante && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedInstalacaoInfo.acompanhante}
-                    </p>
-                  </div>
-                )}
-
-                {selectedInstalacaoInfo.relato && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedInstalacaoInfo.relato}
-                    </p>
-                  </div>
-                )}
-
-                {selectedInstalacaoInfo.tecnicos && selectedInstalacaoInfo.tecnicos.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
-                    <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedInstalacaoInfo.tecnicos.map(tecnico => (
-                        <li key={tecnico.id}>{tecnico.nome}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
+                  onClick={handleCloseInfoModal}
+                >
+                  Fechar
+                </button>
               </div>
-            )}
-
-            {selectedVisitaInfo && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Data da Visita</h3>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {format(new Date(selectedVisitaInfo.data), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                  </p>
-                </div>
-
-                {selectedVisitaInfo.acompanhante && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Acompanhante</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedVisitaInfo.acompanhante}
-                    </p>
-                  </div>
-                )}
-
-                {selectedVisitaInfo.relato && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Relato</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedVisitaInfo.relato}
-                    </p>
-                  </div>
-                )}
-
-                {selectedVisitaInfo.tecnicos && selectedVisitaInfo.tecnicos.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
-                    <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      {selectedVisitaInfo.tecnicos.map(tecnico => (
-                        <li key={tecnico.id}>{tecnico.nome}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
-                onClick={handleCloseInfoModal}
-              >
-                Fechar
-              </button>
             </div>
           </div>
-        </div>
-      </Dialog>
+        </Dialog>
+      </div>
     </div>
   );
 }

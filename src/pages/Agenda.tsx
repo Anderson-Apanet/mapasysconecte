@@ -36,9 +36,11 @@ export default function Agenda() {
 
   const loadEvents = async (start: Date, end: Date) => {
     try {
-      const fetchedEvents = await fetchEvents(start, end);
-      const transformedEvents = transformEvents(fetchedEvents);
-      setEvents(transformedEvents);
+      const events = await fetchEvents(start, end);
+      if (events) {
+        const transformedEvents = transformEvents(events);
+        setEvents(transformedEvents);
+      }
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
       toast.error('Erro ao carregar eventos');
