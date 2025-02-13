@@ -12,7 +12,8 @@ import {
   PlusIcon,
   EyeIcon,
   PrinterIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { 
   findCustomerByCpfCnpj, 
@@ -46,6 +47,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [valorPersonalizado, setValorPersonalizado] = useState<string>('');
   const [cliente, setCliente] = useState<any>(null);
   const [plano, setPlano] = useState<any>(null);
+  const [isGerandoCarne, setIsGerandoCarne] = useState(false);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -141,6 +143,123 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       return;
     }
     window.open(invoiceUrl, '_blank');
+  };
+
+  const handleGerarPDFBoletos = async () => {
+    if (isGerandoCarne) return;
+
+    let pdfUrl = null;
+    
+    try {
+      setIsGerandoCarne(true);
+      
+      // Primeiro, buscar os parcelamentos_id do contrato
+      const { data: parcelamentos, error: parcelamentosError } = await supabase
+        .from('parcelamentos_contratos')
+        .select('parcelamento_id')
+        .eq('contrato_id', contrato.id)
+        .not('parcelamento_id', 'is', null);
+
+      if (parcelamentosError) {
+        console.error('Erro ao buscar parcelamentos:', parcelamentosError);
+        throw parcelamentosError;
+      }
+
+      if (!parcelamentos || parcelamentos.length === 0) {
+        toast.error('Nenhum parcelamento encontrado para este contrato');
+        return;
+      }
+
+      const parcelamentosIds = parcelamentos.map(p => p.parcelamento_id);
+      console.log('Parcelamentos encontrados:', parcelamentosIds);
+
+      // Enviar os parcelamentos_id para o N8N
+      const requestBody = {
+        parcelamentos_id: parcelamentosIds
+      };
+      console.log('Enviando requisição para N8N:', requestBody);
+
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/5de4f032-629a-4ee2-997e-beb0344b9ce1', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Resposta de erro do N8N:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Erro ao gerar o carnê: ${response.status} - ${errorText || response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('Resposta do N8N recebida com sucesso');
+      
+      if (!responseData || !responseData.data) {
+        console.error('Resposta inválida do N8N:', responseData);
+        throw new Error('Resposta inválida do servidor: dados do PDF não encontrados');
+      }
+
+      // Remove o prefixo do data URL se existir
+      const base64Data = responseData.data.replace(/^data:application\/pdf;base64,/, '');
+      console.log('Dados base64 recebidos, tamanho:', base64Data.length);
+      
+      if (!base64Data) {
+        throw new Error('Dados do PDF estão vazios');
+      }
+
+      try {
+        // Converte a string base64 em um blob PDF
+        const pdfContent = atob(base64Data);
+        const byteArray = new Uint8Array(pdfContent.length);
+        for (let i = 0; i < pdfContent.length; i++) {
+          byteArray[i] = pdfContent.charCodeAt(i);
+        }
+        const pdfBlob = new Blob([byteArray], { type: 'application/pdf' });
+        console.log('PDF Blob criado com sucesso. Tamanho:', pdfBlob.size);
+        
+        if (pdfBlob.size === 0) {
+          throw new Error('PDF gerado está vazio');
+        }
+
+        // Cria uma URL para o blob
+        pdfUrl = URL.createObjectURL(pdfBlob);
+        console.log('URL do PDF criada:', pdfUrl);
+
+        // Cria um elemento <a> para abrir o PDF
+        const link = document.createElement('a');
+        link.href = pdfUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        
+        // Adiciona o link ao documento e simula o clique
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success('Carnê gerado com sucesso!');
+      } catch (error) {
+        console.error('Erro ao processar PDF:', error);
+        toast.error(`Erro ao processar o PDF do carnê: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Erro ao gerar carnê:', error);
+      toast.error(error.message || 'Erro ao gerar o carnê');
+    } finally {
+      // Limpa a URL do objeto após um breve delay
+      if (pdfUrl) {
+        setTimeout(() => {
+          URL.revokeObjectURL(pdfUrl);
+          console.log('URL do PDF liberada');
+        }, 1000);
+      }
+      setIsGerandoCarne(false);
+    }
   };
 
   // Buscar dados do cliente e plano
@@ -337,6 +456,18 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                     className="text-green-600 hover:text-green-800"
                                   >
                                     <CheckCircleIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    title="Gerar Carnê"
+                                    className="text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                                    onClick={handleGerarPDFBoletos}
+                                    disabled={isGerandoCarne}
+                                  >
+                                    {isGerandoCarne ? (
+                                      <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                      <DocumentArrowDownIcon className="h-5 w-5" />
+                                    )}
                                   </button>
                                 </div>
                               </td>
