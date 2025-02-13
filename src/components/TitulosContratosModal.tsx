@@ -9,7 +9,10 @@ import {
   QrCodeIcon,
   DocumentTextIcon,
   ClipboardDocumentIcon,
-  PlusIcon
+  PlusIcon,
+  EyeIcon,
+  PrinterIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { 
   findCustomerByCpfCnpj, 
@@ -40,6 +43,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [showCriarTitulosModal, setShowCriarTitulosModal] = useState(false);
   const [dataInicialVencimento, setDataInicialVencimento] = useState('');
   const [quantidadeTitulos, setQuantidadeTitulos] = useState(1);
+  const [valorPersonalizado, setValorPersonalizado] = useState<string>('');
   const [cliente, setCliente] = useState<any>(null);
   const [plano, setPlano] = useState<any>(null);
 
@@ -131,6 +135,14 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     }
   };
 
+  const handlePrintTitulo = (invoiceUrl: string | null) => {
+    if (!invoiceUrl) {
+      toast.error('URL do título não disponível');
+      return;
+    }
+    window.open(invoiceUrl, '_blank');
+  };
+
   // Buscar dados do cliente e plano
   useEffect(() => {
     const buscarDados = async () => {
@@ -164,10 +176,12 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       return;
     }
 
+    const valorFinal = valorPersonalizado ? parseFloat(valorPersonalizado) : plano.valor;
+
     const payload = {
       nome: cliente.nome,
       cpf_cnpj: cliente.cpf_cnpj,
-      valor: plano.valor,
+      valor: valorFinal,
       idasaas: cliente.idasaas,
       billingType: "BOLETO",
       nextDueDate: dataInicialVencimento,
@@ -275,7 +289,10 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                               Valor
                             </th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Status
+                              Pago
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Ações
                             </th>
                           </tr>
                         </thead>
@@ -292,14 +309,36 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                 }).format(titulo.valor)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  titulo.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                  titulo.status === 'RECEIVED' ? 'bg-green-100 text-green-800' :
-                                  titulo.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
-                                  'bg-gray-100 text-gray-800'
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  titulo.pago 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-yellow-100 text-yellow-800'
                                 }`}>
-                                  {titulo.status}
+                                  {titulo.pago ? 'Pago' : 'Em Aberto'}
                                 </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <div className="flex items-center space-x-3">
+                                  <button
+                                    title="Ver detalhes do título"
+                                    className="text-blue-600 hover:text-blue-800"
+                                  >
+                                    <EyeIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    title="Imprimir título"
+                                    className="text-gray-600 hover:text-gray-800"
+                                    onClick={() => handlePrintTitulo(titulo.invoiceurl)}
+                                  >
+                                    <PrinterIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    title="Dar baixa no título"
+                                    className="text-green-600 hover:text-green-800"
+                                  >
+                                    <CheckCircleIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -357,6 +396,34 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                       onChange={(e) => setDataInicialVencimento(e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="valor" className="block text-sm font-medium text-gray-700">
+                      Valor (opcional)
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">R$</span>
+                      </div>
+                      <input
+                        type="text"
+                        id="valor"
+                        name="valor"
+                        placeholder={plano?.valor ? `Valor do plano: R$ ${plano.valor.toFixed(2)}` : 'Digite o valor'}
+                        value={valorPersonalizado}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.,]/g, '');
+                          if (value === '' || /^\d*[.,]?\d{0,2}$/.test(value)) {
+                            setValorPersonalizado(value);
+                          }
+                        }}
+                        className="mt-1 block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Se não informado, será usado o valor do plano
+                    </p>
                   </div>
 
                   <div>
