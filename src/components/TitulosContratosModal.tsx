@@ -48,6 +48,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [cliente, setCliente] = useState<any>(null);
   const [plano, setPlano] = useState<any>(null);
   const [isGerandoCarne, setIsGerandoCarne] = useState(false);
+  const [isCriandoTitulos, setIsCriandoTitulos] = useState(false);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -295,6 +296,8 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       return;
     }
 
+    setIsCriandoTitulos(true);
+
     const valorFinal = valorPersonalizado ? parseFloat(valorPersonalizado) : plano.valor;
 
     const payload = {
@@ -333,11 +336,20 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
         throw new Error('Erro ao enviar dados');
       }
 
-      toast.success('Títulos enviados para geração');
+      toast.success('Títulos gerados com sucesso!');
       setShowCriarTitulosModal(false);
+      
+      // Aguarda 2 segundos antes de atualizar a lista de títulos
+      // para dar tempo do N8N processar e salvar os dados
+      setTimeout(() => {
+        buscarTitulosLocais();
+      }, 2000);
+
     } catch (error) {
       console.error('Erro ao enviar dados:', error);
       toast.error('Erro ao enviar dados para geração dos títulos');
+    } finally {
+      setIsCriandoTitulos(false);
     }
   };
 
@@ -584,10 +596,20 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   </button>
                   <button
                     onClick={enviarParaN8N}
-                    disabled={!dataInicialVencimento || quantidadeTitulos < 1}
+                    disabled={!dataInicialVencimento || quantidadeTitulos < 1 || isCriandoTitulos}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    Gerar Títulos
+                    {isCriandoTitulos ? (
+                      <>
+                        <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
+                        Gerando títulos...
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon className="h-5 w-5 mr-2" />
+                        Criar Títulos
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
