@@ -33,7 +33,7 @@ const menuItems: MenuItem[] = [
     id: 'usuarios',
     name: 'Usuários',
     icon: UserIcon,
-    href: '/adm/usuarios',
+    href: ROUTES.ADM_USERS,
     description: 'Gerenciar usuários do sistema',
     color: 'from-blue-400 to-blue-600'
   },
@@ -41,7 +41,7 @@ const menuItems: MenuItem[] = [
     id: 'mensagens',
     name: 'Mensagens WhatsApp',
     icon: ChatBubbleLeftRightIcon,
-    href: '/adm/mensagens',
+    href: ROUTES.ADM_MESSAGES,
     description: 'Configurar mensagens automáticas',
     color: 'from-green-400 to-green-600'
   },
@@ -49,7 +49,7 @@ const menuItems: MenuItem[] = [
     id: 'tipos_usuarios',
     name: 'Tipos de Usuários',
     icon: UserGroupIcon,
-    href: '/adm/tipos-usuarios',
+    href: ROUTES.ADM_USER_TYPES,
     description: 'Configurar tipos de usuários',
     color: 'from-yellow-400 to-yellow-600'
   },
@@ -57,7 +57,7 @@ const menuItems: MenuItem[] = [
     id: 'bairros',
     name: 'Bairros',
     icon: MapPinIcon,
-    href: '/adm/bairros',
+    href: ROUTES.ADM_BAIRROS,
     description: 'Gerenciar bairros atendidos',
     color: 'from-purple-400 to-purple-600'
   },
@@ -73,7 +73,7 @@ const menuItems: MenuItem[] = [
     id: 'configuracoes',
     name: 'Configurações',
     icon: Cog6ToothIcon,
-    href: '/adm/configuracoes',
+    href: ROUTES.ADM_SETTINGS,
     description: 'Configurações do sistema',
     color: 'from-gray-400 to-gray-600'
   }
@@ -83,10 +83,10 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
 
   const handleClick = (href: string) => {
-    if (href === '/adm/tipos-usuarios') {
+    if (href === ROUTES.ADM_USER_TYPES) {
       onMenuClick(href);
     } else {
-      navigate(href);
+      navigate(href, { replace: true });
     }
   };
 

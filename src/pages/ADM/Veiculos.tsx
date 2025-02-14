@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TruckIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
-import Layout from '../components/Layout';
-import { supabase } from '../utils/supabaseClient';
+import Layout from '@/components/Layout';
+import { supabase } from '@/utils/supabaseClient';
 import toast from 'react-hot-toast';
 
 interface Veiculo {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, UserPlusIcon } from '@heroicons/react/24/outline';
 import UserModal from '../UserModal';
 import { supabase } from '../../utils/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -41,20 +41,33 @@ const UserManagement: React.FC = () => {
   };
 
   const handleEditUser = (user: User) => {
-    console.log('Editando usuário:', user);
     setSelectedUser(user);
     setIsModalOpen(true);
-    console.log('Modal aberto:', isModalOpen);
+  };
+
+  const handleAddUser = () => {
+    setSelectedUser(null);
+    setIsModalOpen(true);
   };
 
   const handleUserSuccess = () => {
-    console.log('Usuário atualizado com sucesso');
     fetchUsers();
+    setIsModalOpen(false);
   };
 
   return (
     <div>
-      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">Usuários</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">Usuários</h2>
+        <button
+          onClick={handleAddUser}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <UserPlusIcon className="h-5 w-5 mr-2" />
+          Adicionar Usuário
+        </button>
+      </div>
+
       <table className="min-w-full divide-y divide-gray-300">
         <thead className="bg-gray-50">
           <tr>

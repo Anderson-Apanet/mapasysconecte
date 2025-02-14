@@ -15,7 +15,9 @@ import Caixa from './pages/Caixa';
 import Tecnicos from './pages/Tecnicos';
 import Estoque from './pages/Estoque';
 import Bairros from './pages/ADM/Bairros';
-import Veiculos from './pages/Veiculos';
+import Veiculos from './pages/ADM/Veiculos';
+import Users from './pages/ADM/Users';
+import Messages from './pages/ADM/Messages';
 import PrivateRoute from './components/PrivateRoute';
 import { ROUTES } from './constants/routes';
 
@@ -88,6 +90,8 @@ const App: React.FC = () => {
             <Estoque />
           </PrivateRoute>
         } />
+
+        {/* Rotas administrativas */}
         <Route path={ROUTES.ADM_BAIRROS} element={
           <PrivateRoute>
             <Bairros />
@@ -98,9 +102,19 @@ const App: React.FC = () => {
             <Veiculos />
           </PrivateRoute>
         } />
+        <Route path={ROUTES.ADM_USERS} element={
+          <PrivateRoute>
+            <Users />
+          </PrivateRoute>
+        } />
+        <Route path={ROUTES.ADM_MESSAGES} element={
+          <PrivateRoute>
+            <Messages />
+          </PrivateRoute>
+        } />
 
-        {/* Redirecionar para home se a rota não existir */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Redirecionar para a página inicial se a rota não existir */}
+        <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
       </Routes>
     </Router>
   );
