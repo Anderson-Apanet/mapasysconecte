@@ -96,16 +96,15 @@ const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato
 <p style="text-align: justify;">Por este instrumento particular, o ASSINANTE abaixo qualificado contrata e adere ao Serviço da PRESTADORA:</p>
 <h2 style="font-size: 4.5px; margin: 2px 0; font-weight: bold;">DADOS DA PRESTADORA</h2>
 <p style="text-align: justify;">
-Nome Empresarial: CONECTE TELECOM LTDA
-CNPJ: 41.143.126/0001-00
-Inscrição Estadual: 250/0020066
-Endereço: Rua Paulista, nº 183, Sala 03
+Nome Empresarial: NOSTRANET TELECOM LTDA
+CNPJ: 56.417.910/0001-29
+Endereço: Av. Pé Rizziere Delai, nº 625
 Bairro: Centro
-Cidade: Arroio do Sal
+Cidade: Três Cachoeiras
 Estado: Rio Grande do Sul
-CEP: 95585-000
-Telefone: no. (51) 99759-7259, disponibilizado o recebimento de ligações a cobrar
-E-mail: conecte@seconecte.net</p>
+CEP: 95580-000
+Telefone: nº (51) 9922-0496, disponibilizado o recebimento de ligações a cobrar
+E-mail: nostranet@nostranet.com.br</p>
 <h2 style="font-size: 4.5px; margin: 2px 0; font-weight: bold;">QUALIFICAÇÃO DO ASSINANTE</h2>
 <p style="text-align: justify;">
 Nome: ${contractData.clientName}
@@ -151,8 +150,14 @@ Forma de Pagamento: ( )Boleto Bancário ( )Débito Automático Banco XXXX</p>
 <p style="text-align: justify;">A adesão ao presente Contrato importa na ciência e anuência do ASSINANTE de que o uso de seus dados pessoais (nome, telefone, e-mail) pela PRESTADORA é condição primordial para o fornecimento dos serviços, nos moldes do §3°, do art. 9° da Lei 13.709/18, ao mesmo passo que se aplica ao endereço IP do ASSINANTE, especialmente por se tratar de gestão de dado pessoal decorrente de cumprimento de obrigação legal e regulatória.</p>
 <p style="text-align: justify;">E por estar de acordo com as cláusulas do presente termo e do CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO MULTIMÍDIA, SERVIÇO DE VALOR ADICIONADO, LOCAÇÃO E OUTRAS AVENÇAS, parte integrante deste Termo de Adesão, o ASSINANTE aposta sua assinatura abaixo ou o aceita eletronicamente, para que surta todos os seus efeitos legais.</p>
 <p style="text-align: justify;">A cópia integral do CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO MULTIMÍDIA, SERVIÇO DE VALOR ADICIONADO, LOCAÇÃO E OUTRAS AVENÇAS pode ser obtida no Cartório de Registro de Títulos e Documentos da Comarca de Arroio do Sal/RS.</p>
-<div style="margin-top: 10px; text-align: center; font-size: 4px;">Arroio do Sal, ${currentDate}</div>
-<div style="margin-top: 15px; text-align: center; font-size: 4px;">_______________________________________________<br>${contractData.clientName}</div>
+<div style="margin-top: 10px; text-align: center; font-size: 4px;">Três Cachoeiras, ${currentDate}</div>
+<div style="margin-top: 15px; text-align: center; font-size: 4px;">
+_______________________________________________<br>
+NOSTRANET TELECOM LTDA<br><br>
+_______________________________________________<br>
+${contractData.clientName}<br>
+CPF/CNPJ: ${contractData.cpf}
+</div>
 </div>`;
   };
 
@@ -163,7 +168,7 @@ Forma de Pagamento: ( )Boleto Bancário ( )Débito Automático Banco XXXX</p>
 <h1 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">CONTRATO DE PERMANÊNCIA</h1>
 <p style="text-align: center; font-size: 4px; margin: 2px 0;">(Vinculado ao Contrato de Prestação de Serviços e ao Termo de Adesão celebrado entre a PRESTADORA e o ASSINANTE)</p>
 
-<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contrato.bairros?.nome || '-'}, na Cidade de do Estado de Rio Grande do Sul, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por CONECTE TELECOM LTDA, nome fantasia CONECTE TELECOM, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. 41.143.126/0001-00, com sede na Rua Paulista, nº 183, Sala 03, Bairro Centro, CEP: 95585-000, na cidade Arroio do Sal, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
+<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contrato.bairros?.nome || '-'}, na Cidade de ${contractData.city} do Estado de Rio Grande do Sul, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por NOSTRANET TELECOM LTDA, nome fantasia NOSTRANET TELECOM, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. 56.417.910/0001-29, com sede na Av. Pé Rizziere Delai, nº 625, Bairro Centro, CEP: 95580-000, na cidade Três Cachoeiras, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
 
 <p style="text-align: justify;">1. O ASSINANTE, ao contratar os serviços prestados pela PRESTADORA nas modalidades por ela ofertadas, expressa sua aceitação e se compromete a permanecer como cliente da PRESTADORA pelo prazo de 12 (doze) meses, a contar da data de contratação dos serviços, tendo em vista o recebimento dos benefícios descritos neste instrumento.</p>
 
@@ -212,11 +217,11 @@ Com 12 (doze) meses de uso ------- R$ 50,00</div>
 
 <p style="text-align: justify;">7. Fica, desde já, eleito o Foro do domicílio do Assinante como o competente para dirimir qualquer conflito ou controvérsia oriunda deste Termo, em detrimento de quaisquer outros, por mais especiais ou privilegiados que sejam.</p>
 
-<div style="margin-top: 10px; text-align: center; font-size: 4px;">Arroio do Sal, ${currentDate}</div>
+<div style="margin-top: 10px; text-align: center; font-size: 4px;">Três Cachoeiras, ${currentDate}</div>
 
 <div style="margin-top: 15px; text-align: center; font-size: 4px;">
 _______________________________________________<br>
-CONECTE TELECOM LTDA<br><br>
+NOSTRANET TELECOM LTDA<br><br>
 _______________________________________________<br>
 ${contractData.clientName}<br>
 CPF/CNPJ: ${contractData.cpf}
@@ -230,7 +235,7 @@ CPF/CNPJ: ${contractData.cpf}
     return `<div style="font-family: 'Times New Roman', Times, serif; font-size: 4px; line-height: 1; text-align: justify;">
 <h1 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">RESCISÃO DE CONTRATO</h1>
 
-<p style="text-align: justify; margin-top: 15px;">A empresa CONECTE TELECOM LTDA, inscrita no CNPJ nº 41.143.126.0001-00 e Inscrição Estadual nº 250/0020066, situada a Rua Paulista, 183/103, Centro de Arroio do Sal RS, representada pelo seu sócio Bernard Becker dos Santos, portador do CPF nº 012.484.840-02, informa que não prestará mais serviços de fornecimento de Internet à ${contractData.clientName}, portador(a) do CPF nº ${contractData.cpf} e RG nº ${contractData.rg} na cidade de ${contractData.city} a partir da data de ______________________</p>
+<p style="text-align: justify; margin-top: 15px;">A empresa NOSTRANET TELECOM LTDA, inscrita no CNPJ nº 56.417.910.0001-00 e Inscrição Estadual nº 250/0020066, situada a Av. Pé Rizziere Delai, 625/103, Centro de Três Cachoeiras RS, representada pelo seu sócio Bernard Becker dos Santos, portador do CPF nº 012.484.840-02, informa que não prestará mais serviços de fornecimento de Internet à ${contractData.clientName}, portador(a) do CPF nº ${contractData.cpf} e RG nº ${contractData.rg} na cidade de ${contractData.city} a partir da data de ______________________</p>
 
 <p style="text-align: justify; margin-top: 15px;">MOTIVO DA RESCISÃO:</p>
 <p style="text-align: justify; margin-top: 10px;">_______________________________________________________________________________________</p>
@@ -244,11 +249,11 @@ ${contractData.clientName}
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
 _______________________________________________<br>
-CONECTE TELECOM
+NOSTRANET TELECOM
 </div>
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
-Arroio do Sal, ${currentDate}
+Três Cachoeiras, ${currentDate}
 </div>
 </div>`;
   };

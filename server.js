@@ -49,11 +49,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // MySQL connection configuration
 const dbConfig = {
-  host: process.env.VITE_MYSQL_HOST || '201.76.1.124',
-  port: process.env.VITE_MYSQL_PORT || 3306,
-  user: process.env.VITE_MYSQL_USER || 'root',
-  password: process.env.VITE_MYSQL_PASSWORD || 'bk134',
-  database: process.env.VITE_MYSQL_DATABASE || 'radius',
+  host: process.env.MYSQL_HOST || process.env.VITE_MYSQL_HOST || '201.76.1.124',
+  port: process.env.MYSQL_PORT || process.env.VITE_MYSQL_PORT || 3306,
+  user: process.env.MYSQL_USER || process.env.VITE_MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || process.env.VITE_MYSQL_PASSWORD || 'bk134',
+  database: process.env.MYSQL_DATABASE || process.env.VITE_MYSQL_DATABASE || 'radius',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
