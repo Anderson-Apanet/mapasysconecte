@@ -14,6 +14,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { default as ClienteModal } from '../components/ClienteModal';
+import { default as ContractDetails } from '../components/ContractDetails';
 
 const Clientes: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,8 @@ const Clientes: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
+  const [showContractDetails, setShowContractDetails] = useState(false);
   const itemsPerPage = 5;
 
   // Função para buscar clientes com paginação e busca no servidor
@@ -111,6 +114,22 @@ const Clientes: React.FC = () => {
 
   // Handler para salvar alterações do cliente
   const handleSaveCliente = () => {
+    fetchClientes(currentPage, searchTerm);
+  };
+
+  // Função para atualizar o contrato após edição
+  const handleContratoUpdate = (updatedContrato: Contrato) => {
+    setSelectedContrato(updatedContrato);
+  };
+
+  // Função para exibir detalhes do contrato
+  const handleShowContractDetails = (contrato: Contrato) => {
+    setSelectedContrato(contrato);
+    setShowContractDetails(true);
+  };
+
+  const handleContractUpdate = () => {
+    // Recarregar os dados do cliente após atualização do contrato
     fetchClientes(currentPage, searchTerm);
   };
 
@@ -292,6 +311,15 @@ const Clientes: React.FC = () => {
             onClose={handleCloseModal}
             onSave={handleSaveCliente}
           />
+
+          {/* Detalhes do Contrato */}
+          {showContractDetails && (
+            <ContractDetails
+              contrato={selectedContrato}
+              onClose={() => setShowContractDetails(false)}
+              onUpdate={handleContratoUpdate}
+            />
+          )}
         </div>
       </div>
     </Layout>

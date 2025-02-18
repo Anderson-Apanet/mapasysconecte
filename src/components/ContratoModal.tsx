@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog } from '@headlessui/react';
-import { XMarkIcon, DocumentTextIcon, DocumentIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, DocumentTextIcon, DocumentIcon, PrinterIcon, PencilIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import html2pdf from 'html2pdf.js';
+import { supabase } from '../utils/supabaseClient';
+import { toast } from 'react-toastify';
+import { debounce } from 'lodash';
+
+interface Bairro {
+  id: number;
+  nome: string;
+  cidade: string;
+}
 
 interface Contrato {
   id: number;
@@ -26,6 +35,7 @@ interface Contrato {
   data_cad_contrato: string | null;
   id_legado: string | null;
   id_cliente: number | null;
+  id_bairro: number | null;
   planos: {
     id: number;
     nome: string;
@@ -49,43 +59,189 @@ interface ContratoModalProps {
     rg: string;
     email: string;
     fonewhats: string;
-    cep: string;
   };
+  onSave?: (contrato: Contrato) => void;
 }
 
-const ContratoModal: React.FC<ContratoModalProps> = ({ isOpen, onClose, contrato, cliente }) => {
+const ContratoModal: React.FC<ContratoModalProps> = ({
+  isOpen,
+  onClose,
+  contrato,
+  cliente,
+  onSave
+}) => {
   const [showDocumentEditor, setShowDocumentEditor] = useState(false);
   const [documentType, setDocumentType] = useState<'adesao' | 'permanencia' | 'rescisao'>('adesao');
+  const [isEditing, setIsEditing] = useState(false);
+  const [contratoAtual, setContratoAtual] = useState<Contrato | null>(null);
+  const [editedData, setEditedData] = useState({
+    endereco: '',
+    complemento: '',
+    id_bairro: null as number | null
+  });
+  const [bairros, setBairros] = useState<Bairro[]>([]);
+  const [bairroSearchTerm, setBairroSearchTerm] = useState('');
+  const [selectedBairro, setSelectedBairro] = useState<Bairro | null>(null);
+  const [showBairrosList, setShowBairrosList] = useState(false);
+
+  // Atualiza os dados quando o contrato mudar
+  useEffect(() => {
+    if (contrato) {
+      setContratoAtual(contrato);
+      setEditedData({
+        endereco: contrato.endereco || '',
+        complemento: contrato.complemento || '',
+        id_bairro: contrato.id_bairro
+      });
+      if (contrato.bairros) {
+        setSelectedBairro(contrato.bairros);
+        setBairroSearchTerm(contrato.bairros.nome);
+      }
+    }
+  }, [contrato]);
+
+  const searchBairros = async (searchTerm: string) => {
+    if (searchTerm.length >= 2) {
+      const { data, error } = await supabase
+        .from('bairros')
+        .select('*')
+        .ilike('nome', `%${searchTerm}%`)
+        .limit(10);
+
+      if (error) {
+        console.error('Erro ao buscar bairros:', error);
+        return;
+      }
+
+      setBairros(data || []);
+      setShowBairrosList(true);
+    } else {
+      setBairros([]);
+      setShowBairrosList(false);
+    }
+  };
+
+  const debouncedSearch = debounce(searchBairros, 300);
+
+  const handleBairroSearch = (value: string) => {
+    setBairroSearchTerm(value);
+    debouncedSearch(value);
+  };
+
+  const handleBairroSelect = (bairro: Bairro) => {
+    setSelectedBairro(bairro);
+    setBairroSearchTerm(bairro.nome);
+    setEditedData(prev => ({ ...prev, id_bairro: bairro.id }));
+    setShowBairrosList(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      const { error } = await supabase
+        .from('contratos')
+        .update({
+          endereco: editedData.endereco,
+          complemento: editedData.complemento,
+          id_bairro: editedData.id_bairro
+        })
+        .eq('id', contrato.id);
+
+      if (error) throw error;
+
+      // Recarrega os dados do contrato após salvar
+      const { data: updatedContrato, error: fetchError } = await supabase
+        .from('contratos')
+        .select(`
+          *,
+          bairros (
+            id,
+            nome,
+            cidade
+          ),
+          planos (
+            id,
+            nome,
+            valor
+          )
+        `)
+        .eq('id', contrato.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Atualiza o estado local e notifica o componente pai
+      setContratoAtual(updatedContrato);
+      if (typeof onSave === 'function') {
+        onSave(updatedContrato);
+      }
+
+      toast.success('Endereço atualizado com sucesso!');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      toast.error('Erro ao atualizar endereço');
+    }
+  };
+
+  const handleCancel = () => {
+    if (contratoAtual) {
+      setEditedData({
+        endereco: contratoAtual.endereco || '',
+        complemento: contratoAtual.complemento || '',
+        id_bairro: contratoAtual.id_bairro
+      });
+    }
+    setIsEditing(false);
+    setShowBairrosList(false);
+  };
 
   const handleOpenDocument = (type: 'adesao' | 'permanencia' | 'rescisao') => {
     setDocumentType(type);
     setShowDocumentEditor(true);
   };
 
-  const formatDate = (date: string | null) => {
-    if (!date) return '-';
+  const handleGeneratePDF = () => {
     try {
-      return format(new Date(date), 'dd/MM/yyyy', { locale: ptBR });
-    } catch {
-      return '-';
+      const editorContent = document.querySelector('.ql-editor')?.innerHTML;
+      if (!editorContent) {
+        console.error('No content found in the editor');
+        return;
+      }
+
+      const styledContent = `<style>
+        .ql-editor p { text-align: justify; }
+      </style>${editorContent}`;
+
+      const options = {
+        margin: 1,
+        filename: `contrato_${documentType}_${contrato.pppoe}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+
+      html2pdf().from(styledContent).set(options).save();
+      console.log('PDF generated successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
     }
   };
 
   const contractData = {
-    clientName: cliente?.nome || contrato.cliente || '',
+    clientName: cliente?.nome || contratoAtual?.cliente || '',
     cpf: cliente?.cpf_cnpj || '',
     rg: cliente?.rg || '',
-    address: contrato.endereco || '',
-    city: contrato.bairros?.cidade || '',
+    address: contratoAtual?.endereco || '',
+    city: contratoAtual?.bairros?.cidade || '',
     state: 'RS',
     cep: cliente?.cep || '',
     email: cliente?.email || '',
     phone: cliente?.fonewhats || '',
-    planName: contrato.planos?.nome || '',
-    planValue: contrato.planos?.valor || 0,
+    planName: contratoAtual?.planos?.nome || '',
+    planValue: contratoAtual?.planos?.valor || 0,
     downloadSpeed: 300,
     uploadSpeed: 150,
-    installationDate: contrato.data_instalacao || ''
+    installationDate: contratoAtual?.data_instalacao || ''
   };
 
   const generateAdesaoTemplate = (contractData: any) => {
@@ -111,7 +267,7 @@ Nome: ${contractData.clientName}
 CPF/CNPJ: ${contractData.cpf}
 RG/ID: ${contractData.rg}
 Endereço: ${contractData.address}
-Bairro: ${contrato.bairros?.nome || '-'}
+Bairro: ${contratoAtual?.bairros?.nome || '-'}
 Cidade: ${contractData.city}
 Estado: Rio Grande do Sul
 CEP: ${contractData.cep}
@@ -130,7 +286,7 @@ Taxa de instalação com Fidelidade: R$XXX,XX
 Taxa de Instalação sem Fidelidade: R$XXX,XX
 Equipamentos: Devidamente descrito na OS de instalação.
 Equipamentos: ( ) Comodato da Contratada
-Data de Vencimento: ${contrato.dia_vencimento || '-'}
+Data de Vencimento: ${contratoAtual?.dia_vencimento || '-'}
 Valor sem fidelidade: R$XXX,XX
 Valor com fidelidade: R$XXX,XX
 Fidelidade ( ) Sim ( ) Não
@@ -168,7 +324,7 @@ CPF/CNPJ: ${contractData.cpf}
 <h1 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">CONTRATO DE PERMANÊNCIA</h1>
 <p style="text-align: center; font-size: 4px; margin: 2px 0;">(Vinculado ao Contrato de Prestação de Serviços e ao Termo de Adesão celebrado entre a PRESTADORA e o ASSINANTE)</p>
 
-<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contrato.bairros?.nome || '-'}, na Cidade de ${contractData.city} do Estado de Rio Grande do Sul, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por NOSTRANET TELECOM LTDA, nome fantasia NOSTRANET TELECOM, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. 56.417.910/0001-29, com sede na Av. Pé Rizziere Delai, nº 625, Bairro Centro, CEP: 95580-000, na cidade Três Cachoeiras, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
+<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contratoAtual?.bairros?.nome || '-'}, na Cidade de ${contractData.city} do Estado de Rio Grande do Sul, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por NOSTRANET TELECOM LTDA, nome fantasia NOSTRANET TELECOM, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. 56.417.910/0001-29, com sede na Av. Pé Rizziere Delai, nº 625, Bairro Centro, CEP: 95580-000, na cidade Três Cachoeiras, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
 
 <p style="text-align: justify;">1. O ASSINANTE, ao contratar os serviços prestados pela PRESTADORA nas modalidades por ela ofertadas, expressa sua aceitação e se compromete a permanecer como cliente da PRESTADORA pelo prazo de 12 (doze) meses, a contar da data de contratação dos serviços, tendo em vista o recebimento dos benefícios descritos neste instrumento.</p>
 
@@ -258,198 +414,239 @@ Três Cachoeiras, ${currentDate}
 </div>`;
   };
 
-  const handleGeneratePDF = () => {
-    try {
-      const editorContent = document.querySelector('.ql-editor')?.innerHTML;
-      if (!editorContent) {
-        console.error('No content found in the editor');
-        return;
-      }
-
-      const styledContent = `<style>
-        .ql-editor p { text-align: justify; }
-      </style>${editorContent}`;
-
-      const options = {
-        margin: 1,
-        filename: `contrato_${documentType}_${contrato.pppoe}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-      };
-
-      html2pdf().from(styledContent).set(options).save();
-      console.log('PDF generated successfully');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-    }
-  };
-
   return (
-    <>
-      <Dialog
-        as="div"
-        className="fixed inset-0 z-[60] overflow-y-auto"
-        open={isOpen}
-        onClose={onClose}
-      >
-        <div className="flex items-center justify-center min-h-screen px-4">
-          <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-4xl bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <Dialog.Title className="text-lg font-medium">
+                Detalhes do Contrato
+              </Dialog.Title>
+              <div className="flex gap-2">
+                {!isEditing ? (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="text-blue-600 hover:text-blue-700"
+                    title="Editar endereço"
+                  >
+                    <PencilIcon className="h-5 w-5" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSave}
+                      className="text-green-600 hover:text-green-700"
+                      title="Salvar alterações"
+                    >
+                      <CheckIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="text-red-600 hover:text-red-700"
+                      title="Cancelar edição"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
 
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl p-6">
-            <div className="absolute top-4 right-4">
+            {/* Card de Endereço */}
+            <div className="bg-white shadow rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium mb-3">Endereço</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {isEditing ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Endereço</label>
+                      <input
+                        type="text"
+                        value={editedData.endereco}
+                        onChange={(e) => setEditedData({
+                          ...editedData,
+                          endereco: e.target.value
+                        })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Complemento</label>
+                      <input
+                        type="text"
+                        value={editedData.complemento}
+                        onChange={(e) => setEditedData({
+                          ...editedData,
+                          complemento: e.target.value
+                        })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700">Bairro</label>
+                      <input
+                        type="text"
+                        value={bairroSearchTerm}
+                        onChange={(e) => handleBairroSearch(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Digite para pesquisar..."
+                      />
+                      {showBairrosList && bairros.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto">
+                          {bairros.map((bairro) => (
+                            <div
+                              key={bairro.id}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                              onClick={() => handleBairroSelect(bairro)}
+                            >
+                              <p className="text-sm font-medium">{bairro.nome}</p>
+                              <p className="text-xs text-gray-500">{bairro.cidade}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm text-gray-500">Endereço</p>
+                      <p className="text-sm font-medium">{contratoAtual?.endereco}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Complemento</p>
+                      <p className="text-sm font-medium">{contratoAtual?.complemento}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Bairro</p>
+                      <p className="text-sm font-medium">{contratoAtual?.bairros?.nome}</p>
+                      <p className="text-xs text-gray-500">{contratoAtual?.bairros?.cidade}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Card de Detalhes do Cliente */}
+            <div className="bg-white shadow rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium mb-3">Detalhes do Cliente</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Nome</p>
+                  <p className="text-sm font-medium">{cliente?.nome}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">CPF/CNPJ</p>
+                  <p className="text-sm font-medium">{cliente?.cpf_cnpj}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Email</p>
+                  <p className="text-sm font-medium">{cliente?.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Telefone</p>
+                  <p className="text-sm font-medium">{cliente?.fonewhats}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Card de Detalhes do Plano */}
+            <div className="bg-white shadow rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium mb-3">Detalhes do Plano</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Nome do Plano</p>
+                  <p className="text-sm font-medium">{contratoAtual?.planos?.nome}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Valor</p>
+                  <p className="text-sm font-medium">
+                    {new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    }).format(contratoAtual?.planos?.valor || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Data de Instalação</p>
+                  <p className="text-sm font-medium">
+                    {contratoAtual?.data_instalacao ? format(new Date(contratoAtual.data_instalacao), 'dd/MM/yyyy') : ''}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="text-sm font-medium">{contratoAtual?.status}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Botões para documentos */}
+            <div className="flex gap-4 mt-4">
               <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                onClick={() => handleOpenDocument('adesao')}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
               >
-                <XMarkIcon className="h-6 w-6" />
+                <DocumentTextIcon className="h-5 w-5 mr-2" />
+                Contrato de Adesão
+              </button>
+              <button
+                onClick={() => handleOpenDocument('permanencia')}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+              >
+                <DocumentIcon className="h-5 w-5 mr-2" />
+                Contrato de Permanência
+              </button>
+              <button
+                onClick={() => handleOpenDocument('rescisao')}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+              >
+                <DocumentIcon className="h-5 w-5 mr-2" />
+                Rescisão
               </button>
             </div>
 
-            <div className="space-y-6">
-              <div>
-                <Dialog.Title className="text-2xl font-bold text-gray-900 border-b pb-4">
-                  Detalhes do Contrato
-                </Dialog.Title>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-3">Informações do Cliente</h3>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Nome:</span> {cliente?.nome}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">CPF/CNPJ:</span> {cliente?.cpf_cnpj}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">RG:</span> {cliente?.rg}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Email:</span> {cliente?.email}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Telefone:</span> {cliente?.fonewhats}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-3">Detalhes do Plano</h3>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Plano:</span> {contrato.planos?.nome}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Valor:</span> R$ {contrato.planos?.valor}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">PPPoE:</span> {contrato.pppoe}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Dia Vencimento:</span> {contrato.dia_vencimento}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Data de Instalação:</span> {formatDate(contrato.data_instalacao)}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Status:</span> {contrato.status}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-lg shadow p-4">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-3">Endereço</h3>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Endereço:</span> {contrato.endereco}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Bairro:</span> {contrato.bairros?.nome}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Cidade:</span> {contrato.bairros?.cidade}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-4 mt-6">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Documentos do Contrato</h3>
-                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200 bg-white">
+            {showDocumentEditor && (
+              <div className="bg-white shadow rounded-lg p-4 mt-6" style={{ minHeight: '600px', height: 'auto' }}>
+                <h3 className="text-lg font-medium mb-4 flex items-center justify-between">
+                  Editor de Documento
                   <button
-                    onClick={() => {
-                      setDocumentType('adesao');
-                      setShowDocumentEditor((prev) => !prev);
-                    }}
+                    onClick={handleGeneratePDF}
                     className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
                   >
-                    <DocumentIcon className="h-5 w-5 mr-2" />
-                    Contrato de Adesão
+                    <PrinterIcon className="h-5 w-5 mr-2" />
+                    Gerar PDF
                   </button>
-                  <button
-                    onClick={() => {
-                      setDocumentType('permanencia');
-                      setShowDocumentEditor((prev) => !prev);
-                    }}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
-                  >
-                    <DocumentIcon className="h-5 w-5 mr-2" />
-                    Contrato de Permanência
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDocumentType('rescisao');
-                      setShowDocumentEditor((prev) => !prev);
-                    }}
-                    className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
-                  >
-                    <DocumentIcon className="h-5 w-5 mr-2" />
-                    Rescisão
-                  </button>
-                </div>
+                </h3>
+                <ReactQuill
+                  value={documentType === 'adesao' ? generateAdesaoTemplate(contractData) : documentType === 'permanencia' ? generatePermanenciaTemplate(contractData) : generateRescisaoTemplate(contractData)}
+                  onChange={() => {}}
+                  modules={{
+                    toolbar: [
+                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ list: 'ordered' }, { list: 'bullet' }],
+                      [{ align: [] }],
+                      ['link', 'image'],
+                      ['clean'],
+                    ],
+                  }}
+                  className="h-auto"
+                  style={{ minHeight: '500px', height: 'auto' }}
+                />
               </div>
-
-              {showDocumentEditor && (
-                <div className="bg-white rounded-lg shadow p-4 mt-6" style={{ minHeight: '600px', height: 'auto' }}>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 flex items-center justify-between">
-                    Editor de Documento
-                    <button
-                      onClick={() => handleGeneratePDF()}
-                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                    >
-                      <PrinterIcon className="h-5 w-5 mr-2" />
-                      Gerar PDF
-                    </button>
-                  </h3>
-                  <ReactQuill
-                    value={documentType === 'adesao' ? generateAdesaoTemplate(contractData) : documentType === 'permanencia' ? generatePermanenciaTemplate(contractData) : generateRescisaoTemplate(contractData)}
-                    onChange={() => {}}
-                    modules={{
-                      toolbar: [
-                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ list: 'ordered' }, { list: 'bullet' }],
-                        [{ align: [] }],
-                        ['link', 'image'],
-                        ['clean'],
-                      ],
-                    }}
-                    className="h-auto"
-                    style={{ minHeight: '500px', height: 'auto' }}
-                  />
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        </div>
-      </Dialog>
-    </>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
   );
 };
 
