@@ -19,9 +19,9 @@ const ContractDetails: React.FC<ContractDetailsProps> = ({
   plan
 }) => {
   const [showDocumentEditor, setShowDocumentEditor] = useState(false);
-  const [documentType, setDocumentType] = useState<'adesao' | 'permanencia'>('adesao');
+  const [documentType, setDocumentType] = useState<'adesao' | 'permanencia' | 'rescisao'>('adesao');
 
-  const handleOpenDocument = (type: 'adesao' | 'permanencia') => {
+  const handleOpenDocument = (type: 'adesao' | 'permanencia' | 'rescisao') => {
     setDocumentType(type);
     setShowDocumentEditor(true);
   };
@@ -83,6 +83,13 @@ const ContractDetails: React.FC<ContractDetailsProps> = ({
                 >
                   <DocumentIcon className="h-5 w-5 mr-2" />
                   Contrato de Permanência
+                </button>
+                <button
+                  onClick={() => handleOpenDocument('rescisao')}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                >
+                  <DocumentIcon className="h-5 w-5 mr-2" />
+                  Rescisão
                 </button>
               </div>
             </div>

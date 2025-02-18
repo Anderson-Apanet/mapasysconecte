@@ -155,71 +155,74 @@ app.get('/api/connections', async (req, res) => {
     const offset = (page - 1) * limit;
 
     try {
-        console.log('Tentando conectar ao MySQL com:', {
-            host: process.env.MYSQL_HOST,
-            user: process.env.MYSQL_USER,
-            database: process.env.MYSQL_DATABASE
-        });
-        
         const connection = await mysql.createConnection({
             host: process.env.MYSQL_HOST,
             user: process.env.MYSQL_USER,
             password: process.env.MYSQL_PASSWORD,
             database: process.env.MYSQL_DATABASE,
-            connectTimeout: 10000 // 10 segundos
+            connectTimeout: 10000
         });
 
         let whereClause = '1=1';
         const params: any[] = [];
 
         if (search) {
-            whereClause += ' AND (username LIKE ? OR callingstationid LIKE ? OR framedipaddress LIKE ?)';
+            whereClause += ' AND (r.username LIKE ? OR r.callingstationid LIKE ? OR r.framedipaddress LIKE ?)';
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         if (status !== 'all') {
             if (status === 'up') {
-                whereClause += ' AND acctstoptime IS NULL';
-            } else {
-                whereClause += ' AND acctstoptime IS NOT NULL';
+                whereClause += ' AND r.acctstoptime IS NULL';
+            } else if (status === 'down') {
+                whereClause += ' AND r.acctstoptime IS NOT NULL';
             }
         }
 
         if (nasip !== 'all') {
-            whereClause += ' AND nasipaddress = ?';
+            whereClause += ' AND r.nasipaddress = ?';
             params.push(nasip);
         }
 
-        // Consulta para contar total de registros
-        const [countResult] = await connection.execute(
-            `SELECT COUNT(*) as total FROM radacct WHERE ${whereClause}`,
-            params
-        );
-        const totalRecords = (countResult as any[])[0].total;
+        // Query modificada para pegar apenas o último registro de cada username
+        const query = `
+            WITH RankedConnections AS (
+                SELECT 
+                    r.*,
+                    ROW_NUMBER() OVER (PARTITION BY r.username ORDER BY r.acctstarttime DESC) as rn
+                FROM radacct r
+                WHERE ${whereClause}
+            )
+            SELECT * FROM RankedConnections
+            WHERE rn = 1
+            ORDER BY acctstarttime DESC
+            LIMIT ? OFFSET ?
+        `;
 
-        // Consulta principal com paginação
-        const [rows] = await connection.execute(
-            `SELECT * FROM radacct 
-             WHERE ${whereClause}
-             ORDER BY acctstarttime DESC 
-             LIMIT ? OFFSET ?`,
-            [...params, limit, offset]
-        );
+        const countQuery = `
+            SELECT COUNT(DISTINCT username) as total
+            FROM radacct r
+            WHERE ${whereClause}
+        `;
+
+        const [rows] = await connection.query(query, [...params, limit, offset]);
+        const [countResult] = await connection.query(countQuery, params);
+        const total = (countResult as any)[0].total;
 
         await connection.end();
 
         res.json({
-            data: rows,
+            connections: rows,
             pagination: {
                 currentPage: page,
-                totalPages: Math.ceil(totalRecords / limit),
-                totalRecords,
+                totalPages: Math.ceil(total / limit),
+                totalRecords: total,
                 recordsPerPage: limit
             }
         });
     } catch (error) {
         console.error('Erro ao buscar conexões:', error);
-        res.status(500).json({ error: String(error) });
+        res.status(500).json({ error: 'Erro ao buscar conexões' });
     }
 });
 
@@ -428,6 +431,51 @@ app.get('/api/concentrator-stats', async (req, res) => {
     console.error('Erro ao buscar estatísticas dos concentradores:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas dos concentradores' });
   }
+});
+
+// Rota para buscar histórico de conexões de um usuário específico
+app.get('/api/connections/user/:username/history', async (req, res) => {
+    const username = req.params.username;
+
+    try {
+        const connection = await mysql.createConnection({
+            host: process.env.MYSQL_HOST,
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE,
+            connectTimeout: 10000
+        });
+
+        // Buscar histórico de conexões do usuário
+        const query = `
+            SELECT 
+                radacctid,
+                username,
+                nasipaddress,
+                nasportid,
+                acctstarttime,
+                acctstoptime,
+                acctinputoctets,
+                acctoutputoctets,
+                acctterminatecause,
+                framedipaddress,
+                callingstationid
+            FROM radacct 
+            WHERE username = ?
+            ORDER BY acctstarttime DESC
+            LIMIT 10
+        `;
+
+        const [rows] = await connection.query(query, [username]);
+        await connection.end();
+
+        res.json({
+            history: rows
+        });
+    } catch (error) {
+        console.error('Erro ao buscar histórico de conexões do usuário:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de conexões' });
+    }
 });
 
 const port = 3001;

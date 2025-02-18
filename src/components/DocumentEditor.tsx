@@ -48,16 +48,77 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({
     const element = document.getElementById('document-content');
     if (!element) return;
 
+    // Criar um container temporário para o PDF
+    const tempContainer = document.createElement('div');
+    tempContainer.innerHTML = element.querySelector('.ql-editor')?.innerHTML || '';
+    
+    // Aplicar estilos específicos para o PDF
+    const style = document.createElement('style');
+    style.textContent = `
+      * {
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      div {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-bottom: 10px !important;
+      }
+      p {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-bottom: 10px !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-top: 16px !important;
+        margin-bottom: 8px !important;
+        font-size: 14px !important;
+      }
+    `;
+    tempContainer.appendChild(style);
+
+    // Processar o conteúdo para garantir quebras de página adequadas
+    const paragraphs = tempContainer.querySelectorAll('p, div');
+    paragraphs.forEach(p => {
+      p.style.setProperty('page-break-inside', 'avoid', 'important');
+      p.style.setProperty('break-inside', 'avoid', 'important');
+      p.style.setProperty('margin-bottom', '10px', 'important');
+    });
+
     const opt = {
-      margin: 1,
+      margin: [1, 0.5, 1, 0.5],
       filename: `contrato_${documentType}_${contractData.clientName}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        logging: true,
+        letterRendering: true,
+        allowTaint: true
+      },
+      jsPDF: { 
+        unit: 'in', 
+        format: 'a4', 
+        orientation: 'portrait',
+        compress: true,
+        precision: 16
+      },
+      pagebreak: { 
+        mode: ['avoid-all', 'css', 'legacy'],
+        before: '.page-break-before',
+        after: '.page-break-after',
+        avoid: ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+      }
     };
 
     try {
-      await html2pdf().set(opt).from(element).save();
+      await html2pdf().set(opt).from(tempContainer).save();
       console.log('PDF gerado com sucesso');
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -103,30 +164,75 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 </button>
                 <button
                   onClick={handleCloseClick}
-                  className="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                  className="text-gray-400 hover:text-gray-500"
                 >
-                  Fechar
+                  <span className="sr-only">Fechar</span>
+                  &times;
                 </button>
               </div>
             </div>
             
-            <div className="bg-white rounded-lg" onClick={handleEditorClick}>
-              <div id="document-content" className="p-6">
-                <ReactQuill
-                  value={content}
-                  onChange={setContent}
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, false] }],
-                      ['bold', 'italic', 'underline'],
-                      [{ list: 'ordered' }, { list: 'bullet' }],
-                      ['clean']
-                    ]
-                  }}
-                  className="h-[600px] mb-12 editor-container"
-                  preserveWhitespace={true}
-                />
-              </div>
+            <div 
+              id="document-content" 
+              className="document-content"
+              style={{ 
+                fontSize: '12px',
+                lineHeight: '1.5',
+                padding: '20px'
+              }}
+            >
+              <style>
+                {`
+                  .ql-editor {
+                    min-height: 29.7cm;
+                    padding: 2cm;
+                    box-sizing: border-box;
+                    line-height: 1.5 !important;
+                  }
+                  .ql-editor p {
+                    margin-bottom: 10px !important;
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                  }
+                  .ql-editor h1, 
+                  .ql-editor h2, 
+                  .ql-editor h3 {
+                    page-break-after: avoid !important;
+                    break-after: avoid !important;
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                    margin-top: 16px !important;
+                    margin-bottom: 8px !important;
+                  }
+                  .ql-editor > * {
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                  }
+                `}
+              </style>
+              <ReactQuill
+                value={content}
+                onChange={setContent}
+                modules={{
+                  toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'align': [] }],
+                    ['clean']
+                  ]
+                }}
+                formats={[
+                  'header',
+                  'bold', 'italic', 'underline',
+                  'list', 'bullet',
+                  'align'
+                ]}
+                style={{ 
+                  height: 'calc(100vh - 250px)',
+                  marginBottom: '20px'
+                }}
+              />
             </div>
           </div>
         </div>
@@ -136,10 +242,10 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({
 };
 
 const generateAdesaoTemplate = (data: DocumentEditorProps['contractData']) => {
-  const currentDate = new Date().toLocaleDateString('pt-BR');
-  
   return `
-    <h1 style="text-align: center; margin-bottom: 20px;">TERMO DE ADESÃO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h1>
+    <h2>CONTRATO DE ADESÃO AO SERVIÇO DE INTERNET</h2>
+
+    Por este instrumento particular, de um lado a empresa PROVEDOR DE INTERNET LTDA, inscrita no CNPJ sob o nº XX.XXX.XXX/XXXX-XX, com sede na Rua XXXXX, nº XXX, Bairro XXXXX, Cidade - Estado, doravante denominada CONTRATADA, e de outro lado ${data.clientName}, inscrito(a) no CPF/CNPJ sob o nº ${data.cpf}, RG nº ${data.rg}, residente e domiciliado(a) na ${data.address}, ${data.city} - ${data.state}, CEP ${data.cep}, e-mail ${data.email}, telefone ${data.phone}, doravante denominado(a) CONTRATANTE, têm entre si justo e contratado o seguinte:
 
     <h2>DADOS DA PRESTADORA</h2>
     <p>
@@ -178,7 +284,7 @@ const generateAdesaoTemplate = (data: DocumentEditorProps['contractData']) => {
     </p>
 
     <p style="margin-top: 40px; text-align: center;">
-    Arroio do Sal, ${currentDate}
+    Arroio do Sal, ${new Date().toLocaleDateString('pt-BR')}
     </p>
 
     <div style="margin-top: 60px; text-align: center;">
@@ -195,22 +301,14 @@ const generateAdesaoTemplate = (data: DocumentEditorProps['contractData']) => {
 };
 
 const generatePermanenciaTemplate = (data: DocumentEditorProps['contractData']) => {
-  const currentDate = new Date().toLocaleDateString('pt-BR');
   const valorDesconto = 50.00;
   const mesesFidelidade = 12;
   const valorTotalBeneficios = valorDesconto * mesesFidelidade;
 
   return `
-    <h1 style="text-align: center; margin-bottom: 20px;">CONTRATO DE PERMANÊNCIA</h1>
+    <h2>CONTRATO DE PERMANÊNCIA</h2>
 
-    <p>Por este instrumento, ${data.clientName}, inscrito no RG de nº${data.rg}, e no CPF sob o nº ${data.cpf}, 
-    residente e domiciliado na ${data.address}, ${data.city} - ${data.state}, ${data.cep}, Brasil, denominado ASSINANTE, 
-    que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, 
-    ofertado por CONECTE TELECOM LTDA, nome fantasia CONECTE TELECOM, pessoa jurídica de direito privado, 
-    inscrita no CNPJ sob o nº. 41.143.126/0001-00, com sede na Rua Paulista, nº 183, Sala 03, Bairro Centro, 
-    CEP: 95585-000, na cidade Arroio do Sal, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar 
-    o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, 
-    ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
+    Pelo presente instrumento particular, ${data.clientName}, inscrito(a) no CPF/CNPJ sob o nº ${data.cpf}, já qualificado(a) no Contrato de Prestação de Serviços de Internet, firma o presente Contrato de Permanência, que se regerá mediante as seguintes cláusulas e condições:
 
     <h2>1. OBJETO DO CONTRATO</h2>
     <p>Plano: ${data.planName} (R$${data.planValue.toFixed(2)})<br>
@@ -239,7 +337,7 @@ const generatePermanenciaTemplate = (data: DocumentEditorProps['contractData']) 
     </table>
 
     <p style="margin-top: 40px; text-align: center;">
-    Arroio do Sal, ${currentDate}
+    Arroio do Sal, ${new Date().toLocaleDateString('pt-BR')}
     </p>
 
     <div style="margin-top: 60px; text-align: center;">

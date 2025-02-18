@@ -84,12 +84,12 @@ export default function Rede() {
       }
       const data = await response.json();
       console.log('Raw server response:', data);
-      setConnections(data.data);
+      setConnections(data.connections || []); 
       setPagination(data.pagination);
 
       // Update the list of all unique NAS IPs only on initial load or refresh
       if (nasIpFilter === 'all' && page === 1 && !search) {
-        const ips = Array.from(new Set(data.data.map((conn: Connection) => conn.nasipaddress))).sort();
+        const ips = Array.from(new Set((data.connections || []).map((conn: Connection) => conn.nasipaddress))).sort();
         setAllNasIps(ips);
         
         // Update concentrator stats
@@ -155,9 +155,10 @@ export default function Rede() {
         throw new Error('Failed to fetch user connection history');
       }
       const data = await response.json();
-      setConnectionHistory(data);
+      setConnectionHistory(data.history || []); 
     } catch (err) {
       console.error('Error fetching user connection history:', err);
+      setConnectionHistory([]); 
     }
   };
 
@@ -293,11 +294,11 @@ export default function Rede() {
           <div className="mb-8">
             <div className="flex items-center mb-2">
               <WifiIcon className="h-8 w-8 text-blue-500 dark:text-blue-400 mr-2" />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent dark:from-blue-400 dark:to-blue-300">
+              <h1 className="text-3xl font-bold text-white">
                 Conexões
               </h1>
             </div>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-white">
               Visualize o histórico de conexões dos clientes
             </p>
           </div>
