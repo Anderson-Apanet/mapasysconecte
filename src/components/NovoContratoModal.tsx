@@ -140,6 +140,43 @@ export default function NovoContratoModal({
 
       if (error) throw error;
 
+      // Busca os dados do plano para obter o radius
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+      } else if (!planoData.radius) {
+        console.error('Plano não tem o campo radius definido');
+      } else {
+        // Adiciona as credenciais no banco radius
+        try {
+          const response = await fetch('http://localhost:3001/api/radius/add-contract-credentials', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: contratoData.pppoe,
+              password: contratoData.senha,
+              groupname: planoData.radius
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Erro ao adicionar credenciais no radius:', errorData);
+            toast.error('Erro ao adicionar credenciais no radius');
+          }
+        } catch (error) {
+          console.error('Erro ao adicionar credenciais no radius:', error);
+          toast.error('Erro ao adicionar credenciais no radius');
+        }
+      }
+
       toast.success('Contrato criado com sucesso!');
       onClose();
     } catch (error) {

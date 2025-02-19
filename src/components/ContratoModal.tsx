@@ -40,6 +40,7 @@ interface Contrato {
     id: number;
     nome: string;
     valor: number;
+    radius: string;
   } | null;
   bairros: {
     id: number;
@@ -161,13 +162,43 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
           planos (
             id,
             nome,
-            valor
+            valor,
+            radius
           )
         `)
         .eq('id', contrato.id)
         .single();
 
       if (fetchError) throw fetchError;
+
+      if (!updatedContrato.planos?.radius) {
+        console.error('Plano não tem o campo radius definido');
+        toast.error('Plano não tem o campo radius definido');
+      } else {
+        // Adiciona as credenciais no banco radius
+        try {
+          const response = await fetch('http://localhost:3001/api/radius/add-contract-credentials', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: updatedContrato.pppoe,
+              password: updatedContrato.senha,
+              groupname: updatedContrato.planos.radius
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Erro ao adicionar credenciais no radius:', errorData);
+            toast.error('Erro ao adicionar credenciais no radius');
+          }
+        } catch (error) {
+          console.error('Erro ao adicionar credenciais no radius:', error);
+          toast.error('Erro ao adicionar credenciais no radius');
+        }
+      }
 
       // Atualiza o estado local e notifica o componente pai
       setContratoAtual(updatedContrato);

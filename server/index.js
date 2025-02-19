@@ -12,16 +12,21 @@ if (process.env.NODE_ENV === 'production') {
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const { mysqlHost, mysqlUser, mysqlPassword, mysqlDatabase } = require('./config');
 
 console.log('Iniciando servidor com configuração:', {
     nodeEnv: process.env.NODE_ENV,
-    mysqlHost: process.env.MYSQL_HOST,
+    mysqlHost: mysqlHost,
     port: process.env.PORT
 });
 
 // Importar rotas do Asaas
 const asaasRouter = require('./routes/asaas');
 console.log('Rotas do Asaas importadas com sucesso');
+
+// Importar rotas do Radius
+const radiusRouter = require('./routes/radius');
+console.log('Rotas do Radius importadas com sucesso');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -49,75 +54,31 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(distPath));
 }
 
-// Registrar as rotas do Asaas
-console.log('Registrando rotas do Asaas em /api/asaas');
+// Registrar rotas
 app.use('/api/asaas', asaasRouter);
-console.log('Rotas do Asaas registradas');
+app.use('/api/radius', radiusRouter);
+console.log('Rotas do Asaas e Radius registradas');
 
 // Rota de teste para verificar se o servidor está funcionando
 app.get('/api/test', (req, res) => {
     res.json({ 
-        message: 'Servidor funcionando!',
-        config: {
-            nodeEnv: process.env.NODE_ENV,
-            mysqlHost: process.env.MYSQL_HOST,
-            port: process.env.PORT
-        }
+        message: 'API está funcionando!',
+        timestamp: new Date().toISOString()
     });
 });
 
-// Listar todas as rotas registradas
-console.log('\nRotas registradas:');
-function printRoutes(stack, basePath = '') {
-    stack.forEach(layer => {
-        if (layer.route) {
-            const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
-            console.log(`${methods} ${basePath}${layer.route.path}`);
-        } else if (layer.name === 'router' && layer.handle.stack) {
-            const newBasePath = basePath + (layer.regexp.toString().replace('/^\\', '').replace('\\/?(?=\\/|$)/i', ''));
-            printRoutes(layer.handle.stack, newBasePath);
-        }
-    });
-}
-
-printRoutes(app._router.stack);
-
-// Função para criar conexão com o MySQL
+// Função para criar conexão com o banco MySQL
 const createConnection = async () => {
-    const config = {
-        host: process.env.MYSQL_HOST,
-        user: process.env.MYSQL_USER,
-        password: process.env.MYSQL_PASSWORD,
-        database: process.env.MYSQL_DATABASE,
-        port: process.env.MYSQL_PORT || 3306,
-        connectTimeout: 10000 // 10 segundos
-    };
-
-    // Log das configurações (ocultando a senha)
-    console.log('Tentando conectar ao MySQL com:', {
-        host: config.host,
-        user: config.user,
-        database: config.database,
-        port: config.port
-    });
-
-    // Verificar se as variáveis de ambiente estão definidas
-    if (!config.host || !config.user || !config.password || !config.database) {
-        console.error('Erro: Variáveis de ambiente do MySQL não configuradas corretamente:', {
-            MYSQL_HOST: process.env.MYSQL_HOST,
-            MYSQL_USER: process.env.MYSQL_USER,
-            MYSQL_DATABASE: process.env.MYSQL_DATABASE,
-            MYSQL_PORT: process.env.MYSQL_PORT
-        });
-        throw new Error('Configuração do MySQL incompleta');
-    }
-
     try {
-        const connection = await mysql.createConnection(config);
-        console.log('Conexão MySQL estabelecida com sucesso');
+        const connection = await mysql.createConnection({
+            host: mysqlHost,
+            user: mysqlUser,
+            password: mysqlPassword,
+            database: mysqlDatabase
+        });
         return connection;
     } catch (error) {
-        console.error('Erro ao conectar ao MySQL:', error);
+        console.error('Erro ao criar conexão:', error);
         throw error;
     }
 };
@@ -291,7 +252,7 @@ app.get('/api/user-consumption/:username', async (req, res) => {
 });
 
 // Rota para buscar histórico de conexões de um usuário
-app.get('/api/connections/user/:username/history', async (req, res) => {
+app.get('/api/support/connections/user/:username/history', async (req, res) => {
     try {
         const connection = await createConnection();
         const username = req.params.username;
@@ -311,15 +272,22 @@ app.get('/api/connections/user/:username/history', async (req, res) => {
                 callingstationid
             FROM radacct 
             WHERE username = ?
-            ORDER BY acctstarttime DESC 
+            ORDER BY acctstarttime DESC
             LIMIT 10`;
 
         const [rows] = await connection.execute(query, [username]);
         await connection.end();
-        res.json(rows);
+
+        res.json({
+            success: true,
+            data: rows
+        });
     } catch (error) {
         console.error('Erro ao buscar histórico de conexões:', error);
-        res.status(500).json({ error: String(error) });
+        res.status(500).json({ 
+            error: 'Erro ao buscar histórico de conexões',
+            details: error.message 
+        });
     }
 });
 
@@ -354,7 +322,23 @@ app.listen(port, () => {
     console.log(`Servidor rodando na porta ${port}`);
     console.log('Ambiente:', process.env.NODE_ENV);
     console.log('Variáveis de ambiente carregadas:');
-    console.log('- MYSQL_HOST:', process.env.MYSQL_HOST);
-    console.log('- MYSQL_DATABASE:', process.env.MYSQL_DATABASE);
+    console.log('- MYSQL_HOST:', mysqlHost);
+    console.log('- MYSQL_DATABASE:', mysqlDatabase);
     console.log('- ASAAS_API_KEY:', process.env.ASAAS_API_KEY ? 'Configurado' : 'Não configurado');
 });
+
+// Listar todas as rotas registradas
+console.log('\nRotas registradas:');
+function printRoutes(stack, basePath = '') {
+    stack.forEach(layer => {
+        if (layer.route) {
+            const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+            console.log(`${methods} ${basePath}${layer.route.path}`);
+        } else if (layer.name === 'router' && layer.handle.stack) {
+            const newBasePath = basePath + (layer.regexp.toString().replace('/^\\', '').replace('\\/?(?=\\/|$)/i', ''));
+            printRoutes(layer.handle.stack, newBasePath);
+        }
+    });
+}
+
+printRoutes(app._router.stack);

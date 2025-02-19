@@ -72,7 +72,7 @@ export default function Rede() {
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
       const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
-      const url = new URL(`${baseUrl}/api/connections`);
+      const url = new URL(`${baseUrl}/api/support/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
       url.searchParams.set('status', statusFilter);
@@ -84,12 +84,12 @@ export default function Rede() {
       }
       const data = await response.json();
       console.log('Raw server response:', data);
-      setConnections(data.connections || []); 
+      setConnections(data.data || []); 
       setPagination(data.pagination);
 
       // Update the list of all unique NAS IPs only on initial load or refresh
       if (nasIpFilter === 'all' && page === 1 && !search) {
-        const ips = Array.from(new Set((data.connections || []).map((conn: Connection) => conn.nasipaddress))).sort();
+        const ips = Array.from(new Set((data.data || []).map((conn: Connection) => conn.nasipaddress))).sort();
         setAllNasIps(ips);
         
         // Update concentrator stats
@@ -122,40 +122,45 @@ export default function Rede() {
     }
   };
 
-  const fetchUserConsumption = async (username: string) => {
+  const handleUserClick = async (username: string) => {
     try {
-      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${baseUrl}/api/user-consumption/${username}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch user consumption');
-      }
-      const data = await response.json();
-      console.log('Consumption data:', data);
-      
-      // Encontrar o valor máximo entre upload e download
-      const maxValue = data.reduce((max, item) => {
-        const currentMax = Math.max(item.upload_gb || 0, item.download_gb || 0);
-        return Math.max(max, currentMax);
-      }, 0);
-      
-      console.log('Maximum value:', maxValue);
-      setConsumptionData(data);
       setSelectedUser(username);
       setShowModal(true);
+      
+      // Busca os dados de consumo e histórico em paralelo
+      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
+      const [consumptionResponse, historyResponse] = await Promise.all([
+        fetch(`${baseUrl}/api/user-consumption/${username}`),
+        fetch(`${baseUrl}/api/support/connections/user/${username}/history`)
+      ]);
+
+      if (!consumptionResponse.ok) {
+        throw new Error('Erro ao buscar dados de consumo');
+      }
+      if (!historyResponse.ok) {
+        throw new Error('Erro ao buscar histórico de conexões');
+      }
+
+      const consumptionData = await consumptionResponse.json();
+      const historyData = await historyResponse.json();
+
+      setConsumptionData(consumptionData);
+      setConnectionHistory(historyData.data || []);
     } catch (err) {
-      console.error('Error fetching user consumption:', err);
+      console.error('Erro ao buscar dados do usuário:', err);
+      // toast.error('Erro ao buscar dados do usuário');
     }
   };
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
       const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${baseUrl}/api/connections/user/${username}/history`);
+      const response = await fetch(`${baseUrl}/api/support/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');
       }
       const data = await response.json();
-      setConnectionHistory(data.history || []); 
+      setConnectionHistory(data.data || []); 
     } catch (err) {
       console.error('Error fetching user connection history:', err);
       setConnectionHistory([]); 
@@ -178,15 +183,6 @@ export default function Rede() {
     const newNasIp = e.target.value;
     setNasIpFilter(newNasIp);
     fetchConnections(1, searchTerm); // Reset to first page when changing NAS IP
-  };
-
-  const handleUserClick = async (username: string) => {
-    setSelectedUser(username);
-    setShowModal(true);
-    await Promise.all([
-      fetchUserConsumption(username),
-      fetchUserConnectionHistory(username)
-    ]);
   };
 
   useEffect(() => {
@@ -306,7 +302,12 @@ export default function Rede() {
           {/* Cards dos Concentradores */}
           <div className="mb-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {concentrators.map((concentrator) => (
+              {concentrators
+                .filter(concentrator => 
+                  concentrator.nasname !== 'localhost' && 
+                  concentrator.nasname !== '127.0.0.1'
+                )
+                .map((concentrator) => (
                 <div
                   key={concentrator.nasname}
                   className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-100 dark:border-gray-700"
@@ -316,7 +317,9 @@ export default function Rede() {
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {concentrator.shortname || 'Concentrador'}
                       </h3>
-                      <p className="text-gray-600 dark:text-gray-300">{concentrator.nasname}</p>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        {concentrator.nasname}
+                      </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         {concentrator.description || 'Sem descrição'}
                       </p>
