@@ -31,8 +31,8 @@ export function EventModal({
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="mx-auto max-w-xl w-full rounded bg-white p-6">
+      <div className="fixed inset-0 flex items-start justify-center p-4 overflow-y-auto">
+        <Dialog.Panel className="mx-auto max-w-xl w-full rounded bg-white p-6 my-8">
           <Dialog.Title className="text-lg font-medium mb-4">{modalTitle}</Dialog.Title>
           <form onSubmit={(e) => { e.preventDefault(); onSave(); }}>
             <div className="space-y-4">
