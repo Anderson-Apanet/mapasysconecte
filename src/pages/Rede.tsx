@@ -66,12 +66,13 @@ export default function Rede() {
   const [connectionHistory, setConnectionHistory] = useState<Connection[]>([]);
   const [showModal, setShowModal] = useState(false);
 
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+
   const fetchConnections = async (page: number = 1, search: string = '') => {
     setLoading(true);
     setError(null);
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
-      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const url = new URL(`${baseUrl}/api/support/connections`);
       url.searchParams.set('page', page.toString());
       url.searchParams.set('search', search);
@@ -105,7 +106,6 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const response = await fetch(`${baseUrl}/api/concentrator-stats`);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
@@ -128,7 +128,6 @@ export default function Rede() {
       setShowModal(true);
       
       // Busca os dados de consumo e histórico em paralelo
-      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const [consumptionResponse, historyResponse] = await Promise.all([
         fetch(`${baseUrl}/api/user-consumption/${username}`),
         fetch(`${baseUrl}/api/support/connections/user/${username}/history`)
@@ -154,7 +153,6 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const baseUrl = import.meta.env.VITE_RADIUS_API_URL || 'http://localhost:3001';
       const response = await fetch(`${baseUrl}/api/support/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');

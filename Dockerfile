@@ -12,7 +12,7 @@ COPY . .
 
 # Set environment variables for build
 ENV NODE_ENV=production
-ENV VITE_API_URL=/api
+ENV VITE_API_BASE_URL=/api
 
 # Build the application
 RUN npm run build
