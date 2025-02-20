@@ -73,13 +73,17 @@ export default function Rede() {
     setError(null);
     try {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
-      const url = new URL(`${baseUrl}/api/support/connections`);
-      url.searchParams.set('page', page.toString());
-      url.searchParams.set('search', search);
-      url.searchParams.set('status', statusFilter);
-      url.searchParams.set('nasip', nasIpFilter);
+      
+      // Construir a URL corretamente
+      const url = window.location.origin + baseUrl + '/api/support/connections';
+      const searchParams = new URLSearchParams({
+        page: page.toString(),
+        search: search || '',
+        status: statusFilter,
+        nasip: nasIpFilter
+      });
 
-      const response = await fetch(url.toString());
+      const response = await fetch(`${url}?${searchParams}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch connections: ${response.statusText}`);
       }
@@ -106,7 +110,8 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/concentrator-stats`);
+      const url = window.location.origin + baseUrl + '/api/concentrator-stats';
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
       }
@@ -128,9 +133,10 @@ export default function Rede() {
       setShowModal(true);
       
       // Busca os dados de consumo e histórico em paralelo
+      const baseUrlWithOrigin = window.location.origin + baseUrl;
       const [consumptionResponse, historyResponse] = await Promise.all([
-        fetch(`${baseUrl}/api/user-consumption/${username}`),
-        fetch(`${baseUrl}/api/support/connections/user/${username}/history`)
+        fetch(`${baseUrlWithOrigin}/api/user-consumption/${username}`),
+        fetch(`${baseUrlWithOrigin}/api/support/connections/user/${username}/history`)
       ]);
 
       if (!consumptionResponse.ok) {
@@ -153,7 +159,8 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const response = await fetch(`${baseUrl}/api/support/connections/user/${username}/history`);
+      const baseUrlWithOrigin = window.location.origin + baseUrl;
+      const response = await fetch(`${baseUrlWithOrigin}/api/support/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');
       }
