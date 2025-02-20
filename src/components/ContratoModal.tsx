@@ -178,7 +178,8 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
         // Adiciona as credenciais no banco radius
         try {
           const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-          const response = await fetch(`${baseUrl}/api/support/add-contract-credentials`, {
+          const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : baseUrl;
+          const response = await fetch(`${apiUrl}/support/add-contract-credentials`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
