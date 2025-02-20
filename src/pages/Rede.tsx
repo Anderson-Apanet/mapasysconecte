@@ -75,7 +75,7 @@ export default function Rede() {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
       
       // Construir a URL corretamente
-      const url = window.location.origin + baseUrl + '/api/support/connections';
+      const url = `${window.location.origin}${baseUrl}/support/connections`;
       const searchParams = new URLSearchParams({
         page: page.toString(),
         search: search || '',
@@ -110,7 +110,7 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const url = window.location.origin + baseUrl + '/api/concentrator-stats';
+      const url = `${window.location.origin}${baseUrl}/concentrator-stats`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
@@ -133,10 +133,10 @@ export default function Rede() {
       setShowModal(true);
       
       // Busca os dados de consumo e histórico em paralelo
-      const baseUrlWithOrigin = window.location.origin + baseUrl;
+      const baseUrlWithOrigin = `${window.location.origin}${baseUrl}`;
       const [consumptionResponse, historyResponse] = await Promise.all([
-        fetch(`${baseUrlWithOrigin}/api/user-consumption/${username}`),
-        fetch(`${baseUrlWithOrigin}/api/support/connections/user/${username}/history`)
+        fetch(`${baseUrlWithOrigin}/user-consumption/${username}`),
+        fetch(`${baseUrlWithOrigin}/support/connections/user/${username}/history`)
       ]);
 
       if (!consumptionResponse.ok) {
@@ -159,8 +159,8 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const baseUrlWithOrigin = window.location.origin + baseUrl;
-      const response = await fetch(`${baseUrlWithOrigin}/api/support/connections/user/${username}/history`);
+      const baseUrlWithOrigin = `${window.location.origin}${baseUrl}`;
+      const response = await fetch(`${baseUrlWithOrigin}/support/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');
       }
