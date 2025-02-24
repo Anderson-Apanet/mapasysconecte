@@ -68,7 +68,7 @@ export default function Rede() {
 
   // Usar a URL base correta dependendo do ambiente
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-  const apiUrl = baseUrl.startsWith('http') ? baseUrl : `/api`;
+  const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : `/api`;
 
   const fetchConnections = async (page: number = 1, search: string = '') => {
     setLoading(true);
