@@ -68,6 +68,7 @@ export default function Rede() {
 
   // Usar a URL base correta dependendo do ambiente
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+  const apiUrl = baseUrl.startsWith('http') ? baseUrl : `/api`;
 
   const fetchConnections = async (page: number = 1, search: string = '') => {
     setLoading(true);
@@ -76,7 +77,7 @@ export default function Rede() {
       console.log('Fetching connections with:', { page, search, statusFilter, nasIpFilter });
       
       // Construir a URL corretamente
-      const url = `${baseUrl}/api/support/connections`;
+      const url = `${apiUrl}/support/connections`;
       const searchParams = new URLSearchParams({
         page: page.toString(),
         search: search || '',
@@ -111,7 +112,7 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const url = `${baseUrl}/api/concentrator-stats`;
+      const url = `${apiUrl}/concentrator-stats`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
@@ -135,8 +136,8 @@ export default function Rede() {
       
       // Busca os dados de consumo e histórico em paralelo
       const [consumptionResponse, historyResponse] = await Promise.all([
-        fetch(`${baseUrl}/api/user-consumption/${username}`),
-        fetch(`${baseUrl}/api/support/connections/user/${username}/history`)
+        fetch(`${apiUrl}/user-consumption/${username}`),
+        fetch(`${apiUrl}/support/connections/user/${username}/history`)
       ]);
 
       if (!consumptionResponse.ok) {
@@ -159,7 +160,7 @@ export default function Rede() {
 
   const fetchUserConnectionHistory = async (username: string) => {
     try {
-      const response = await fetch(`${baseUrl}/api/support/connections/user/${username}/history`);
+      const response = await fetch(`${apiUrl}/support/connections/user/${username}/history`);
       if (!response.ok) {
         throw new Error('Failed to fetch user connection history');
       }
