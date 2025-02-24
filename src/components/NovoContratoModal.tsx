@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 import { Contrato } from '../types/contrato';
 import { Plano } from '../types/plano';
 import { Bairro } from '../types/bairro';
@@ -23,11 +24,31 @@ interface Plano {
   valor: number;
 }
 
+const mapContainerStyle = {
+  width: '100%',
+  height: '300px',
+  marginTop: '1rem',
+  marginBottom: '1rem'
+};
+
+const defaultCenter = {
+  lat: -29.4519, // Latitude de Três Cachoeiras - RS
+  lng: -49.9278  // Longitude de Três Cachoeiras - RS
+};
+
+const libraries: ("places" | "geometry" | "drawing" | "localContext" | "visualization")[] = ["places"];
+
 export default function NovoContratoModal({
   isOpen,
   onClose,
   clienteData,
 }: NovoContratoModalProps) {
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_MAPS_API_KEY,
+    libraries: libraries
+  });
+
   const [plano, setPlano] = useState("");
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [tipo, setTipo] = useState("Residencial");
@@ -37,6 +58,72 @@ export default function NovoContratoModal({
   const [bairro, setBairro] = useState("");
   const [bairros, setBairros] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    setMap(map);
+    setSelectedLocation(defaultCenter);
+  }, []);
+
+  const onUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
+
+  // Função para obter o endereço a partir das coordenadas
+  const getAddressFromLatLng = async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${import.meta.env.VITE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.results && data.results[0]) {
+        const addressComponents = data.results[0].address_components;
+        let streetNumber = '', route = '', neighborhood = '';
+        
+        for (const component of addressComponents) {
+          if (component.types.includes('street_number')) {
+            streetNumber = component.long_name;
+          }
+          if (component.types.includes('route')) {
+            route = component.long_name;
+          }
+          if (component.types.includes('sublocality') || component.types.includes('neighborhood')) {
+            neighborhood = component.long_name;
+          }
+        }
+        
+        // Atualiza o endereço
+        setEndereco(`${route}${streetNumber ? `, ${streetNumber}` : ''}`);
+        
+        // Procura o bairro na lista de bairros e atualiza se encontrar
+        const foundBairro = bairros.find(b => b.nome.toLowerCase() === neighborhood.toLowerCase());
+        if (foundBairro) {
+          setBairro(foundBairro.id);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar endereço:', error);
+      toast.error('Erro ao buscar endereço');
+    }
+  };
+
+  // Handler para clique no mapa
+  const handleMapClick = async (e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      const newLocation = { lat, lng };
+      setSelectedLocation(newLocation);
+      await getAddressFromLatLng(lat, lng);
+    }
+  };
+
+  useEffect(() => {
+    // Inicializa a localização selecionada com o centro padrão
+    setSelectedLocation(defaultCenter);
+  }, []);
 
   useEffect(() => {
     // Carregar bairros da tabela
@@ -85,17 +172,6 @@ export default function NovoContratoModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Log dos valores para debug
-    console.log('Valores do formulário:', {
-      clienteId: clienteData?.id,
-      plano,
-      tipo,
-      vencimento,
-      endereco,
-      complemento,
-      bairro
-    });
-
     if (!clienteData?.id) {
       toast.error('Erro: ID do cliente não encontrado');
       return;
@@ -108,6 +184,11 @@ export default function NovoContratoModal({
 
     if (!vencimento) {
       toast.error('Por favor, informe o dia do vencimento');
+      return;
+    }
+
+    if (!selectedLocation) {
+      toast.error('Por favor, selecione uma localização no mapa');
       return;
     }
 
@@ -129,7 +210,9 @@ export default function NovoContratoModal({
         id_bairro: bairro || null,
         data_cad_contrato: new Date().toISOString().split('T')[0],
         contratoassinado: false,
-        pendencia: false
+        pendencia: false,
+        locallat: selectedLocation.lat,
+        locallon: selectedLocation.lng
       };
 
       console.log('Dados a serem salvos:', contratoData);
@@ -198,116 +281,164 @@ export default function NovoContratoModal({
     >
       <div className="min-h-screen px-4 text-center">
         <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
-        <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
-          <Dialog.Title
-            as="h3"
-            className="text-lg font-medium leading-6 text-gray-900"
-          >
-            Novo Contrato - {clienteData?.nome}
-          </Dialog.Title>
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Plano
-              </label>
-              <select
-                value={plano}
-                onChange={(e) => setPlano(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-              >
-                <option value="">Selecione um plano</option>
-                {planos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nome} - R$ {p.valor}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="inline-block w-full max-w-2xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+          <div className="flex justify-between items-center">
+            <Dialog.Title className="text-lg font-medium">
+              Novo Contrato - {clienteData?.nome}
+            </Dialog.Title>
+            <button
+              type="button"
+              className="text-gray-400 hover:text-gray-500"
+              onClick={onClose}
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Tipo
-              </label>
-              <select
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="Residencial">Residencial</option>
-                <option value="Comercial">Comercial</option>
-              </select>
-            </div>
+          <form onSubmit={handleSubmit} className="mt-4">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Plano
+                </label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={plano}
+                  onChange={(e) => setPlano(e.target.value)}
+                  required
+                >
+                  <option value="">Selecione um plano</option>
+                  {planos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome} - R$ {p.valor}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Dia do Vencimento
-              </label>
-              <input
-                type="text"
-                value={vencimento}
-                onChange={(e) => setVencimento(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Tipo
+                </label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={tipo}
+                  onChange={(e) => setTipo(e.target.value)}
+                  required
+                >
+                  <option value="Residencial">Residencial</option>
+                  <option value="Comercial">Comercial</option>
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Endereço
-              </label>
-              <input
-                type="text"
-                value={endereco}
-                onChange={(e) => setEndereco(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Dia do Vencimento
+                </label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={vencimento}
+                  onChange={(e) => setVencimento(e.target.value)}
+                  required
+                >
+                  <option value="">Selecione o dia</option>
+                  {[...Array(28)].map((_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {i + 1}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Complemento
-              </label>
-              <input
-                type="text"
-                value={complemento}
-                onChange={(e) => setComplemento(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Endereço
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={endereco}
+                  onChange={(e) => setEndereco(e.target.value)}
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Bairro
-              </label>
-              <select
-                value={bairro}
-                onChange={(e) => setBairro(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="">Selecione um bairro</option>
-                {bairros.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Complemento
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={complemento}
+                  onChange={(e) => setComplemento(e.target.value)}
+                />
+              </div>
 
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Salvando...' : 'Salvar'}
-              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Bairro
+                </label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={bairro}
+                  onChange={(e) => setBairro(e.target.value)}
+                  required
+                >
+                  <option value="">Selecione um bairro</option>
+                  {bairros.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {isLoaded ? (
+                <GoogleMap
+                  mapContainerStyle={mapContainerStyle}
+                  zoom={15}
+                  center={selectedLocation || defaultCenter}
+                  onClick={handleMapClick}
+                  onLoad={onLoad}
+                  onUnmount={onUnmount}
+                >
+                  {selectedLocation && isLoaded && (
+                    <Marker
+                      position={selectedLocation}
+                      icon={{
+                        path: "M12 3L4 9v12h5v-7h6v7h5V9z",
+                        fillColor: "#2563EB",
+                        fillOpacity: 1,
+                        strokeWeight: 0,
+                        scale: 2,
+                        anchor: new google.maps.Point(12, 12)
+                      }}
+                    />
+                  )}
+                </GoogleMap>
+              ) : (
+                <div style={mapContainerStyle} className="flex items-center justify-center bg-gray-100">
+                  <p>Carregando mapa...</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  onClick={onClose}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={loading}
+                >
+                  {loading ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
             </div>
           </form>
         </div>

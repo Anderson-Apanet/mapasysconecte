@@ -478,6 +478,66 @@ app.get('/api/connections/user/:username/history', async (req, res) => {
     }
 });
 
+// Rota para atualizar contrato
+app.put('/api/contracts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      client_id,
+      plan_id,
+      data_instalacao,
+      status,
+      endereco
+    } = req.body;
+
+    const connection = await createRadiusConnection();
+
+    // Atualizar dados do contrato
+    await connection.query(
+      `UPDATE contratos 
+       SET plan_id = ?, 
+           data_instalacao = ?, 
+           status = ?
+       WHERE id = ?`,
+      [plan_id, data_instalacao, status, id]
+    );
+
+    // Atualizar endereço do cliente
+    if (endereco) {
+      await connection.query(
+        `UPDATE clientes 
+         SET logradouro = ?,
+             numero = ?,
+             complemento = ?,
+             bairro = ?,
+             cidade = ?,
+             uf = ?,
+             cep = ?
+         WHERE id = ?`,
+        [
+          endereco.logradouro,
+          endereco.numero,
+          endereco.complemento,
+          endereco.bairro,
+          endereco.cidade,
+          endereco.uf,
+          endereco.cep,
+          client_id
+        ]
+      );
+    }
+
+    res.json({ success: true, message: 'Contrato atualizado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao atualizar contrato:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao atualizar contrato',
+      error: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
 const port = 3001;
 app.listen(port, () => {
     console.log(`Servidor rodando em http://localhost:${port}`);
