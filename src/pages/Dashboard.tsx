@@ -77,12 +77,6 @@ interface ReceitaStats {
   };
 }
 
-interface TecnicoStats {
-  tecnico: string;
-  visitas: number;
-  instalacoes: number;
-}
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [clientStats, setClientStats] = useState<ClientStats>({
@@ -104,7 +98,6 @@ const Dashboard: React.FC = () => {
       percentual: 0
     }
   });
-  const [tecnicoStats, setTecnicoStats] = useState<TecnicoStats[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
@@ -113,7 +106,6 @@ const Dashboard: React.FC = () => {
     fetchContratosPorMes();
     fetchStatusContratos();
     fetchReceitaStats();
-    fetchTecnicoStats();
   }, []);
 
   const fetchClientStats = async () => {
@@ -336,94 +328,6 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Erro ao buscar estatísticas de receita:', error);
       setLoading(false);
-    }
-  };
-
-  const fetchTecnicoStats = async () => {
-    try {
-      // Buscar dados de visitas e instalações por técnico
-      const { data: eventos, error } = await supabase
-        .from('agenda')
-        .select('usuario_resp, tipo_evento')
-        .not('usuario_resp', 'is', null);
-
-      if (error) throw error;
-
-      // Processar os dados para contar visitas e instalações por técnico
-      const statsMap = new Map<string, { visitas: number; instalacoes: number }>();
-
-      eventos?.forEach(evento => {
-        if (!evento.usuario_resp) return;
-
-        const stats = statsMap.get(evento.usuario_resp) || { visitas: 0, instalacoes: 0 };
-        
-        if (evento.tipo_evento?.toLowerCase().includes('visita')) {
-          stats.visitas++;
-        } else if (evento.tipo_evento?.toLowerCase().includes('instalação') || 
-                  evento.tipo_evento?.toLowerCase().includes('instalacao')) {
-          stats.instalacoes++;
-        }
-
-        statsMap.set(evento.usuario_resp, stats);
-      });
-
-      // Converter o Map para array
-      const statsArray = Array.from(statsMap.entries()).map(([tecnico, stats]) => ({
-        tecnico,
-        visitas: stats.visitas,
-        instalacoes: stats.instalacoes
-      }));
-
-      // Ordenar por total de eventos (visitas + instalações)
-      statsArray.sort((a, b) => 
-        (b.visitas + b.instalacoes) - (a.visitas + a.instalacoes)
-      );
-
-      setTecnicoStats(statsArray);
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas dos técnicos:', error);
-    }
-  };
-
-  const tecnicoChartData = {
-    labels: tecnicoStats.map(stat => stat.tecnico),
-    datasets: [
-      {
-        label: 'Visitas',
-        data: tecnicoStats.map(stat => stat.visitas),
-        backgroundColor: '#60A5FA', // blue-400
-        borderColor: '#2563EB', // blue-600
-        borderWidth: 1
-      },
-      {
-        label: 'Instalações',
-        data: tecnicoStats.map(stat => stat.instalacoes),
-        backgroundColor: '#34D399', // emerald-400
-        borderColor: '#059669', // emerald-600
-        borderWidth: 1
-      }
-    ]
-  };
-
-  const tecnicoChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-      title: {
-        display: true,
-        text: 'Visitas e Instalações por Técnico'
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          stepSize: 1
-        }
-      }
     }
   };
 
@@ -795,27 +699,6 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-
-          {/* Gráfico de Visitas e Instalações por Técnico */}
-          <div className="mt-4">
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Visitas e Instalações por Técnico
-                </h3>
-                <button
-                  onClick={fetchTecnicoStats}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-                  title="Atualizar"
-                >
-                  <ArrowPathIcon className="h-5 w-5 text-gray-400" />
-                </button>
-              </div>
-              <div className="h-96">
-                <Bar options={tecnicoChartOptions} data={tecnicoChartData} />
               </div>
             </div>
           </div>
