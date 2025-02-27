@@ -12,6 +12,7 @@ import { toast } from 'react-hot-toast';
 
 interface ContratoDetalhes {
   endereco: string;
+  complemento: string;
   bairro: {
     nome: string;
   };
@@ -111,7 +112,7 @@ const EventCard: React.FC<EventCardProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
             </svg>
             <span>
-              {contratoDetalhes.endereco}, {contratoDetalhes.bairro?.nome}
+              {contratoDetalhes.endereco}, {contratoDetalhes.complemento}, {contratoDetalhes.bairro?.nome}
             </span>
           </div>
         )}
@@ -202,6 +203,7 @@ export default function Tecnicos() {
         .select(`
           pppoe,
           endereco,
+          complemento,
           bairro:id_bairro (
             nome
           ),
@@ -217,6 +219,7 @@ export default function Tecnicos() {
         ...acc,
         [contrato.pppoe]: {
           endereco: contrato.endereco,
+          complemento: contrato.complemento,
           bairro: contrato.bairro,
           plano: contrato.plano
         }
