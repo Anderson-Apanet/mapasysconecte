@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Endpoint do N8N para operações no MySQL
-const N8N_ENDPOINT = 'https://workflows.apanet.tec.br/webhook-test/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e';
+const N8N_ENDPOINT = 'https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e';
 
 export const getGroupNames = async (): Promise<string[]> => {
   try {
