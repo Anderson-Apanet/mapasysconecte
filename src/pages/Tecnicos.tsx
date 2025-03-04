@@ -574,7 +574,7 @@ export default function Tecnicos() {
   }, [selectedDate, viewMode, fetchDayEvents, fetchWeekEvents, fetchUserName]);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#1E4620' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#1092E8' }}>
       {/* Cabeçalho */}
       <div className="bg-white shadow">
         <div className="mx-auto px-4 sm:px-6 lg:px-8">

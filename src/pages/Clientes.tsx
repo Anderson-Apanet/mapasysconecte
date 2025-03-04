@@ -5,7 +5,8 @@ import {
   EyeIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  PlusIcon
+  PlusIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
@@ -135,20 +136,31 @@ const Clientes: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         <div className="container mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold mb-6 text-white">Gerenciamento de Clientes</h1>
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center mb-2">
+              <UserGroupIcon className="h-8 w-8 text-white dark:text-white mr-2" />
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent dark:from-yellow-300 dark:to-yellow-500">
+                Clientes
+              </h1>
+            </div>
+            <p className="text-white dark:text-white">
+              Gerenciamento de clientes e contratos
+            </p>
+          </div>
           
           <div className="flex flex-col space-y-4 p-4">
             {/* Card de Ações */}
-            <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow p-4 mb-4">
+            <div className="bg-[#E1F5FE] dark:bg-[#0D47A1] rounded-lg shadow p-4 mb-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Ações
                 </h2>
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white bg-[#2E7D32] hover:bg-[#1B5E20] transition-colors duration-200"
+                  className="inline-flex items-center px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white bg-[#1976D2] hover:bg-[#0D47A1] transition-colors duration-200"
                 >
                   <PlusIcon className="h-5 w-5 mr-2" />
                   Adicionar Cliente
@@ -157,7 +169,7 @@ const Clientes: React.FC = () => {
             </div>
 
             {/* Card de Filtros */}
-            <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] rounded-lg shadow p-6 mb-4">
+            <div className="bg-[#E1F5FE] dark:bg-[#0D47A1] rounded-lg shadow p-6 mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 Filtros
               </h2>
@@ -169,7 +181,7 @@ const Clientes: React.FC = () => {
                     placeholder="Pesquisar por nome, telefone ou CPF/CNPJ..."
                     value={searchTerm}
                     onChange={handleSearchChange}
-                    className="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2E7D32] focus:border-[#2E7D32] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1976D2] focus:border-[#1976D2] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                 </div>
@@ -184,22 +196,21 @@ const Clientes: React.FC = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-100 uppercase tracking-wider">Nome</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-100 uppercase tracking-wider">Telefone</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-100 uppercase tracking-wider">CPF/CNPJ</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-100 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-100 uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {loading ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                          <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
                             <div className="flex justify-center items-center">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2E7D32]"></div>
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1976D2]"></div>
                             </div>
                           </td>
                         </tr>
                       ) : clientes.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                          <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
                             Nenhum cliente encontrado
                           </td>
                         </tr>
@@ -215,18 +226,10 @@ const Clientes: React.FC = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                               {cliente.cpf_cnpj || '-'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                ${cliente.status === 'Ativo' ? 'bg-[#E8F5E9] text-[#2E7D32] dark:bg-[#1B5E20] dark:text-[#E8F5E9]' : 
-                                cliente.status === 'Inativo' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' : 
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'}`}>
-                                {cliente.status || 'Pendente'}
-                              </span>
-                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <button
                                 onClick={() => handleViewCliente(cliente)}
-                                className="text-[#2E7D32] hover:text-[#1B5E20] dark:text-[#E8F5E9] dark:hover:text-[#2E7D32] transition-colors duration-200"
+                                className="text-[#1976D2] hover:text-[#0D47A1] dark:text-[#E1F5FE] dark:hover:text-[#1976D2] transition-colors duration-200"
                               >
                                 <EyeIcon className="h-5 w-5" />
                               </button>
@@ -239,7 +242,7 @@ const Clientes: React.FC = () => {
                 </div>
 
                 {/* Paginação */}
-                <div className="bg-[#E8F5E9] dark:bg-[#1B5E20] px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
+                <div className="bg-[#E1F5FE] dark:bg-[#0D47A1] px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
                   <div className="flex-1 flex justify-between sm:hidden">
                     <button
                       onClick={goToPreviousPage}
@@ -247,7 +250,7 @@ const Clientes: React.FC = () => {
                       className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md 
                         ${currentPage === 1 
                           ? 'text-gray-400 bg-gray-100' 
-                          : 'text-white bg-[#2E7D32] hover:bg-[#1B5E20]'} 
+                          : 'text-white bg-[#1976D2] hover:bg-[#0D47A1]'} 
                         transition-colors duration-200`}
                     >
                       Anterior
@@ -258,7 +261,7 @@ const Clientes: React.FC = () => {
                       className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md 
                         ${currentPage >= totalPages 
                           ? 'text-gray-400 bg-gray-100' 
-                          : 'text-white bg-[#2E7D32] hover:bg-[#1B5E20]'} 
+                          : 'text-white bg-[#1976D2] hover:bg-[#0D47A1]'} 
                         transition-colors duration-200`}
                     >
                       Próxima
@@ -280,7 +283,7 @@ const Clientes: React.FC = () => {
                           className={`relative inline-flex items-center px-2 py-2 rounded-l-md border text-sm font-medium 
                             ${currentPage === 1 
                               ? 'text-gray-400 bg-gray-100 border-gray-300' 
-                              : 'text-white bg-[#2E7D32] hover:bg-[#1B5E20] border-[#2E7D32]'} 
+                              : 'text-white bg-[#1976D2] hover:bg-[#0D47A1] border-[#1976D2]'} 
                             transition-colors duration-200`}
                         >
                           <ChevronLeftIcon className="h-5 w-5" />
@@ -291,7 +294,7 @@ const Clientes: React.FC = () => {
                           className={`relative inline-flex items-center px-2 py-2 rounded-r-md border text-sm font-medium 
                             ${currentPage >= totalPages 
                               ? 'text-gray-400 bg-gray-100 border-gray-300' 
-                              : 'text-white bg-[#2E7D32] hover:bg-[#1B5E20] border-[#2E7D32]'} 
+                              : 'text-white bg-[#1976D2] hover:bg-[#0D47A1] border-[#1976D2]'} 
                             transition-colors duration-200`}
                         >
                           <ChevronRightIcon className="h-5 w-5" />

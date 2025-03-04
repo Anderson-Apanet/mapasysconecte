@@ -240,8 +240,23 @@ export default function Planos() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center mb-2">
+              <svg className="h-8 w-8 text-white dark:text-white mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent dark:from-yellow-300 dark:to-yellow-500">
+                Planos
+              </h1>
+            </div>
+            <p className="text-white dark:text-white">
+              Gerenciamento de planos
+            </p>
+          </div>
+
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 mb-6">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="flex flex-1 gap-4 w-full sm:w-auto">

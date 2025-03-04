@@ -7,7 +7,14 @@ class SupabaseService {
   private constructor() {
     this.client = createClient(
       import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        }
+      }
     );
   }
 

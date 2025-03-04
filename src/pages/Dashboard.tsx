@@ -77,6 +77,15 @@ interface ReceitaStats {
   };
 }
 
+interface ReceitaDespesaStats {
+  meses: string[];
+  receitas: number[];
+  despesas: number[];
+  totalReceitas: number;
+  totalDespesas: number;
+  saldo: number;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [clientStats, setClientStats] = useState<ClientStats>({
@@ -98,6 +107,14 @@ const Dashboard: React.FC = () => {
       percentual: 0
     }
   });
+  const [receitaDespesaStats, setReceitaDespesaStats] = useState<ReceitaDespesaStats>({
+    meses: [],
+    receitas: [],
+    despesas: [],
+    totalReceitas: 0,
+    totalDespesas: 0,
+    saldo: 0
+  });
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
@@ -106,6 +123,7 @@ const Dashboard: React.FC = () => {
     fetchContratosPorMes();
     fetchStatusContratos();
     fetchReceitaStats();
+    fetchReceitaDespesaStats();
   }, []);
 
   const fetchClientStats = async () => {
@@ -331,14 +349,67 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchReceitaDespesaStats = async () => {
+    try {
+      const anoAtual = new Date().getFullYear();
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .select('*')
+        .gte('data_cad_lancamento', `${anoAtual}-01-01`)
+        .lte('data_cad_lancamento', `${anoAtual}-12-31`);
+
+      if (error) {
+        throw error;
+      }
+
+      const meses = Array.from({ length: 12 }, (_, i) => {
+        const mes = new Date(anoAtual, i).toLocaleString('pt-BR', { month: 'long' });
+        return mes.charAt(0).toUpperCase() + mes.slice(1);
+      });
+
+      const receitas = meses.map(() => 0);
+      const despesas = meses.map(() => 0);
+
+      data?.forEach(lancamento => {
+        const mes = new Date(lancamento.data_cad_lancamento).getMonth();
+        if (lancamento.tipopag === 'RECEITA') {
+          receitas[mes] += Number(lancamento.entradas || 0);
+        } else if (lancamento.tipopag === 'DESPESA') {
+          despesas[mes] += Number(lancamento.saidas || 0);
+        }
+      });
+
+      const totalReceitas = receitas.reduce((a, b) => a + b, 0);
+      const totalDespesas = despesas.reduce((a, b) => a + b, 0);
+      const saldo = totalReceitas - totalDespesas;
+
+      setReceitaDespesaStats({
+        meses,
+        receitas,
+        despesas,
+        totalReceitas,
+        totalDespesas,
+        saldo
+      });
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas de receita e despesa:', error);
+    }
+  };
+
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
-            <p className="mt-2 text-sm text-gray-200">
-              Bem-vindo ao seu painel de controle
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center mb-2">
+              <ChartBarIcon className="h-8 w-8 text-white dark:text-white mr-2" />
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent dark:from-yellow-300 dark:to-yellow-500">
+                Dashboard
+              </h1>
+            </div>
+            <p className="text-white dark:text-white">
+              Visualização de métricas e indicadores de desempenho
             </p>
           </div>
 
@@ -776,6 +847,150 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Receita e Despesa */}
+          <div className="mt-5">
+            <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <ChartBarIcon className="h-6 w-6 text-gray-400" aria-hidden="true" />
+                    <h3 className="ml-2 text-lg font-medium text-gray-900 dark:text-white">
+                      Receita e Despesa
+                    </h3>
+                  </div>
+                  <button 
+                    onClick={fetchReceitaDespesaStats}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+                    title="Atualizar"
+                  >
+                    <ArrowPathIcon className="h-5 w-5 text-gray-400" />
+                  </button>
+                </div>
+
+                {loading ? (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    {receitaDespesaStats.meses.length > 0 && (
+                      <Bar
+                        data={{
+                          labels: receitaDespesaStats.meses,
+                          datasets: [
+                            {
+                              label: 'Receita',
+                              data: receitaDespesaStats.receitas,
+                              backgroundColor: 'rgba(16, 185, 129, 0.7)', // Verde
+                              borderColor: 'rgb(16, 185, 129)',
+                              borderWidth: 1,
+                            },
+                            {
+                              label: 'Despesa',
+                              data: receitaDespesaStats.despesas,
+                              backgroundColor: 'rgba(239, 68, 68, 0.7)', // Vermelho
+                              borderColor: 'rgb(239, 68, 68)',
+                              borderWidth: 1,
+                            },
+                          ],
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              display: true,
+                              position: 'top',
+                              labels: {
+                                color: document.documentElement.classList.contains('dark') ? 'white' : 'black',
+                              },
+                            },
+                            tooltip: {
+                              callbacks: {
+                                label: (context) => {
+                                  const value = context.raw as number;
+                                  const label = context.dataset.label || '';
+                                  return `${label}: ${value.toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL'
+                                  })}`;
+                                },
+                              },
+                            },
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                callback: (value) => {
+                                  return `R$ ${Number(value).toLocaleString('pt-BR')}`;
+                                },
+                                color: document.documentElement.classList.contains('dark') ? 'white' : 'black',
+                              },
+                              grid: {
+                                color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              },
+                            },
+                            x: {
+                              ticks: {
+                                color: document.documentElement.classList.contains('dark') ? 'white' : 'black',
+                              },
+                              grid: {
+                                color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Resumo de Receitas e Despesas */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Total de Receitas</div>
+                  <div className="text-xl font-bold text-green-600 dark:text-green-400">
+                    {receitaDespesaStats.totalReceitas.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </div>
+                </div>
+                
+                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Total de Despesas</div>
+                  <div className="text-xl font-bold text-red-600 dark:text-red-400">
+                    {receitaDespesaStats.totalDespesas.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </div>
+                </div>
+                
+                <div className={`${
+                  receitaDespesaStats.saldo >= 0 
+                    ? 'bg-blue-50 dark:bg-blue-900/20' 
+                    : 'bg-yellow-50 dark:bg-yellow-900/20'
+                } p-4 rounded-lg`}>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Saldo</div>
+                  <div className={`text-xl font-bold ${
+                    receitaDespesaStats.saldo >= 0 
+                      ? 'text-blue-600 dark:text-blue-400' 
+                      : 'text-yellow-600 dark:text-yellow-400'
+                  }`}>
+                    {receitaDespesaStats.saldo.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

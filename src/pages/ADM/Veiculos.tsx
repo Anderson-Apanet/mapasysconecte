@@ -187,19 +187,20 @@ const Veiculos: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen py-6 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex items-center mb-2">
-            <TruckIcon className="h-8 w-8 text-green-600 dark:text-green-500 mr-2" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Veículos
-            </h1>
+          <div className="flex flex-col items-center mb-6 text-center">
+            <div className="flex items-center mb-2">
+              <TruckIcon className="h-8 w-8 text-white mr-2" />
+              <h1 className="text-2xl font-bold text-white">
+                Veículos
+              </h1>
+            </div>
+            <p className="mt-2 mb-8 text-sm text-white">
+              Gerencie os veículos da empresa
+            </p>
           </div>
-          <p className="mt-2 mb-8 text-sm text-gray-600 dark:text-gray-400">
-            Gerencie os veículos da empresa
-          </p>
-
           {/* Card de Ação */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-4">
             <div className="flex justify-between items-center">
@@ -213,7 +214,7 @@ const Veiculos: React.FC = () => {
               </div>
               <button
                 onClick={handleAddNew}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
               >
                 <PlusIcon className="h-5 w-5 mr-2" />
                 Novo Veículo
@@ -289,7 +290,7 @@ const Veiculos: React.FC = () => {
                           <div className="flex justify-end space-x-3">
                             <button
                               onClick={() => handleEdit(veiculo)}
-                              className="text-green-600 hover:text-green-900 dark:text-green-500 dark:hover:text-green-400 transition-colors duration-200"
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200"
                               title="Editar"
                             >
                               <PencilIcon className="h-5 w-5" />

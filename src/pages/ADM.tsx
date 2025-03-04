@@ -16,16 +16,16 @@ const ADM: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center mb-2">
-            <UserGroupIcon className="h-8 w-8 text-blue-500 dark:text-blue-400 mr-2" />
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent dark:from-blue-400 dark:to-blue-300">
+        <div className="mb-8 text-center">
+          <div className="flex items-center justify-center mb-2">
+            <UserGroupIcon className="h-8 w-8 text-white dark:text-white mr-2" />
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent dark:from-yellow-300 dark:to-yellow-500">
               Administração
             </h1>
           </div>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-white dark:text-white">
             Gerencie usuários, permissões e configurações do sistema
           </p>
         </div>

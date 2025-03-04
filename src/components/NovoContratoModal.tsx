@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { GoogleMap, Marker } from '@react-google-maps/api';
+import { useGoogleMapsApi } from '../utils/googleMapsLoader';
 import { Contrato } from '../types/contrato';
 import { Plano } from '../types/plano';
 import { Bairro } from '../types/bairro';
@@ -36,8 +37,6 @@ const defaultCenter = {
   lng: -49.9278  // Longitude de Três Cachoeiras - RS
 };
 
-const libraries: ("places" | "geometry" | "drawing" | "localContext" | "visualization")[] = ["places"];
-
 export default function NovoContratoModal({
   isOpen,
   onClose,
@@ -45,11 +44,7 @@ export default function NovoContratoModal({
 }: NovoContratoModalProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: apiKey || '',
-    libraries: libraries
-  });
+  const { isLoaded } = useGoogleMapsApi();
 
   const [plano, setPlano] = useState("");
   const [planos, setPlanos] = useState<Plano[]>([]);

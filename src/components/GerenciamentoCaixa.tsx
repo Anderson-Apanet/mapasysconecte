@@ -25,24 +25,30 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
         return;
       }
 
+      console.log('Buscando caixa para o usuário:', session.user.id);
+      
       const { data: caixas, error } = await supabase
         .from('caixas')
         .select('*')
         .eq('id_usuario', session.user.id)
         .is('horario_fechamento', null)
         .order('horario_abertura', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 é o código para nenhum resultado
+      if (error) {
+        console.error('Erro ao buscar caixa:', error);
         throw error;
       }
 
+      // Verifica se há algum caixa aberto
+      const caixaAberto = caixas && caixas.length > 0 ? caixas[0] : null;
+      
       const newStatus = {
-        isOpen: !!caixas,
-        caixaAtual: caixas || null
+        isOpen: !!caixaAberto,
+        caixaAtual: caixaAberto
       };
 
+      console.log('Status do caixa:', newStatus);
       setCaixaStatus(newStatus);
       onStatusChange(newStatus);
     } catch (error) {
@@ -79,6 +85,8 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
         return;
       }
 
+      console.log('Abrindo caixa para o usuário:', session.user.id);
+      
       const { data: novoCaixa, error } = await supabase
         .from('caixas')
         .insert([
@@ -87,16 +95,23 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
             horario_abertura: new Date().toISOString(),
           }
         ])
-        .select()
-        .single();
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao abrir caixa:', error);
+        throw error;
+      }
+
+      if (!novoCaixa || novoCaixa.length === 0) {
+        throw new Error('Não foi possível criar o caixa');
+      }
 
       const newStatus = {
         isOpen: true,
-        caixaAtual: novoCaixa
+        caixaAtual: novoCaixa[0]
       };
       
+      console.log('Caixa aberto:', newStatus);
       setCaixaStatus(newStatus);
       onStatusChange(newStatus);
       toast.success('Caixa aberto com sucesso!');
@@ -113,6 +128,8 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
 
     try {
       setLoading(true);
+      console.log('Fechando caixa:', caixaStatus.caixaAtual.id);
+      
       const { error } = await supabase
         .from('caixas')
         .update({
@@ -120,19 +137,21 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
         })
         .eq('id', caixaStatus.caixaAtual.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao fechar caixa:', error);
+        throw error;
+      }
 
       const newStatus = {
         isOpen: false,
         caixaAtual: null
       };
       
+      console.log('Caixa fechado com sucesso');
       setCaixaStatus(newStatus);
       onStatusChange(newStatus);
       
-      if (isAutomatic) {
-        toast.success('Caixa fechado automaticamente às 22h');
-      } else {
+      if (!isAutomatic) {
         toast.success('Caixa fechado com sucesso!');
       }
     } catch (error) {

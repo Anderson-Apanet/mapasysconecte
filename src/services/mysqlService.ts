@@ -1,24 +1,42 @@
-import mysql from 'mysql2/promise';
+// Serviço para comunicação com o N8N para operações no MySQL
+import axios from 'axios';
 
-const createConnection = async () => {
-  return await mysql.createConnection({
-    host: import.meta.env.VITE_MYSQL_HOST,
-    user: import.meta.env.VITE_MYSQL_USER,
-    password: import.meta.env.VITE_MYSQL_PASSWORD,
-    database: 'radius'
-  });
-};
+// Endpoint do N8N para operações no MySQL
+const N8N_ENDPOINT = 'https://workflows.apanet.tec.br/webhook-test/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e';
 
 export const getGroupNames = async (): Promise<string[]> => {
   try {
-    const connection = await createConnection();
-    const [rows] = await connection.execute(
-      'SELECT DISTINCT groupname FROM radusergroup ORDER BY groupname'
-    );
-    await connection.end();
-    return (rows as any[]).map(row => row.groupname);
+    // Valores estáticos para interface
+    return ['bloqueado', 'ativo', 'liberado48'];
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('Erro ao obter groupnames:', error);
+    throw error;
+  }
+};
+
+export const updateUserGroupName = async (username: string, acao: string, radius?: string): Promise<boolean> => {
+  try {
+    // Enviar o PPPoE para o endpoint do N8N
+    const payload: {
+      pppoe: string;
+      acao: string;
+      radius?: string;
+    } = {
+      pppoe: username,
+      acao: acao
+    };
+
+    // Adicionar o radius apenas se for fornecido
+    if (radius) {
+      payload.radius = radius;
+    }
+
+    const response = await axios.post(N8N_ENDPOINT, payload);
+    
+    console.log('Solicitação enviada para o N8N:', response.data);
+    return true;
+  } catch (error) {
+    console.error('Erro ao enviar solicitação para o N8N:', error);
     throw error;
   }
 };

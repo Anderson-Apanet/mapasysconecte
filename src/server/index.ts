@@ -351,43 +351,70 @@ app.get('/api/support/connections', async (req, res) => {
 
     const connection = await createRadiusConnection();
 
-    let query = `
-      SELECT SQL_CALC_FOUND_ROWS 
-        radacctid, username, nasipaddress, nasportid, 
-        acctstarttime, acctstoptime, acctinputoctets, 
-        acctoutputoctets, acctterminatecause, 
-        framedipaddress, callingstationid
-      FROM radacct
-      WHERE 1=1
-    `;
-
+    let whereClause = '';
     const queryParams: any[] = [];
 
     if (search) {
-      query += ` AND (username LIKE ? OR framedipaddress LIKE ? OR nasipaddress LIKE ?)`;
+      whereClause += ` AND (ra.username LIKE ? OR ra.framedipaddress LIKE ? OR ra.nasipaddress LIKE ?)`;
       queryParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     if (status !== 'all') {
       if (status === 'up') {
-        query += ` AND acctstoptime IS NULL`;
+        whereClause += ` AND ra.acctstoptime IS NULL`;
       } else {
-        query += ` AND acctstoptime IS NOT NULL`;
+        whereClause += ` AND ra.acctstoptime IS NOT NULL`;
       }
     }
 
     if (nasip !== 'all') {
-      query += ` AND nasipaddress = ?`;
+      whereClause += ` AND ra.nasipaddress = ?`;
       queryParams.push(nasip);
     }
 
-    query += ` ORDER BY acctstarttime DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit, offset);
-
-    const [rows] = await connection.execute(query, queryParams);
-    const [countResult] = await connection.execute('SELECT FOUND_ROWS() as total');
+    // Count total records
+    const countQuery = `
+      WITH LastConnection AS (
+        SELECT username, MAX(radacctid) as last_id
+        FROM radacct
+        GROUP BY username
+      )
+      SELECT COUNT(*) as total 
+      FROM LastConnection lc
+      JOIN radacct ra ON ra.radacctid = lc.last_id
+      WHERE 1=1 ${whereClause}
+    `;
+    
+    const [countResult] = await connection.execute(countQuery, queryParams);
     const total = (countResult as any)[0].total;
 
+    // Get paginated records
+    const query = `
+      WITH LastConnection AS (
+        SELECT username, MAX(radacctid) as last_id
+        FROM radacct
+        GROUP BY username
+      )
+      SELECT 
+        ra.radacctid, 
+        ra.username, 
+        ra.nasipaddress, 
+        ra.nasportid, 
+        ra.acctstarttime, 
+        ra.acctstoptime, 
+        ra.acctinputoctets, 
+        ra.acctoutputoctets, 
+        ra.acctterminatecause, 
+        ra.framedipaddress, 
+        ra.callingstationid
+      FROM LastConnection lc
+      JOIN radacct ra ON ra.radacctid = lc.last_id
+      WHERE 1=1 ${whereClause}
+      ORDER BY ra.acctstarttime DESC 
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [rows] = await connection.execute(query, [...queryParams, limit, offset]);
     await connection.end();
 
     res.json({
@@ -478,6 +505,49 @@ app.get('/api/connections/user/:username/history', async (req, res) => {
     }
 });
 
+// Rota para buscar histórico de conexões de um usuário específico (endpoint alternativo)
+app.get('/api/support/connections/user/:username/history', async (req, res) => {
+    const username = req.params.username;
+
+    try {
+        const connection = await createRadiusConnection();
+
+        // Buscar histórico de conexões do usuário
+        const query = `
+            SELECT 
+                radacctid,
+                username,
+                nasipaddress,
+                nasportid,
+                acctstarttime,
+                acctstoptime,
+                acctinputoctets,
+                acctoutputoctets,
+                acctterminatecause,
+                framedipaddress,
+                callingstationid
+            FROM radacct 
+            WHERE username = ?
+            ORDER BY acctstarttime DESC
+            LIMIT 10
+        `;
+
+        const [rows] = await connection.execute(query, [username]);
+        await connection.end();
+
+        res.json({
+            success: true,
+            data: rows
+        });
+    } catch (error) {
+        console.error('Erro ao buscar histórico de conexões do usuário:', error);
+        res.status(500).json({ 
+            error: 'Erro ao buscar histórico de conexões',
+            details: error.message 
+        });
+    }
+});
+
 // Rota para atualizar contrato
 app.put('/api/contracts/:id', async (req, res) => {
   try {
@@ -534,6 +604,74 @@ app.put('/api/contracts/:id', async (req, res) => {
       success: false, 
       message: 'Erro ao atualizar contrato',
       error: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+// Rota para adicionar credenciais de contrato no Radius
+app.post('/api/support/add-contract-credentials', async (req, res) => {
+  console.log('Recebida requisição POST /api/support/add-contract-credentials');
+  try {
+    const { username, password, groupname } = req.body;
+    
+    if (!username || !password || !groupname) {
+      return res.status(400).json({ 
+        error: 'Parâmetros incompletos', 
+        message: 'Username, password e groupname são obrigatórios' 
+      });
+    }
+
+    console.log('Tentando adicionar credenciais para:', { username, groupname });
+    
+    const connection = await createRadiusConnection();
+    
+    // Verificar se o usuário já existe
+    const [existingUsers] = await connection.execute(
+      'SELECT * FROM radcheck WHERE username = ?',
+      [username]
+    );
+    
+    if ((existingUsers as any[]).length > 0) {
+      // Atualizar senha se o usuário já existe
+      await connection.execute(
+        'UPDATE radcheck SET value = ? WHERE username = ? AND attribute = "Cleartext-Password"',
+        [password, username]
+      );
+      
+      // Atualizar grupo
+      await connection.execute(
+        'UPDATE radusergroup SET groupname = ? WHERE username = ?',
+        [groupname, username]
+      );
+      
+      console.log('Credenciais atualizadas com sucesso para:', username);
+    } else {
+      // Inserir novo usuário
+      await connection.execute(
+        'INSERT INTO radcheck (username, attribute, op, value) VALUES (?, ?, ?, ?)',
+        [username, 'Cleartext-Password', ':=', password]
+      );
+      
+      // Inserir grupo do usuário
+      await connection.execute(
+        'INSERT INTO radusergroup (username, groupname, priority) VALUES (?, ?, ?)',
+        [username, groupname, 1]
+      );
+      
+      console.log('Novas credenciais adicionadas com sucesso para:', username);
+    }
+    
+    await connection.end();
+    
+    res.json({ 
+      success: true, 
+      message: 'Credenciais adicionadas/atualizadas com sucesso' 
+    });
+  } catch (error) {
+    console.error('Erro ao adicionar credenciais no Radius:', error);
+    res.status(500).json({ 
+      error: 'Erro ao adicionar credenciais no Radius', 
+      details: error.message 
     });
   }
 });

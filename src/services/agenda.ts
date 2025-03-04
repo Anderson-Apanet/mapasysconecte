@@ -1,11 +1,14 @@
 import { supabase } from '../utils/supabaseClient';
 import { AgendaEvent } from '../types/agenda';
 
-export async function fetchEvents(start?: Date | number | string, end?: Date | number | string) {
+export async function fetchEvents(startDate?: Date | string | number, endDate?: Date | string) {
+  console.log('Buscando eventos com parâmetros:', { startDate, endDate });
+  
   try {
-    // Se start for um número, assume que é um ID de evento
-    if (typeof start === 'number') {
-      const { data: eventData, error: eventError } = await supabase
+    // Se startDate for um número, assume que é um ID de evento específico
+    if (typeof startDate === 'number') {
+      console.log('Buscando evento específico por ID:', startDate);
+      const { data: eventData, error } = await supabase
         .from('agenda')
         .select(`
           id,
@@ -24,69 +27,26 @@ export async function fetchEvents(start?: Date | number | string, end?: Date | n
           data_cad_evento,
           criador
         `)
-        .eq('id', start)
+        .eq('id', startDate)
         .single();
 
-      if (eventError) {
-        console.error('Erro ao buscar evento:', eventError);
-        throw eventError;
+      if (error) {
+        console.error('Erro ao buscar evento específico:', error);
+        throw error;
       }
 
-      if (!eventData) {
-        return null;
-      }
-
-      // Busca os responsáveis para o evento
-      const { data: respData, error: respError } = await supabase
-        .from('agenda_responsaveis')
-        .select(`user_id`)
-        .eq('agenda_id', eventData.id);
-
-      if (respError) {
-        console.error('Erro ao buscar responsáveis:', respError);
-        throw respError;
-      }
-
-      // Se encontrou responsáveis, busca os dados dos usuários
-      if (respData && respData.length > 0) {
-        const userIds = respData.map(r => r.user_id);
-        
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('id_user, nome')
-          .in('id_user', userIds);
-
-        if (userError) {
-          console.error('Erro ao buscar dados dos usuários:', userError);
-          throw userError;
-        }
-
-        // Mapeia os dados dos usuários para o formato esperado
-        const responsaveis = userData.map(user => ({
-          id: user.id_user,
-          nome: user.nome
-        }));
-
-        return {
-          ...eventData,
-          responsaveis
-        };
-      }
-
-      return {
-        ...eventData,
-        responsaveis: []
-      };
+      // Como a tabela agenda_responsaveis está vazia, retornamos o evento sem responsáveis
+      return { ...eventData, responsaveis: [] };
     }
 
-    // Caso contrário, continua com a lógica de buscar eventos por período
-    const startDate = start instanceof Date ? start.toISOString() : start;
-    const endDate = end instanceof Date ? end.toISOString() : end;
-
-    console.log('Buscando eventos entre:', startDate, 'e', endDate);
-
-    // Busca os eventos
-    const { data: eventData, error: eventError } = await supabase
+    // Converte as datas para o formato ISO se necessário
+    const startDateISO = startDate instanceof Date ? startDate.toISOString() : startDate;
+    const endDateISO = endDate instanceof Date ? endDate.toISOString() : endDate;
+    
+    console.log('Buscando eventos para o período:', startDateISO, 'até', endDateISO);
+    
+    // Consulta com filtro de período
+    let query = supabase
       .from('agenda')
       .select(`
         id,
@@ -105,77 +65,74 @@ export async function fetchEvents(start?: Date | number | string, end?: Date | n
         data_cad_evento,
         criador
       `);
+    
+    // Descobrimos que todos os eventos têm cancelado = null, então não filtramos por cancelado
+    // query = query.eq('cancelado', false);
+    
+    // Aplicamos filtro de data apenas se ambas as datas forem fornecidas
+    if (startDateISO && endDateISO) {
+      // Extrair as datas sem tempo para usar na consulta
+      const startDateOnly = startDateISO.split('T')[0];
+      const endDateOnly = endDateISO.split('T')[0];
+      
+      console.log('Usando datas para filtro:', startDateOnly, 'até', endDateOnly);
+      
+      // Buscar eventos que começam dentro do período visualizado
+      // Usamos a abordagem mais simples e direta
+      query = query
+        .gte('datainicio', startDateOnly)
+        .lt('datainicio', endDateOnly + 'T23:59:59');
+      
+      // Limitar o número de resultados para evitar sobrecarga
+      query = query.limit(500);
+    } else {
+      // Se não houver datas, limitar a um número pequeno para evitar sobrecarga
+      query = query.limit(100);
+    }
+    
+    const { data: eventData, error: eventError } = await query;
 
     if (eventError) {
       console.error('Erro ao buscar eventos:', eventError);
       throw eventError;
     }
 
-    // Filtra os eventos pelo período
-    const filteredEvents = eventData.filter(event => {
-      const eventStart = new Date(event.datainicio);
-      const eventEnd = new Date(event.datafinal);
-      const filterStart = startDate ? new Date(startDate) : null;
-      const filterEnd = endDate ? new Date(endDate) : null;
-
-      return (!filterStart || eventStart >= filterStart) && 
-             (!filterEnd || eventEnd <= filterEnd);
-    });
-
-    // Para cada evento, busca os responsáveis
-    const eventsWithResponsaveis = await Promise.all(filteredEvents.map(async (eventData) => {
+    // Log para depuração - mostrar todos os eventos antes da filtragem
+    console.log('Total de eventos encontrados no banco para o período:', eventData?.length);
+    
+    // Verificar eventos por mês para depuração
+    const eventosPorMes = {};
+    eventData?.forEach(event => {
       try {
-        // Busca os responsáveis
-        const { data: respData, error: respError } = await supabase
-          .from('agenda_responsaveis')
-          .select(`user_id`)
-          .eq('agenda_id', eventData.id);
-
-        if (respError) {
-          console.error('Erro ao buscar responsáveis:', respError);
-          throw respError;
-        }
-
-        // Se encontrou responsáveis, busca os dados dos usuários
-        if (respData && respData.length > 0) {
-          const userIds = respData.map(r => r.user_id);
+        const data = new Date(event.datainicio);
+        if (!isNaN(data.getTime())) {
+          const mes = data.getMonth() + 1;
+          const ano = data.getFullYear();
+          const chave = `${ano}-${mes}`;
           
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('id_user, nome')
-            .in('id_user', userIds);
-
-          if (userError) {
-            console.error('Erro ao buscar dados dos usuários:', userError);
-            throw userError;
+          if (!eventosPorMes[chave]) {
+            eventosPorMes[chave] = 0;
           }
-
-          // Mapeia os dados dos usuários para o formato esperado
-          const responsaveis = userData.map(user => ({
-            id: user.id_user,
-            nome: user.nome
-          }));
-
-          return {
-            ...eventData,
-            responsaveis
-          };
+          
+          eventosPorMes[chave]++;
+        } else {
+          console.log('Data inválida para o evento:', event.id, event.datainicio);
         }
-
-        // Se não encontrou responsáveis, retorna o evento sem responsáveis
-        return {
-          ...eventData,
-          responsaveis: []
-        };
       } catch (error) {
-        console.error('Erro ao processar responsáveis do evento:', error);
-        return {
-          ...eventData,
-          responsaveis: []
-        };
+        console.error('Erro ao processar data do evento:', event.id, error);
       }
-    }));
+    });
+    
+    console.log('Distribuição de eventos por mês:', eventosPorMes);
 
+    // Como a tabela agenda_responsaveis está vazia, adicionamos um array vazio de responsáveis a cada evento
+    const eventsWithResponsaveis = eventData.map(event => {
+      return {
+        ...event,
+        responsaveis: []
+      };
+    });
+    
     return eventsWithResponsaveis;
   } catch (error) {
     console.error('Erro ao buscar eventos:', error);
@@ -385,92 +342,126 @@ export const updateContratoStatus = async (pppoe: string, status: string) => {
   }
 };
 
-export function transformEvents(events: AgendaEvent[]) {
-  console.log('Transformando eventos - Total:', events.length);
-  return events.map(event => {
-    try {
-      // Garantir que as datas sejam tratadas como UTC para evitar problemas de fuso horário
-      const startDate = new Date(event.datainicio + 'Z');
-      const endDate = new Date(event.datafinal + 'Z');
+export function transformEvents(events) {
+  if (!events || events.length === 0) {
+    console.log('Nenhum evento para transformar');
+    return [];
+  }
 
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        console.log('Data inválida para o evento:', event);
+  console.log('Transformando', events.length, 'eventos');
+  
+  // Filtrar eventos por data atual para depuração
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const mesAtual = hoje.getMonth() + 1;
+  
+  const eventosMesAtual = events.filter(event => {
+    try {
+      const dataInicio = new Date(event.datainicio);
+      return dataInicio.getFullYear() === anoAtual && (dataInicio.getMonth() + 1) === mesAtual;
+    } catch (e) {
+      return false;
+    }
+  });
+  
+  console.log(`Eventos do mês atual (${anoAtual}-${mesAtual}):`, eventosMesAtual.length);
+  
+  const transformedEvents = events
+    .map(event => {
+      try {
+        // Verificar se o evento foi cancelado
+        if (event.cancelado === true) {
+          console.log(`Evento ${event.id} não será exibido pois está cancelado`);
+          return null; // Não exibe eventos cancelados
+        }
+
+        // Verificar se a data de início é válida
+        if (!event.datainicio) {
+          console.log(`Evento ${event.id} não possui data de início válida`);
+          return null;
+        }
+
+        // Remover o 'Z' do final da string de data para evitar problemas de fuso horário
+        let start = event.datainicio;
+        let end = event.datafinal || event.datainicio; // Se não tiver data final, usa a data inicial
+
+        // Remover o 'Z' se existir
+        if (typeof start === 'string' && start.endsWith('Z')) {
+          start = start.slice(0, -1);
+        }
+        if (typeof end === 'string' && end.endsWith('Z')) {
+          end = end.slice(0, -1);
+        }
+
+        // Verificar se as datas são válidas após a transformação
+        const startDate = new Date(start);
+        let endDate = new Date(end);
+        
+        if (isNaN(startDate.getTime())) {
+          console.log(`Evento ${event.id} possui data de início inválida após transformação:`, start);
+          return null;
+        }
+        
+        // Se a data final for inválida ou igual à data inicial, define como data inicial + 1 hora
+        if (isNaN(endDate.getTime()) || endDate.getTime() === startDate.getTime()) {
+          endDate = new Date(startDate.getTime());
+          endDate.setHours(endDate.getHours() + 1);
+          console.log(`Evento ${event.id} teve sua data final ajustada para data inicial + 1 hora`);
+        }
+        
+        // Adicionar log para depuração de eventos do mês atual
+        const eventoMes = startDate.getMonth() + 1;
+        const eventoAno = startDate.getFullYear();
+        if (eventoAno === anoAtual && eventoMes === mesAtual) {
+          console.log(`Evento do mês atual: ID=${event.id}, Título=${event.nome}, Data=${startDate.toISOString()}`);
+        }
+
+        // Determinar a cor do evento com base nas regras
+        let backgroundColor = event.cor || '#3788d8'; // Cor padrão azul do FullCalendar
+        let textColor = '#ffffff'; // Texto branco por padrão
+        let borderColor = backgroundColor;
+
+        // Regras de cor baseadas no status do evento
+        if (event.realizada === true) {
+          backgroundColor = '#28a745'; // Verde para eventos realizados
+        } else if (event.parcial === true) {
+          backgroundColor = '#ffc107'; // Amarelo para eventos parcialmente realizados
+          textColor = '#000000'; // Texto preto para melhor contraste
+        } else if (event.prioritario === true) {
+          backgroundColor = '#dc3545'; // Vermelho para eventos prioritários
+        }
+
+        // Criar o objeto de evento formatado para o FullCalendar
+        const formattedEvent = {
+          id: event.id,
+          title: event.nome,
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          description: event.descricao || '',
+          backgroundColor,
+          borderColor,
+          textColor,
+          extendedProps: {
+            tipo_evento: event.tipo_evento,
+            horamarcada: event.horamarcada,
+            prioritario: event.prioritario,
+            realizada: event.realizada,
+            parcial: event.parcial,
+            cancelado: event.cancelado,
+            pppoe: event.pppoe,
+            responsaveis: event.responsaveis || [], // Array vazio se não houver responsáveis
+            criador: event.criador
+          }
+        };
+
+        return formattedEvent;
+      } catch (error) {
+        console.error(`Erro ao transformar evento ${event.id}:`, error);
         return null;
       }
+    })
+    .filter(event => event !== null); // Remover eventos nulos (cancelados ou com erros)
 
-      // Define a cor de fundo com base no tipo de evento e status
-      const isRealizada = event.realizada === true;
-      let eventColor;
-      
-      if (isRealizada) {
-        eventColor = '#E2E8F0'; // Cinza para eventos realizados
-      } else {
-        // Define a cor com base no tipo de evento
-        switch (event.tipo_evento?.toLowerCase()) {
-          case 'instalação':
-            eventColor = '#3788d8'; // Azul para instalações
-            break;
-          case 'visita':
-            eventColor = '#10B981'; // Verde para visitas
-            break;
-          default:
-            eventColor = '#6B7280'; // Cinza escuro para outros tipos
-        }
-      }
-
-      const textColor = isRealizada ? '#1F2937' : '#ffffff';
-
-      // Verifica se o evento é para o dia todo
-      const isAllDay = !event.horamarcada;
-
-      // Formata a hora para exibição
-      const startTime = new Date(event.datainicio).toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-
-      // Formata o título do evento para mostrar apenas informações essenciais
-      const responsaveisNomes = event.responsaveis?.map(r => r.nome).join(', ') || 'Sem responsável';
-      const title = event.horamarcada
-        ? `${startTime}\n${event.tipo_evento}\n${responsaveisNomes}`
-        : `${event.tipo_evento}\n${responsaveisNomes}`;
-
-      const transformedEvent = {
-        id: event.id.toString(),
-        title: title,
-        start: event.datainicio,
-        end: event.datafinal,
-        backgroundColor: eventColor,
-        borderColor: eventColor,
-        textColor: textColor,
-        allDay: isAllDay,
-        display: 'block',
-        classNames: [
-          isRealizada ? 'event-realizada' : '',
-          event.cancelado ? 'event-cancelada' : '',
-          event.parcial ? 'event-parcial' : '',
-          event.prioritario ? 'event-prioritaria' : '',
-          isAllDay ? 'event-all-day' : 'event-timed',
-          'custom-calendar-event',
-          `event-type-${event.tipo_evento?.toLowerCase().replace(/\s+/g, '-') || 'outros'}` // Nova classe baseada no tipo
-        ].filter(Boolean),
-        extendedProps: {
-          descricao: event.descricao,
-          tipo_evento: event.tipo_evento,
-          responsaveis: event.responsaveis || [],
-          horamarcada: event.horamarcada,
-          prioritario: event.prioritario,
-          realizada: event.realizada,
-          parcial: event.parcial,
-          cancelado: event.cancelado,
-          pppoe: event.pppoe
-        }
-      };
-
-      return transformedEvent;
-    } catch (error) {
-      console.error('Erro ao transformar evento:', event, error);
-      return null;
-    }
-  }).filter(event => event !== null);
+  console.log('Total de eventos após transformação:', transformedEvents.length);
+  return transformedEvents;
 }

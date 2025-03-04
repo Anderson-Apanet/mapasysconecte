@@ -180,7 +180,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       };
       console.log('Enviando requisição para N8N:', requestBody);
 
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/5de4f032-629a-4ee2-997e-beb0344b9ce1', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/e56c98fc-19fc-40c2-9f60-9fa6cffbe032', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
           statusText: response.statusText,
           body: errorText
         });
-        throw new Error(`Erro ao gerar o carnê: ${response.status} - ${errorText || response.statusText}`);
+        throw new Error(`Erro ao gerar o carnê: ${response.status} - ${response.statusText}`);
       }
 
       const responseData = await response.json();
@@ -322,7 +322,9 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     };
 
     try {
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/e4e61c7f-76a5-4d98-b725-d4fac879850b', {
+      console.log('Payload completo sendo enviado:', JSON.stringify(payload, null, 2));
+      
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/c5834f5d-ba5a-4d05-aa1d-e8e4ef2d6d43', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -333,7 +335,13 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       });
 
       if (!response.ok) {
-        throw new Error('Erro ao enviar dados');
+        const errorText = await response.text();
+        console.error('Resposta de erro do N8N:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Erro ao enviar dados: ${response.status} - ${errorText || response.statusText}`);
       }
 
       toast.success('Títulos gerados com sucesso!');

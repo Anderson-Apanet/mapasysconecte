@@ -7,14 +7,14 @@
   ],
   "env": {
     "VITE_API_BASE_URL": "https://mapasys-api.onrender.com",
-    "VITE_SUPABASE_URL": "https://aunfucsmyfbdyxfgvpha.supabase.co",
-    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1bmZ1Y3NteWZiZHl4Zmd2cGhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY1MTk4NjYsImV4cCI6MjAzMjA5NTg2Nn0.EuPJTwjeqpTWK3YIRhq981FTRwSAHsjCqsvrB0AMnGM"
+    "VITE_SUPABASE_URL": "https://dieycvogftvfoncigvtl.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpZXljdm9nZnR2Zm9uY2lndnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0ODU4NzUsImV4cCI6MjA1NjA2MTg3NX0.5StyYMsrRVhSkcHjR-V7vSgcqU5q0lYbyc9Q7kLvZIQ"
   },
   "build": {
     "env": {
       "VITE_API_BASE_URL": "https://mapasys-api.onrender.com",
-      "VITE_SUPABASE_URL": "https://aunfucsmyfbdyxfgvpha.supabase.co",
-      "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1bmZ1Y3NteWZiZHl4Zmd2cGhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY1MTk4NjYsImV4cCI6MjAzMjA5NTg2Nn0.EuPJTwjeqpTWK3YIRhq981FTRwSAHsjCqsvrB0AMnGM"
+      "VITE_SUPABASE_URL": "https://dieycvogftvfoncigvtl.supabase.co",
+      "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpZXljdm9nZnR2Zm9uY2lndnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0ODU4NzUsImV4cCI6MjA1NjA2MTg3NX0.5StyYMsrRVhSkcHjR-V7vSgcqU5q0lYbyc9Q7kLvZIQ"
     }
   }
 }

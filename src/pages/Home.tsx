@@ -220,14 +220,14 @@ const Home: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] p-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center">
             <div className="mb-8">
               <img 
-                src="https://aunfucsmyfbdyxfgvpha.supabase.co/storage/v1/object/public/assets-mapasys/Nostranet/logosemfundo.PNG"
-                alt="Nostranet Logo"
-                className="w-[225px] h-auto"
+                src="https://dieycvogftvfoncigvtl.supabase.co/storage/v1/object/public/imagens//logoconecte.jpg"
+                alt="Conecte Logo"
+                className="w-[135px] h-auto"
               />
             </div>
             

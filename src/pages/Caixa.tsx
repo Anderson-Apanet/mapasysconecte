@@ -142,7 +142,7 @@ export default function Caixa() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         <div className="container mx-auto px-4 py-8">
           {/* Cabeçalho */}
           <div className="mb-8">

@@ -9,7 +9,13 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  NoSymbolIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
@@ -18,6 +24,8 @@ import { ptBR } from 'date-fns/locale';
 import { TitulosContratosModal } from '../components/TitulosContratosModal';
 import Layout from '../components/Layout';
 import ListaCaixas from '../components/ListaCaixas';
+import ConfirmacaoModal from '../components/ConfirmacaoModal';
+import { updateUserGroupName } from '../services/mysqlService';
 import {
   CONTRACT_STATUS_OPTIONS,
   Cliente,
@@ -28,24 +36,29 @@ import { Transition } from '@headlessui/react';
 
 const Financeiro: React.FC = () => {
   // Estados para contratos e títulos
-  const [contratos, setContratos] = useState<(Contrato & { cliente_nome?: string, cliente_idasaas?: string | null })[]>([]);
+  const [contratos, setContratos] = useState<(Contrato & { cliente_nome?: string, cliente_idasaas?: string | null, plano?: { id: number, nome: string, radius: string } })[]>([]);
   const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
   const [showTitulosModal, setShowTitulosModal] = useState(false);
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [contractStatusFilter, setContractStatusFilter] = useState('');
+  const [contractStatusFilter, setContractStatusFilter] = useState('Ativo');
   const [showAsaasOnly, setShowAsaasOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [showConfirmacaoModal, setShowConfirmacaoModal] = useState(false);
+  const [showLiberarModal, setShowLiberarModal] = useState(false);
+  const [liberarLoading, setLiberarLoading] = useState(false);
+  const [showCancelarModal, setShowCancelarModal] = useState(false);
+  const [cancelarLoading, setCancelarLoading] = useState(false);
 
   // Estados para controlar a visibilidade do histórico
   const [showHistorico, setShowHistorico] = useState(false);
 
   // Atualizar as opções de status do contrato
   const CONTRACT_STATUS_OPTIONS = [
-    { value: '', label: 'Todos' },
     { value: 'Ativo', label: 'Contratos Ativos' },
     { value: 'Agendado', label: 'Contratos Agendados' },
     { value: 'Bloqueado', label: 'Contratos Bloqueados' },
@@ -86,7 +99,7 @@ const Financeiro: React.FC = () => {
       // Agora, buscar os registros da página atual
       let dataQuery = supabase
         .from('contratos')
-        .select('*, clientes!inner(id, nome, idasaas)')
+        .select('*, clientes!inner(id, nome, idasaas), planos(id, nome, radius)')
         .order('created_at', { ascending: false });
 
       // Aplicar os mesmos filtros na query de dados
@@ -115,7 +128,8 @@ const Financeiro: React.FC = () => {
         const contratosFormatados = contratosData.map(contrato => ({
           ...contrato,
           cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
-          cliente_idasaas: contrato.clientes?.idasaas
+          cliente_idasaas: contrato.clientes?.idasaas,
+          plano: contrato.planos
         }));
 
         setContratos(contratosFormatados);
@@ -167,11 +181,180 @@ const Financeiro: React.FC = () => {
     setShowTitulosModal(true);
   };
 
+  // Handler para bloquear cliente
+  const handleBloquearCliente = (contrato: any) => {
+    setSelectedContrato(contrato);
+    setShowConfirmacaoModal(true);
+  };
+
+  // Handler para confirmar bloqueio de cliente
+  const handleConfirmarBloqueio = async () => {
+    try {
+      if (!selectedContrato) return;
+      
+      setBlockLoading(true);
+      console.log(`Iniciando processo de bloqueio para cliente: ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})`);
+
+      // 1. Atualizar o status do contrato no Supabase
+      console.log('Atualizando status do contrato no Supabase...');
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ status: 'Bloqueado' })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Enviar o PPPoE para o N8N para atualização no MySQL
+      console.log('Enviando solicitação para o N8N...');
+      await updateUserGroupName(selectedContrato.pppoe, 'bloquear', '');
+
+      console.log('Processo de bloqueio concluído com sucesso!');
+      toast.success('Cliente bloqueado com sucesso!');
+      setShowConfirmacaoModal(false);
+      setSelectedContrato(null);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
+    } catch (error: any) {
+      console.error('Erro ao bloquear cliente:', error.message);
+      toast.error(`Erro ao bloquear cliente: ${error.message}`);
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
+  // Handler para abrir o modal de confirmação
+  const handleOpenConfirmacaoModal = (contrato: any) => {
+    setSelectedContrato(contrato);
+    setShowConfirmacaoModal(true);
+  };
+
+  // Handler para fechar o modal de confirmação
+  const handleCloseConfirmacaoModal = () => {
+    setShowConfirmacaoModal(false);
+    setSelectedContrato(null);
+  };
+
+  // Handler para liberar cliente
+  const handleLiberarCliente = (contrato: any) => {
+    setSelectedContrato(contrato);
+    setShowLiberarModal(true);
+  };
+
+  // Handler para confirmar liberação de cliente
+  const handleConfirmarLiberacao = async () => {
+    try {
+      if (!selectedContrato) return;
+      
+      setLiberarLoading(true);
+      console.log(`Iniciando processo de liberação para cliente: ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})`);
+
+      // 1. Atualizar o status do contrato no Supabase
+      console.log('Atualizando status do contrato no Supabase...');
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ status: 'Ativo' })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Enviar o PPPoE e o radius para o N8N para atualização no MySQL
+      console.log('Enviando solicitação para o N8N...');
+      
+      // Buscar o contrato atualizado com os dados do plano
+      const { data: contratoAtualizado, error: contratoError } = await supabase
+        .from('contratos')
+        .select('*, planos(id, nome, radius)')
+        .eq('id', selectedContrato.id)
+        .single();
+      
+      if (contratoError) throw contratoError;
+      
+      const radiusGroup = contratoAtualizado.planos?.radius || '';
+      
+      await updateUserGroupName(selectedContrato.pppoe, 'liberar', radiusGroup);
+
+      console.log('Processo de liberação concluído com sucesso!');
+      toast.success('Cliente liberado com sucesso!');
+      setShowLiberarModal(false);
+      setSelectedContrato(null);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
+    } catch (error: any) {
+      console.error('Erro ao liberar cliente:', error.message);
+      toast.error(`Erro ao liberar cliente: ${error.message}`);
+    } finally {
+      setLiberarLoading(false);
+    }
+  };
+
+  // Handler para fechar o modal de liberação
+  const handleCloseLiberarModal = () => {
+    setShowLiberarModal(false);
+    setSelectedContrato(null);
+  };
+
+  // Handler para cancelar cliente
+  const handleCancelarCliente = (contrato: any) => {
+    setSelectedContrato(contrato);
+    setShowCancelarModal(true);
+  };
+
+  // Handler para confirmar cancelamento de cliente
+  const handleConfirmarCancelamento = async () => {
+    try {
+      if (!selectedContrato) return;
+      
+      setCancelarLoading(true);
+      console.log(`Iniciando processo de cancelamento para cliente: ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})`);
+
+      // 1. Atualizar o status do contrato no Supabase
+      console.log('Atualizando status do contrato no Supabase...');
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ status: 'Cancelado' })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Enviar o PPPoE para o N8N para atualização no MySQL
+      console.log('Enviando solicitação para o N8N...');
+      await updateUserGroupName(selectedContrato.pppoe, 'cancelar');
+
+      console.log('Processo de cancelamento concluído com sucesso!');
+      toast.success('Cliente cancelado com sucesso!');
+      setShowCancelarModal(false);
+      setSelectedContrato(null);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
+    } catch (error: any) {
+      console.error('Erro ao cancelar cliente:', error.message);
+      toast.error(`Erro ao cancelar cliente: ${error.message}`);
+    } finally {
+      setCancelarLoading(false);
+    }
+  };
+
+  // Handler para fechar o modal de cancelamento
+  const handleCloseCancelarModal = () => {
+    setShowCancelarModal(false);
+    setSelectedContrato(null);
+  };
+
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         <div className="container mx-auto px-4 py-8">
           <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col items-center mb-6 text-center">
+              <div className="flex items-center mb-2">
+                <BanknotesIcon className="h-8 w-8 text-white mr-2" />
+                <h1 className="text-2xl font-bold text-white">
+                  Financeiro
+                </h1>
+              </div>
+              <p className="mt-2 mb-8 text-sm text-white">
+                Gerenciamento do financeiro (Títulos)
+              </p>
+            </div>
+            
             {/* Card de Histórico de Caixas com Toggle */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
               <div 
@@ -320,6 +503,61 @@ const Financeiro: React.FC = () => {
                           >
                             <DocumentTextIcon className="h-5 w-5" />
                           </button>
+                          
+                          {/* Botão Bloquear Cliente - Mostrar apenas para contratos ativos */}
+                          {contrato.status === 'Ativo' && (
+                            <button
+                              onClick={() => handleBloquearCliente(contrato)}
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              title="Bloquear Cliente"
+                            >
+                              <LockClosedIcon className="h-5 w-5" />
+                            </button>
+                          )}
+
+                          {/* Botão Cancelar Cliente - Mostrar para contratos bloqueados e agendados */}
+                          {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'Agendado') && (
+                            <button
+                              onClick={() => handleCancelarCliente(contrato)}
+                              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                              title="Cancelar Cliente"
+                            >
+                              <XMarkIcon className="h-5 w-5" />
+                            </button>
+                          )}
+
+                          {/* Botão Liberar Cliente - Mostrar apenas para contratos bloqueados */}
+                          {contractStatusFilter === 'Bloqueado' && (
+                            <button
+                              onClick={() => handleLiberarCliente(contrato)}
+                              className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                              title="Liberar Cliente"
+                            >
+                              <LockOpenIcon className="h-5 w-5" />
+                            </button>
+                          )}
+
+                          {/* Botão Liberar Cliente 48h - Mostrar apenas para contratos bloqueados */}
+                          {contractStatusFilter === 'Bloqueado' && (
+                            <button
+                              onClick={() => {}}
+                              className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
+                              title="Liberar Cliente 48h"
+                            >
+                              <ClockIcon className="h-5 w-5" />
+                            </button>
+                          )}
+
+                          {/* Botão Ativar Cliente - Mostrar apenas para contratos agendados */}
+                          {contractStatusFilter === 'Agendado' && (
+                            <button
+                              onClick={() => {}}
+                              className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                              title="Ativar Cliente"
+                            >
+                              <CheckCircleIcon className="h-5 w-5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -363,6 +601,69 @@ const Financeiro: React.FC = () => {
                 }}
                 pppoe={selectedPPPoE}
                 contrato={selectedContrato}
+              />
+            )}
+
+            {/* Modal de Confirmação */}
+            {showConfirmacaoModal && selectedContrato && (
+              <ConfirmacaoModal
+                isOpen={showConfirmacaoModal}
+                onClose={handleCloseConfirmacaoModal}
+                onConfirm={handleConfirmarBloqueio}
+                title="Bloquear Cliente"
+                message={`Tem certeza que deseja bloquear o cliente ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})? 
+                
+Esta ação irá:
+1. Alterar o status do contrato para "Bloqueado" no sistema
+2. Enviar o PPPoE para o webhook da Apanet para bloqueio no Radius
+                
+O cliente perderá acesso à internet imediatamente.`}
+                confirmButtonText="Sim, Bloquear"
+                cancelButtonText="Cancelar"
+                confirmButtonClass="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                isLoading={blockLoading}
+              />
+            )}
+
+            {/* Modal de Liberação */}
+            {showLiberarModal && selectedContrato && (
+              <ConfirmacaoModal
+                isOpen={showLiberarModal}
+                onClose={handleCloseLiberarModal}
+                onConfirm={handleConfirmarLiberacao}
+                title="Liberar Cliente"
+                message={`Tem certeza que deseja liberar o cliente ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})? 
+                
+Esta ação irá:
+1. Alterar o status do contrato para "Ativo" no sistema
+2. Enviar o PPPoE para o webhook da Apanet para liberação no Radius
+                
+O cliente terá acesso à internet imediatamente.`}
+                confirmButtonText="Sim, Liberar"
+                cancelButtonText="Cancelar"
+                confirmButtonClass="bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                isLoading={liberarLoading}
+              />
+            )}
+
+            {/* Modal de Cancelamento */}
+            {showCancelarModal && selectedContrato && (
+              <ConfirmacaoModal
+                isOpen={showCancelarModal}
+                onClose={handleCloseCancelarModal}
+                onConfirm={handleConfirmarCancelamento}
+                title="Cancelar Cliente"
+                message={`Tem certeza que deseja cancelar o cliente ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})? 
+                
+Esta ação irá:
+1. Alterar o status do contrato para "Cancelado" no sistema
+2. Enviar o PPPoE para o webhook da Apanet para cancelamento no Radius
+                
+O cliente perderá acesso à internet imediatamente.`}
+                confirmButtonText="Sim, Cancelar"
+                cancelButtonText="Cancelar"
+                confirmButtonClass="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                isLoading={cancelarLoading}
               />
             )}
           </div>

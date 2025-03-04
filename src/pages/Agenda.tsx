@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -11,7 +11,7 @@ import { EventModal } from '../components/Agenda/EventModal';
 import { MoreEventsPopover } from '../components/Agenda/MoreEventsPopover';
 import { AgendaEvent } from '../types/agenda';
 import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates, updateContratoStatus } from '../services/agenda';
-import { debounce } from '../utils/date';
+import { debounce } from 'lodash';
 
 export default function Agenda() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
@@ -32,20 +32,61 @@ export default function Agenda() {
   const [searchResults, setSearchResults] = useState<Array<{ id: number; pppoe: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<Array<{ id: number; nome: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const calendarRef = useRef<FullCalendar | null>(null);
+  const lastFetchRef = useRef<{ start: string, end: string } | null>(null);
 
-  const loadEvents = async (start: Date, end: Date) => {
+  const loadEvents = useCallback(async (info, successCallback, failureCallback) => {
+    // Verifica se já estamos carregando eventos
+    if (isLoadingEvents) {
+      console.log('Já existe um carregamento de eventos em andamento. Ignorando nova requisição.');
+      return;
+    }
+
+    // Vamos sempre carregar novos eventos, independente da última faixa carregada
+    // para garantir que todos os eventos sejam exibidos
+    
+    setIsLoadingEvents(true);
+    setLoading(true);
+    
     try {
-      const events = await fetchEvents(start, end);
-      if (events) {
-        const transformedEvents = transformEvents(events);
+      console.log('Carregando eventos para o período:', info.startStr, 'até', info.endStr);
+      
+      // Buscar eventos apenas para o período visualizado
+      const events = await fetchEvents(info.startStr, info.endStr);
+      
+      // Transformar eventos para o formato do FullCalendar
+      const transformedEvents = await transformEvents(events);
+      
+      console.log('Eventos carregados com sucesso:', transformedEvents.length);
+      
+      // Armazena a faixa de datas que acabamos de carregar
+      lastFetchRef.current = { start: info.startStr, end: info.endStr };
+      
+      if (successCallback) {
+        successCallback(transformedEvents);
+      } else {
         setEvents(transformedEvents);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
-      toast.error('Erro ao carregar eventos');
+      if (failureCallback) {
+        failureCallback(error);
+      }
+      // Corrigindo o erro de renderização do toast
+      toast({
+        title: 'Erro ao carregar eventos',
+        description: String(error.message || 'Erro desconhecido'),
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+      setIsLoadingEvents(false);
     }
-  };
+  }, [toast, events, isLoadingEvents]);
 
   const handleDateSelect = (selectInfo: any) => {
     const startDate = new Date(selectInfo.startStr);
@@ -148,7 +189,7 @@ export default function Agenda() {
       const calendarApi = calendarRef.current?.getApi();
       if (calendarApi) {
         const dateRange = calendarApi.view.getCurrentData().dateProfile.activeRange;
-        await loadEvents(dateRange.start, dateRange.end);
+        await loadEvents(calendarApi.view.getCurrentData(), (events) => setEvents(events), (error) => console.error(error));
       }
 
       setSelectedEvent(null);
@@ -202,7 +243,7 @@ export default function Agenda() {
       
       // Atualizar a lista de eventos
       const dateInfo = dropInfo.view.getCurrentData().dateProfile;
-      await loadEvents(dateInfo.activeRange.start, dateInfo.activeRange.end);
+      await loadEvents(dropInfo.view.getCurrentData(), (events) => setEvents(events), (error) => console.error(error));
     } catch (error) {
       console.error('Erro ao atualizar evento:', error);
       toast.error('Erro ao atualizar evento');
@@ -210,9 +251,24 @@ export default function Agenda() {
     }
   };
 
+  // Usar debounce para evitar múltiplas chamadas em rápida sucessão
+  const debouncedLoadEvents = useCallback(
+    debounce((dateInfo) => {
+      loadEvents(dateInfo, (events) => setEvents(events), (error) => console.error(error));
+    }, 300),
+    [loadEvents]
+  );
+
   const handleDatesSet = (dateInfo: any) => {
-    loadEvents(dateInfo.start, dateInfo.end);
+    console.log('Período visualizado:', dateInfo.startStr, 'até', dateInfo.endStr);
+    debouncedLoadEvents(dateInfo);
   };
+
+  // Debounce para a busca de PPPoE
+  const debouncedSearch = useCallback(
+    debounce(handleSearchPPPoE, 300),
+    []
+  );
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -227,14 +283,9 @@ export default function Agenda() {
     loadUsers();
   }, []);
 
-  const debouncedSearch = React.useCallback(
-    debounce(handleSearchPPPoE, 300),
-    []
-  );
-
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] dark:bg-[#1E4620] p-6">
+      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="h-full" onClick={() => selectedMoreEvents && setSelectedMoreEvents(null)}>
             <FullCalendar

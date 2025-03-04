@@ -174,7 +174,7 @@ export default function NovoLancamentoModal({
   const fetchCategorias = async () => {
     try {
       const { data, error } = await supabase
-        .from('categoriascontas')
+        .from('categorias_lancamentos')
         .select('id, nome')
         .eq('tipo', 'despesa')
         .order('nome');
@@ -526,6 +526,7 @@ export default function NovoLancamentoModal({
 
       // Preparar dados do lançamento
       const lancamentoData = {
+        id: lancamentoToEdit?.id || Date.now(), // Gerar um ID único baseado no timestamp atual
         id_caixa: caixaStatus.caixaAtual.id,
         data_pagamento: dataPagamento ? new Date(dataPagamento) : new Date(),
         descricao: formData.descricao || descricao,
@@ -548,7 +549,7 @@ export default function NovoLancamentoModal({
         juros: selectedType === 'RECEITA' ? parseMoeda(juros) : 0,
         multa: selectedType === 'RECEITA' ? parseMoeda(multa) : 0,
         titulobancario: selectedType === 'RECEITA' ? selectedTitulo?.nossonumero || null : null,
-        fechar_caixa: false,
+        id_categoria: selectedType === 'DESPESA' ? categoria : null,
         pago_boleto: false
       };
 
@@ -562,13 +563,15 @@ export default function NovoLancamentoModal({
           .update(lancamentoData)
           .eq('id', lancamentoToEdit.id);
       } else {
-        // Insert new transaction
+        // Insert new transaction - mantém o campo id pois a tabela não gera automaticamente
         result = await supabase
           .from('lancamentos')
-          .insert([lancamentoData]);
+          .insert([lancamentoData])
+          .select();
       }
 
-      const { error } = result;
+      const { error, data } = result;
+      console.log('Resultado da operação:', { error, data });
 
       if (error) {
         console.error('Erro ao salvar lançamento:', error);
@@ -799,7 +802,7 @@ export default function NovoLancamentoModal({
 
     try {
       const { data, error } = await supabase
-        .from('categoriascontas')
+        .from('categorias_lancamentos')
         .insert([{ 
           nome: newCategoryName.trim(),
           tipo: 'despesa'

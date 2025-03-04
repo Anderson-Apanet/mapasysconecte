@@ -302,7 +302,7 @@ const EstoqueNew: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1E4620] py-8">
+      <div className="min-h-screen bg-[#1092E8] py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Cabeçalho */}
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">

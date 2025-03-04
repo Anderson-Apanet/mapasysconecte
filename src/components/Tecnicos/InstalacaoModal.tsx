@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../utils/supabaseClient';
 import { saveEvent } from '../../services/agenda';
 import { format } from 'date-fns';
 import Modal from '../Modal';
 import { Dialog } from '@headlessui/react';
+import { GoogleMap, Marker } from '@react-google-maps/api';
+import { useGoogleMapsApi } from '../../utils/googleMapsLoader';
 
 interface InstalacaoModalProps {
   isOpen: boolean;
@@ -17,6 +19,143 @@ interface Cliente {
   nome: string;
 }
 
+interface ContratoDetalhes {
+  endereco: string;
+  complemento: string | null;
+  bairro: {
+    nome: string;
+  };
+}
+
+interface MapContainerProps {
+  endereco: string;
+  complemento?: string;
+  bairro?: string;
+}
+
+const MapContainer: React.FC<MapContainerProps> = ({ endereco, complemento, bairro }) => {
+  const [mapPosition, setMapPosition] = useState({ lat: -29.5169, lng: -49.9278 }); // Coordenadas de Três Cachoeiras, RS
+  const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const [geocodingComplete, setGeocodingComplete] = useState(false);
+  
+  const { isLoaded, loadError } = useGoogleMapsApi();
+  
+  const mapContainerStyle = {
+    width: '100%',
+    height: '200px',
+    borderRadius: '8px'
+  };
+  
+  const onLoad = useCallback((map: google.maps.Map) => {
+    setMapInstance(map);
+  }, []);
+  
+  const onUnmount = useCallback(() => {
+    setMapInstance(null);
+  }, []);
+  
+  // Referência ao endereço atual para evitar loops
+  const addressRef = useRef({ endereco, complemento, bairro });
+  
+  useEffect(() => {
+    // Atualiza a referência quando os props mudam
+    addressRef.current = { endereco, complemento, bairro };
+  }, [endereco, complemento, bairro]);
+  
+  // Efeito para geocodificação executado apenas uma vez quando o mapa carrega
+  useEffect(() => {
+    const geocodeAddress = async () => {
+      // Se já completou a geocodificação, não faz nada
+      if (geocodingComplete) return;
+      
+      try {
+        const { endereco, complemento, bairro } = addressRef.current;
+        const fullAddress = `${endereco}${complemento ? `, ${complemento}` : ''}, ${bairro || ''}, Três Cachoeiras, RS, Brasil`;
+        console.log('Buscando endereço (uma vez):', fullAddress);
+        const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`;
+        
+        const response = await fetch(geocodeUrl);
+        const data = await response.json();
+        
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          const { lat, lng } = data.results[0].geometry.location;
+          const newPosition = { lat, lng };
+          console.log('Nova posição encontrada:', newPosition);
+          setMapPosition(newPosition);
+          setMarker(newPosition);
+          
+          // Centraliza o mapa na nova posição se o mapa já estiver carregado
+          if (mapInstance) {
+            mapInstance.panTo(newPosition);
+          }
+        } else {
+          console.log('Endereço não encontrado, usando posição padrão');
+          // Se não encontrar o endereço, usa a posição padrão e mostra o marcador nela
+          setMarker(mapPosition);
+        }
+        
+        // Marca a geocodificação como completa
+        setGeocodingComplete(true);
+      } catch (error) {
+        console.error('Erro ao geocodificar endereço:', error);
+        // Em caso de erro, usa a posição padrão e mostra o marcador nela
+        setMarker(mapPosition);
+        setGeocodingComplete(true);
+      }
+    };
+    
+    if (isLoaded && !geocodingComplete) {
+      geocodeAddress();
+    }
+  }, [isLoaded, geocodingComplete, mapPosition, mapInstance]);
+  
+  // Reseta o estado de geocodificação quando o modal é fechado/aberto
+  useEffect(() => {
+    setGeocodingComplete(false);
+    
+    return () => {
+      // Cleanup ao desmontar
+    };
+  }, [endereco, complemento, bairro]); // Reseta quando o endereço muda
+  
+  if (loadError) {
+    return <div className="p-4 bg-red-50 text-red-600 rounded-md">Erro ao carregar o mapa</div>;
+  }
+  
+  if (!isLoaded) {
+    return <div className="p-4 bg-gray-50 text-gray-600 rounded-md">Carregando mapa...</div>;
+  }
+  
+  return (
+    <div className="mt-4">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={mapPosition}
+        zoom={16}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        options={{
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: true,
+          zoomControl: true
+        }}
+      >
+        {marker && (
+          <Marker 
+            position={marker}
+            icon={{
+              url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+              scaledSize: new window.google.maps.Size(40, 40)
+            }}
+          />
+        )}
+      </GoogleMap>
+    </div>
+  );
+};
+
 export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoModalProps) {
   const [loading, setLoading] = useState(false);
   const [observacao, setObservacao] = useState('');
@@ -24,6 +163,7 @@ export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoMo
   const [cto, setCto] = useState('');
   const [portaCto, setPortaCto] = useState('');
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [contratoDetalhes, setContratoDetalhes] = useState<ContratoDetalhes | null>(null);
   const [contratoAssinado, setContratoAssinado] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,27 +171,43 @@ export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoMo
     const fetchCliente = async () => {
       if (!event?.pppoe) {
         setCliente(null);
+        setContratoDetalhes(null);
         return;
       }
 
       try {
         const { data: contratoData, error: contratoError } = await supabase
           .from('contratos')
-          .select('id_cliente')
+          .select(`
+            id_cliente,
+            endereco,
+            complemento,
+            bairro:id_bairro (
+              nome
+            )
+          `)
           .eq('pppoe', event.pppoe)
           .single();
 
         if (contratoError) throw contratoError;
 
-        if (contratoData?.id_cliente) {
-          const { data: clienteData, error: clienteError } = await supabase
-            .from('clientes')
-            .select('id, nome')
-            .eq('id', contratoData.id_cliente)
-            .single();
+        if (contratoData) {
+          setContratoDetalhes({
+            endereco: contratoData.endereco,
+            complemento: contratoData.complemento,
+            bairro: contratoData.bairro
+          });
 
-          if (clienteError) throw clienteError;
-          setCliente(clienteData);
+          if (contratoData.id_cliente) {
+            const { data: clienteData, error: clienteError } = await supabase
+              .from('clientes')
+              .select('id, nome')
+              .eq('id', contratoData.id_cliente)
+              .single();
+
+            if (clienteError) throw clienteError;
+            setCliente(clienteData);
+          }
         }
       } catch (error) {
         console.error('Erro ao buscar cliente:', error);
@@ -284,6 +440,17 @@ export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoMo
                   disabled={isSubmitting}
                 />
               </div>
+
+              {contratoDetalhes && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Localização do Contrato</h4>
+                  <MapContainer 
+                    endereco={contratoDetalhes.endereco} 
+                    complemento={contratoDetalhes.complemento || ''} 
+                    bairro={contratoDetalhes.bairro?.nome} 
+                  />
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end space-x-3">

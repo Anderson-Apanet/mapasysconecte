@@ -19,6 +19,9 @@ export function useAuth() {
     // Função para buscar dados do usuário
     const fetchUserData = async (userId: string) => {
       try {
+        console.log('Buscando dados do usuário:', userId);
+        
+        // Adicionar cabeçalho Accept explícito para evitar erro 406
         const { data, error } = await supabase
           .from('users')
           .select(`
@@ -33,9 +36,10 @@ export function useAuth() {
           return null;
         }
 
+        console.log('Dados do usuário obtidos com sucesso:', data);
         return data;
       } catch (error) {
-        console.error('Error in fetchUserData:', error);
+        console.error('Error fetching user data:', error);
         return null;
       }
     };
