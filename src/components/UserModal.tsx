@@ -3,6 +3,7 @@ import { User, UserTipo } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import { ROUTES } from '../constants/routes';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -167,7 +168,7 @@ export default function UserModal({ isOpen, onClose, user, onSuccess }: UserModa
       setResetingPassword(true);
       const { error } = await supabase.auth.resetPasswordForEmail(
         user.auth_user.email,
-        { redirectTo: `${window.location.origin}/reset-password` }
+        { redirectTo: 'https://mapasysconecte.onrender.com/reset-password' }
       );
       
       if (error) throw error;

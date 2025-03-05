@@ -18,6 +18,7 @@ import Bairros from './pages/ADM/Bairros';
 import Veiculos from './pages/ADM/Veiculos';
 import Users from './pages/ADM/Users';
 import Messages from './pages/ADM/Messages';
+import ResetPassword from './pages/ResetPassword';
 import PrivateRoute from './components/PrivateRoute';
 import { ROUTES } from './constants/routes';
 
@@ -28,6 +29,7 @@ const App: React.FC = () => {
       <Routes>
         {/* Rota pública */}
         <Route path={ROUTES.LOGIN} element={<Login />} />
+        <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
 
         {/* Rotas protegidas */}
         <Route path={ROUTES.HOME} element={

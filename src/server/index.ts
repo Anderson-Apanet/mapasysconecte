@@ -3,12 +3,21 @@ import cors from 'cors';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// Obter o equivalente a __dirname em módulos ES
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos do diretório dist
+app.use(express.static(path.join(__dirname, '../../dist')));
 
 // Configuração da API do Asaas
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY || '';
@@ -676,7 +685,13 @@ app.post('/api/support/add-contract-credentials', async (req, res) => {
   }
 });
 
-const port = 3001;
+// Todas as outras requisições não tratadas devem retornar o app React
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../dist/index.html'));
+});
+
+// Usar porta 3001 para desenvolvimento e a porta do ambiente para produção
+const port = process.env.NODE_ENV === 'production' ? (process.env.PORT || 10000) : 3001;
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
+    console.log(`Servidor rodando na porta ${port}`);
 });

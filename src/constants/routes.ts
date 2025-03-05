@@ -13,6 +13,7 @@ export const ROUTES = {
   TECNICOS: '/tecnicos',
   ESTOQUE: '/estoque',
   SUPORTE: '/suporte',
+  RESET_PASSWORD: '/reset-password',
 
   // Rotas administrativas
   ADM_BAIRROS: '/adm/bairros',
