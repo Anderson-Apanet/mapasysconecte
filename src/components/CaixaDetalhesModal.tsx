@@ -2,9 +2,10 @@ import React from 'react';
 import { Dialog } from '@headlessui/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { Caixa } from '../types/caixa';
 import { Lancamento } from '../types/lancamento';
+import { gerarReciboTermico } from './ReciboTermico';
 
 interface CaixaDetalhesModalProps {
   isOpen: boolean;
@@ -164,12 +165,15 @@ const CaixaDetalhesModal: React.FC<CaixaDetalhesModalProps> = ({ isOpen, onClose
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Valor
                       </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {caixa.lancamentos.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                        <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                           Nenhum lançamento encontrado
                         </td>
                       </tr>
@@ -203,8 +207,17 @@ const CaixaDetalhesModal: React.FC<CaixaDetalhesModalProps> = ({ isOpen, onClose
                                 ? 'text-green-600 dark:text-green-400'
                                 : 'text-red-600 dark:text-red-400'
                             }>
-                              {formatMoney(lancamento.total)}
+                              {formatMoney(lancamento.valor)}
                             </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 text-center">
+                            <button
+                              onClick={() => gerarReciboTermico(lancamento)}
+                              className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                              title="Imprimir recibo"
+                            >
+                              <PrinterIcon className="h-4 w-4" aria-hidden="true" />
+                            </button>
                           </td>
                         </tr>
                       ))

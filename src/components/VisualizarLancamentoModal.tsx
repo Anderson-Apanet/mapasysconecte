@@ -2,8 +2,9 @@ import React from 'react';
 import { Dialog } from '@headlessui/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { Lancamento } from '../types/financeiro';
+import { gerarReciboTermico } from './ReciboTermico';
 
 interface VisualizarLancamentoModalProps {
   isOpen: boolean;
@@ -45,12 +46,22 @@ export default function VisualizarLancamentoModal({
             <Dialog.Title className="text-xl font-semibold text-gray-900 dark:text-white">
               Detalhes do Lançamento
             </Dialog.Title>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => gerarReciboTermico(lancamento)}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                title="Imprimir recibo"
+              >
+                <PrinterIcon className="h-4 w-4 mr-1" aria-hidden="true" />
+                Imprimir Recibo
+              </button>
+              <button
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
