@@ -9,6 +9,7 @@ import { Bairro } from '../types/bairro';
 import { User } from '../types/user';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
+import MapWithMarker from './MapWithMarker';
 
 interface NovoContratoModalProps {
   isOpen: boolean;
@@ -25,16 +26,9 @@ interface Plano {
   valor: number;
 }
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '300px',
-  marginTop: '1rem',
-  marginBottom: '1rem'
-};
-
 const defaultCenter = {
-  lat: -29.4519, // Latitude de Três Cachoeiras - RS
-  lng: -49.9278  // Longitude de Três Cachoeiras - RS
+  lat: -29.5441, // Latitude de Arroio do Sal - RS
+  lng: -49.8890  // Longitude de Arroio do Sal - RS
 };
 
 export default function NovoContratoModal({
@@ -55,21 +49,24 @@ export default function NovoContratoModal({
   const [bairro, setBairro] = useState("");
   const [bairros, setBairros] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<google.maps.LatLngLiteral>(defaultCenter);
+  const [isAddressBeingUpdatedByMap, setIsAddressBeingUpdatedByMap] = useState(false);
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    setMap(map);
-    setSelectedLocation(defaultCenter);
-  }, []);
-
-  const onUnmount = useCallback(() => {
-    setMap(null);
-  }, []);
+  // Função para gerar o PPPoE baseado no nome do cliente e data atual
+  const generatePPPoE = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const firstName = clienteData.nome.split(' ')[0].toLowerCase();
+    return `${firstName}${year}${month}${day}${hour}`;
+  };
 
   // Função para obter o endereço a partir das coordenadas
-  const getAddressFromLatLng = async (lat: number, lng: number) => {
+  const getAddressFromLatLng = useCallback(async (lat: number, lng: number) => {
     try {
+      setIsAddressBeingUpdatedByMap(true);
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
       );
@@ -103,24 +100,52 @@ export default function NovoContratoModal({
     } catch (error) {
       console.error('Erro ao buscar endereço:', error);
       toast.error('Erro ao buscar endereço');
+    } finally {
+      setIsAddressBeingUpdatedByMap(false);
     }
-  };
+  }, [bairros]);
+
+  // Função para obter coordenadas a partir do endereço
+  const getLatLngFromAddress = useCallback(async (address: string) => {
+    if (!address || isAddressBeingUpdatedByMap) return;
+    
+    try {
+      console.log('Geocodificando endereço:', address);
+      // Adiciona "Arroio do Sal, RS" ao endereço para melhorar a precisão
+      const fullAddress = `${address}, Arroio do Sal, RS`;
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      console.log('Resposta da geocodificação:', data);
+      
+      if (data.results && data.results[0] && data.results[0].geometry) {
+        const location = data.results[0].geometry.location;
+        const newLocation = { lat: location.lat, lng: location.lng };
+        console.log('Nova localização:', newLocation);
+        setSelectedLocation(newLocation);
+        
+        // Centraliza o mapa na nova localização
+        // if (map) {
+        //   map.panTo(newLocation);
+        // }
+      }
+    } catch (error) {
+      console.error('Erro ao geocodificar endereço:', error);
+    }
+  }, [isAddressBeingUpdatedByMap]);
 
   // Handler para clique no mapa
-  const handleMapClick = async (e: google.maps.MapMouseEvent) => {
+  const handleMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
     if (e.latLng) {
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
       const newLocation = { lat, lng };
+      console.log('Clique no mapa:', newLocation);
       setSelectedLocation(newLocation);
       await getAddressFromLatLng(lat, lng);
     }
-  };
-
-  useEffect(() => {
-    // Inicializa a localização selecionada com o centro padrão
-    setSelectedLocation(defaultCenter);
-  }, []);
+  }, [getAddressFromLatLng]);
 
   useEffect(() => {
     // Carregar bairros da tabela
@@ -156,15 +181,18 @@ export default function NovoContratoModal({
     fetchPlanos();
   }, []);
 
-  const generatePPPoE = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hour = String(now.getHours()).padStart(2, '0');
-    const firstName = clienteData.nome.split(' ')[0].toLowerCase();
-    return `${firstName}${year}${month}${day}${hour}`;
-  };
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      getLatLngFromAddress(endereco);
+    }, 1000); // Delay para evitar muitas requisições durante a digitação
+    
+    return () => clearTimeout(timeoutId);
+  }, [endereco, getLatLngFromAddress]);
+
+  // Monitorar mudanças no selectedLocation
+  useEffect(() => {
+    console.log('selectedLocation atualizado:', selectedLocation);
+  }, [selectedLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -356,6 +384,7 @@ export default function NovoContratoModal({
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
+                  placeholder="Digite o endereço ou clique no mapa"
                   required
                 />
               </div>
@@ -391,34 +420,11 @@ export default function NovoContratoModal({
                 </select>
               </div>
 
-              {isLoaded ? (
-                <GoogleMap
-                  mapContainerStyle={mapContainerStyle}
-                  zoom={15}
-                  center={selectedLocation || defaultCenter}
-                  onClick={handleMapClick}
-                  onLoad={onLoad}
-                  onUnmount={onUnmount}
-                >
-                  {selectedLocation && isLoaded && (
-                    <Marker
-                      position={selectedLocation}
-                      icon={{
-                        path: "M12 3L4 9v12h5v-7h6v7h5V9z",
-                        fillColor: "#2563EB",
-                        fillOpacity: 1,
-                        strokeWeight: 0,
-                        scale: 2,
-                        anchor: new google.maps.Point(12, 12)
-                      }}
-                    />
-                  )}
-                </GoogleMap>
-              ) : (
-                <div style={mapContainerStyle} className="flex items-center justify-center bg-gray-100">
-                  <p>Carregando mapa...</p>
-                </div>
-              )}
+              {console.log('Renderizando mapa com selectedLocation:', selectedLocation)}
+              <MapWithMarker 
+                center={selectedLocation} 
+                onClick={handleMapClick}
+              />
 
               <div className="mt-6 flex justify-end space-x-3">
                 <button
