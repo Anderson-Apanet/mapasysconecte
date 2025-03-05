@@ -162,13 +162,7 @@ export const gerarReciboTermico = (lancamento: any) => {
     y += 6;
   }
 
-  // Assinatura
-  y += 10;
-  const lineWidth = 40;
-  const lineX = (width - lineWidth) / 2 + margin;
-  doc.line(lineX, y, lineX + lineWidth, y);
-  y += 4;
-  addCenteredText('Assinatura');
+  addLine();
 
   // Rodapé
   y += 6;
