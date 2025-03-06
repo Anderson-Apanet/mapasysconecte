@@ -53,6 +53,8 @@ const Financeiro: React.FC = () => {
   const [liberarLoading, setLiberarLoading] = useState(false);
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [cancelarLoading, setCancelarLoading] = useState(false);
+  const [showLiberar48hModal, setShowLiberar48hModal] = useState(false);
+  const [liberar48hLoading, setLiberar48hLoading] = useState(false);
 
   // Estados para controlar a visibilidade do histórico
   const [showHistorico, setShowHistorico] = useState(false);
@@ -64,13 +66,21 @@ const Financeiro: React.FC = () => {
     { value: 'Bloqueado', label: 'Contratos Bloqueados' },
     { value: 'Liberado48', label: 'Contratos Liberados 48h' },
     { value: 'Cancelado', label: 'Contratos Cancelados' },
-    { value: 'pendencia', label: 'Contratos com Pendência' }
+    { value: 'pendencia', label: 'Contratos com Pendência' },
+    { value: 'atraso', label: 'Contratos com Atraso' },
+    { value: 'atraso15dias', label: 'Contratos com Atraso > 15 dias' }
   ];
 
   // Função para carregar contratos com paginação e busca
   const fetchContratos = async (page: number, searchTerm: string = '', status: string = '') => {
     try {
       setLoading(true);
+      
+      // Para filtros de atraso, usamos uma abordagem diferente
+      if (status === 'atraso' || status === 'atraso15dias') {
+        await fetchContratosComAtraso(page, searchTerm, status);
+        return;
+      }
       
       // Primeiro, buscar o total de registros para paginação
       let countQuery = supabase
@@ -81,11 +91,14 @@ const Financeiro: React.FC = () => {
       if (searchTerm) {
         countQuery = countQuery.ilike('pppoe', `%${searchTerm}%`);
       }
+      
+      // Filtros de status
       if (status === 'pendencia') {
         countQuery = countQuery.eq('pendencia', true);
       } else if (status) {
         countQuery = countQuery.eq('status', status);
       }
+      
       if (showAsaasOnly) {
         countQuery = countQuery.not('clientes.idasaas', 'is', null);
       }
@@ -106,11 +119,14 @@ const Financeiro: React.FC = () => {
       if (searchTerm) {
         dataQuery = dataQuery.ilike('pppoe', `%${searchTerm}%`);
       }
+      
+      // Filtros de status
       if (status === 'pendencia') {
         dataQuery = dataQuery.eq('pendencia', true);
       } else if (status) {
         dataQuery = dataQuery.eq('status', status);
       }
+      
       if (showAsaasOnly) {
         dataQuery = dataQuery.not('clientes.idasaas', 'is', null);
       }
@@ -124,7 +140,7 @@ const Financeiro: React.FC = () => {
 
       if (contratosError) throw contratosError;
 
-      if (contratosData) {
+      if (contratosData && contratosData.length > 0) {
         const contratosFormatados = contratosData.map(contrato => ({
           ...contrato,
           cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
@@ -141,6 +157,90 @@ const Financeiro: React.FC = () => {
       toast.error('Erro ao carregar contratos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Função específica para buscar contratos com atraso
+  const fetchContratosComAtraso = async (page: number, searchTerm: string = '', status: string = '') => {
+    try {
+      // Calcular a data de filtro
+      const hoje = new Date();
+      const dataAtual = hoje.toISOString().split('T')[0];
+      
+      let dataFiltro = dataAtual;
+      if (status === 'atraso15dias') {
+        const quinzeDiasAtras = new Date();
+        quinzeDiasAtras.setDate(hoje.getDate() - 15);
+        dataFiltro = quinzeDiasAtras.toISOString().split('T')[0];
+      }
+
+      // Primeiro, buscar todos os IDs de contratos com títulos vencidos
+      // Usando a mesma lógica da consulta SQL: t.pago <> true AND t.vencimento < CURRENT_DATE
+      const { data: contratosComAtraso, error: titulosError } = await supabase
+        .from('titulos')
+        .select('id_contrato')
+        .not('pago', 'eq', true)
+        .lt('vencimento', dataFiltro);
+
+      if (titulosError) throw titulosError;
+
+      if (!contratosComAtraso || contratosComAtraso.length === 0) {
+        setContratos([]);
+        setTotalCount(0);
+        return;
+      }
+
+      // Obter IDs únicos de contratos com atraso
+      const idsContratosComAtraso = [...new Set(contratosComAtraso.map(t => t.id_contrato))];
+      console.log(`Encontrados ${idsContratosComAtraso.length} contratos com títulos em atraso`);
+
+      // Buscar detalhes dos contratos com atraso
+      let query = supabase
+        .from('contratos')
+        .select('*, clientes!inner(id, nome, idasaas), planos(id, nome, radius)')
+        .in('id', idsContratosComAtraso)
+        .order('created_at', { ascending: false });
+
+      // Aplicar filtro de busca se necessário
+      if (searchTerm) {
+        query = query.ilike('pppoe', `%${searchTerm}%`);
+      }
+
+      // Aplicar filtro de ASAAS se necessário
+      if (showAsaasOnly) {
+        query = query.not('clientes.idasaas', 'is', null);
+      }
+
+      // Primeiro contar o total para paginação
+      const { data: todosContratos, error: countError } = await query;
+      
+      if (countError) throw countError;
+      
+      const totalFiltrado = todosContratos ? todosContratos.length : 0;
+      setTotalCount(totalFiltrado);
+      console.log(`Total de contratos com atraso após filtros: ${totalFiltrado}`);
+
+      // Aplicar paginação manualmente
+      const from = (page - 1) * itemsPerPage;
+      const to = Math.min(from + itemsPerPage, totalFiltrado);
+      
+      const contratosFormatados = todosContratos
+        ? todosContratos
+            .slice(from, to)
+            .map(contrato => ({
+              ...contrato,
+              cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
+              cliente_idasaas: contrato.clientes?.idasaas,
+              plano: contrato.planos
+            }))
+        : [];
+
+      setContratos(contratosFormatados);
+    } catch (error: any) {
+      console.error('Erro ao carregar contratos com atraso:', error.message);
+      toast.error('Erro ao carregar contratos com atraso');
+      setContratos([]);
+      setTotalCount(0);
     }
   };
 
@@ -288,6 +388,52 @@ const Financeiro: React.FC = () => {
   // Handler para fechar o modal de liberação
   const handleCloseLiberarModal = () => {
     setShowLiberarModal(false);
+    setSelectedContrato(null);
+  };
+
+  // Handler para liberar 48h cliente
+  const handleLiberar48hCliente = (contrato: any) => {
+    setSelectedContrato(contrato);
+    setShowLiberar48hModal(true);
+  };
+
+  // Handler para confirmar liberação 48h de cliente
+  const handleConfirmarLiberacao48h = async () => {
+    try {
+      if (!selectedContrato) return;
+      
+      setLiberar48hLoading(true);
+      console.log(`Iniciando processo de liberação 48h para cliente: ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})`);
+
+      // 1. Atualizar o status do contrato no Supabase
+      console.log('Atualizando status do contrato no Supabase...');
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ status: 'Liberado48' })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Enviar o PPPoE e o radius para o N8N para atualização no MySQL
+      console.log('Enviando solicitação para o N8N...');
+      await updateUserGroupName(selectedContrato.pppoe, 'liberar48h', selectedContrato.planos.radius);
+
+      console.log('Processo de liberação 48h concluído com sucesso!');
+      toast.success('Cliente liberado 48h com sucesso!');
+      setShowLiberar48hModal(false);
+      setSelectedContrato(null);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
+    } catch (error: any) {
+      console.error('Erro ao liberar 48h cliente:', error.message);
+      toast.error(`Erro ao liberar 48h cliente: ${error.message}`);
+    } finally {
+      setLiberar48hLoading(false);
+    }
+  };
+
+  // Handler para fechar o modal de liberação 48h
+  const handleCloseLiberar48hModal = () => {
+    setShowLiberar48hModal(false);
     setSelectedContrato(null);
   };
 
@@ -537,12 +683,12 @@ const Financeiro: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Botão Liberar Cliente 48h - Mostrar apenas para contratos bloqueados */}
+                          {/* Botão Liberar 48h Cliente - Mostrar apenas para contratos bloqueados */}
                           {contractStatusFilter === 'Bloqueado' && (
                             <button
-                              onClick={() => {}}
-                              className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
-                              title="Liberar Cliente 48h"
+                              onClick={() => handleLiberar48hCliente(contrato)}
+                              className="text-blue-600 hover:text-blue-700"
+                              title="Liberar 48h"
                             >
                               <ClockIcon className="h-5 w-5" />
                             </button>
@@ -643,6 +789,27 @@ O cliente terá acesso à internet imediatamente.`}
                 cancelButtonText="Cancelar"
                 confirmButtonClass="bg-green-600 hover:bg-green-700 focus:ring-green-500"
                 isLoading={liberarLoading}
+              />
+            )}
+
+            {/* Modal de Liberação 48h */}
+            {showLiberar48hModal && selectedContrato && (
+              <ConfirmacaoModal
+                isOpen={showLiberar48hModal}
+                onClose={handleCloseLiberar48hModal}
+                onConfirm={handleConfirmarLiberacao48h}
+                title="Liberar 48h Cliente"
+                message={`Tem certeza que deseja liberar por 48h o cliente ${selectedContrato.cliente_nome} (PPPoE: ${selectedContrato.pppoe})? 
+                
+Esta ação irá:
+1. Alterar o status do contrato para "Liberado48" no sistema
+2. Enviar o PPPoE para o webhook da Apanet para liberação no Radius
+                
+O cliente terá acesso à internet por 48h.`}
+                confirmButtonText="Sim, Liberar 48h"
+                cancelButtonText="Cancelar"
+                confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+                isLoading={liberar48hLoading}
               />
             )}
 
