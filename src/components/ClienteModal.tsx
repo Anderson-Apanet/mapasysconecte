@@ -456,7 +456,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
                         >
                           <div className="flex-1">
                             <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                              {contrato.pppoe} - {contrato.planos?.nome || 'Sem plano'}
+                              {contrato.pppoe} / {contrato.senha} - {contrato.planos?.nome || 'Sem plano'}
                             </h4>
                             <div className="mt-1 flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-300">
                               <span>Status: {contrato.status || 'Não definido'}</span>
