@@ -90,6 +90,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   const [selectedPlanoId, setSelectedPlanoId] = useState<number | null>(null);
   const [loadingPlanos, setLoadingPlanos] = useState(false);
   const [isChangingPlan, setIsChangingPlan] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
 
   // Atualiza os dados quando o contrato mudar
   useEffect(() => {
@@ -179,8 +180,11 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
     setShowBairrosList(false);
   };
 
-  const handleSave = async () => {
+  const handleSaveChanges = async () => {
     try {
+      if (!contratoAtual) return;
+
+      // Atualizar o contrato com os dados editados
       const { error } = await supabase
         .from('contratos')
         .update({
@@ -188,73 +192,33 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
           complemento: editedData.complemento,
           id_bairro: editedData.id_bairro
         })
-        .eq('id', contrato.id);
+        .eq('id', contratoAtual.id);
 
       if (error) throw error;
 
-      // Recarrega os dados do contrato após salvar
-      const { data: updatedContrato, error: fetchError } = await supabase
-        .from('contratos')
-        .select(`
-          *,
-          bairros (
-            id,
-            nome,
-            cidade
-          ),
-          planos (
-            id,
-            nome,
-            valor,
-            radius
-          )
-        `)
-        .eq('id', contrato.id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      if (!updatedContrato.planos?.radius) {
-        console.error('Plano não tem o campo radius definido');
-        toast.error('Plano não tem o campo radius definido');
-      } else {
-        // Adiciona as credenciais no banco radius
-        try {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-          const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : baseUrl;
-          const response = await fetch(`${apiUrl}/support/add-contract-credentials`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              username: updatedContrato.pppoe,
-              password: updatedContrato.senha,
-              groupname: updatedContrato.planos.radius
-            }),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Erro ao adicionar credenciais no radius:', errorData);
-            toast.error('Erro ao adicionar credenciais no radius');
-          }
-        } catch (error) {
-          console.error('Erro ao adicionar credenciais no radius:', error);
-          toast.error('Erro ao adicionar credenciais no radius');
-        }
-      }
-
-      // Atualiza o estado local e notifica o componente pai
-      setContratoAtual(updatedContrato);
-      if (typeof onSave === 'function') {
-        onSave(updatedContrato);
-      }
-
+      // Atualizar o contrato local
+      setContratoAtual({
+        ...contratoAtual,
+        endereco: editedData.endereco,
+        complemento: editedData.complemento,
+        id_bairro: editedData.id_bairro
+      });
+      
       toast.success('Endereço atualizado com sucesso!');
+      
+      // Notificar o componente pai
+      if (onSave) {
+        onSave({
+          ...contratoAtual,
+          endereco: editedData.endereco,
+          complemento: editedData.complemento,
+          id_bairro: editedData.id_bairro
+        });
+      }
+
       setIsEditing(false);
     } catch (error) {
-      console.error('Erro ao salvar:', error);
+      console.error('Erro ao salvar alterações:', error);
       toast.error('Erro ao atualizar endereço');
     }
   };
@@ -490,46 +454,19 @@ Arroio do Sal, ${currentDate}
 </div>`;
   };
 
-  const handleSaveChanges = async () => {
-    try {
-      if (!contratoAtual) return;
-
-      // Atualizar o contrato com os dados editados
-      const { data, error } = await supabase
-        .from('contratos')
-        .update({
-          endereco: editedData.endereco,
-          complemento: editedData.complemento,
-          id_bairro: editedData.id_bairro
-        })
-        .eq('id', contratoAtual.id)
-        .select('*');
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        // Atualizar o contrato local
-        setContratoAtual(data[0]);
-        toast.success('Contrato atualizado com sucesso!');
-        
-        // Notificar o componente pai
-        if (onSave) {
-          onSave(data[0]);
-        }
-      }
-
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Erro ao salvar alterações:', error);
-      toast.error('Erro ao salvar alterações');
-    }
-  };
-
   const handleSavePlanChange = async () => {
     try {
       if (!contratoAtual || !selectedPlanoId) return;
       
+      // Buscar informações do plano selecionado
+      const selectedPlano = planos.find(p => p.id === selectedPlanoId);
+      if (!selectedPlano) {
+        toast.error('Plano não encontrado');
+        return;
+      }
+      
       // Atualizar o plano do contrato
+      setIsSavingPlan(true);
       const { data, error } = await supabase
         .from('contratos')
         .update({
@@ -543,6 +480,36 @@ Arroio do Sal, ${currentDate}
       if (data && data.length > 0) {
         // Atualizar o contrato local
         setContratoAtual(data[0]);
+        
+        // Enviar notificação para o webhook do n8n
+        try {
+          const webhookUrl = 'https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e';
+          const webhookData = {
+            pppoe: contratoAtual.pppoe,
+            acao: 'trocarplano',
+            radius: selectedPlano.radius
+          };
+          
+          console.log('Enviando dados para webhook:', webhookData);
+          
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(webhookData),
+          });
+          
+          if (response.ok) {
+            console.log('Notificação de troca de plano enviada com sucesso');
+          } else {
+            console.error('Erro ao enviar notificação de troca de plano:', await response.text());
+          }
+        } catch (webhookError) {
+          console.error('Erro ao enviar notificação para webhook:', webhookError);
+          // Não vamos interromper o fluxo se o webhook falhar
+        }
+        
         toast.success('Plano do contrato atualizado com sucesso!');
         
         // Notificar o componente pai
@@ -552,9 +519,11 @@ Arroio do Sal, ${currentDate}
       }
 
       setIsChangingPlan(false);
+      setIsSavingPlan(false);
     } catch (error) {
       console.error('Erro ao alterar plano:', error);
       toast.error('Erro ao alterar plano do contrato');
+      setIsSavingPlan(false);
     }
   };
 
@@ -719,10 +688,22 @@ Arroio do Sal, ${currentDate}
                     <button 
                       onClick={handleSavePlanChange}
                       className="text-green-600 hover:text-green-700 text-sm flex items-center"
-                      disabled={!selectedPlanoId}
+                      disabled={!selectedPlanoId || isSavingPlan}
                     >
-                      <CheckIcon className="h-4 w-4 mr-1" />
-                      Salvar
+                      {isSavingPlan ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckIcon className="h-4 w-4 mr-1" />
+                          Salvar
+                        </>
+                      )}
                     </button>
                     <button 
                       onClick={() => {
@@ -730,6 +711,7 @@ Arroio do Sal, ${currentDate}
                         setSelectedPlanoId(contratoAtual?.planos?.id || null);
                       }}
                       className="text-red-600 hover:text-red-700 text-sm flex items-center"
+                      disabled={isSavingPlan}
                     >
                       <XMarkIcon className="h-4 w-4 mr-1" />
                       Cancelar
