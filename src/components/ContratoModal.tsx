@@ -85,6 +85,12 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   const [selectedBairro, setSelectedBairro] = useState<Bairro | null>(null);
   const [showBairrosList, setShowBairrosList] = useState(false);
 
+  // Estados para gerenciar a alteração de plano
+  const [planos, setPlanos] = useState<any[]>([]);
+  const [selectedPlanoId, setSelectedPlanoId] = useState<number | null>(null);
+  const [loadingPlanos, setLoadingPlanos] = useState(false);
+  const [isChangingPlan, setIsChangingPlan] = useState(false);
+
   // Atualiza os dados quando o contrato mudar
   useEffect(() => {
     if (contrato) {
@@ -98,8 +104,45 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
         setSelectedBairro(contrato.bairros);
         setBairroSearchTerm(contrato.bairros.nome);
       }
+      
+      // Definir o plano atual como selecionado
+      if (contrato.planos?.id) {
+        setSelectedPlanoId(contrato.planos.id);
+      }
     }
   }, [contrato]);
+  
+  // Carregar planos disponíveis quando o modal for aberto
+  useEffect(() => {
+    if (isOpen) {
+      fetchPlanos();
+    }
+  }, [isOpen]);
+  
+  // Função para buscar planos disponíveis
+  const fetchPlanos = async () => {
+    try {
+      setLoadingPlanos(true);
+      const { data, error } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setPlanos(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+      toast.error('Erro ao carregar planos');
+    } finally {
+      setLoadingPlanos(false);
+    }
+  };
 
   const searchBairros = async (searchTerm: string) => {
     if (searchTerm.length >= 2) {
@@ -447,6 +490,74 @@ Arroio do Sal, ${currentDate}
 </div>`;
   };
 
+  const handleSaveChanges = async () => {
+    try {
+      if (!contratoAtual) return;
+
+      // Atualizar o contrato com os dados editados
+      const { data, error } = await supabase
+        .from('contratos')
+        .update({
+          endereco: editedData.endereco,
+          complemento: editedData.complemento,
+          id_bairro: editedData.id_bairro
+        })
+        .eq('id', contratoAtual.id)
+        .select('*');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Atualizar o contrato local
+        setContratoAtual(data[0]);
+        toast.success('Contrato atualizado com sucesso!');
+        
+        // Notificar o componente pai
+        if (onSave) {
+          onSave(data[0]);
+        }
+      }
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Erro ao salvar alterações:', error);
+      toast.error('Erro ao salvar alterações');
+    }
+  };
+
+  const handleSavePlanChange = async () => {
+    try {
+      if (!contratoAtual || !selectedPlanoId) return;
+      
+      // Atualizar o plano do contrato
+      const { data, error } = await supabase
+        .from('contratos')
+        .update({
+          id_plano: selectedPlanoId
+        })
+        .eq('id', contratoAtual.id)
+        .select('*, planos(*)');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Atualizar o contrato local
+        setContratoAtual(data[0]);
+        toast.success('Plano do contrato atualizado com sucesso!');
+        
+        // Notificar o componente pai
+        if (onSave) {
+          onSave(data[0]);
+        }
+      }
+
+      setIsChangingPlan(false);
+    } catch (error) {
+      console.error('Erro ao alterar plano:', error);
+      toast.error('Erro ao alterar plano do contrato');
+    }
+  };
+
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
@@ -469,7 +580,7 @@ Arroio do Sal, ${currentDate}
                 ) : (
                   <>
                     <button
-                      onClick={handleSave}
+                      onClick={handleSaveChanges}
                       className="text-green-600 hover:text-green-700"
                       title="Salvar alterações"
                     >
@@ -593,20 +704,82 @@ Arroio do Sal, ${currentDate}
 
             {/* Card de Detalhes do Plano */}
             <div className="bg-white shadow rounded-lg p-4 mb-4">
-              <h3 className="text-lg font-medium mb-3">Detalhes do Plano</h3>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-medium">Detalhes do Plano</h3>
+                {!isChangingPlan ? (
+                  <button 
+                    onClick={() => setIsChangingPlan(true)}
+                    className="text-blue-600 hover:text-blue-700 text-sm flex items-center"
+                  >
+                    <PencilIcon className="h-4 w-4 mr-1" />
+                    Alterar Plano
+                  </button>
+                ) : (
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={handleSavePlanChange}
+                      className="text-green-600 hover:text-green-700 text-sm flex items-center"
+                      disabled={!selectedPlanoId}
+                    >
+                      <CheckIcon className="h-4 w-4 mr-1" />
+                      Salvar
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setIsChangingPlan(false);
+                        setSelectedPlanoId(contratoAtual?.planos?.id || null);
+                      }}
+                      className="text-red-600 hover:text-red-700 text-sm flex items-center"
+                    >
+                      <XMarkIcon className="h-4 w-4 mr-1" />
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Nome do Plano</p>
-                  <p className="text-sm font-medium">{contratoAtual?.planos?.nome}</p>
+                  {isChangingPlan ? (
+                    <div className="mt-1">
+                      <select
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                        value={selectedPlanoId || ''}
+                        onChange={(e) => setSelectedPlanoId(Number(e.target.value))}
+                      >
+                        <option value="">Selecione um plano</option>
+                        {planos.map((plano) => (
+                          <option key={plano.id} value={plano.id}>
+                            {plano.nome}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingPlanos && <p className="text-xs text-gray-500 mt-1">Carregando planos...</p>}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium">{contratoAtual?.planos?.nome}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Valor</p>
-                  <p className="text-sm font-medium">
-                    {new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL'
-                    }).format(contratoAtual?.planos?.valor || 0)}
-                  </p>
+                  {isChangingPlan ? (
+                    <p className="text-sm font-medium">
+                      {selectedPlanoId 
+                        ? new Intl.NumberFormat('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                          }).format(planos.find(p => p.id === selectedPlanoId)?.valor || 0)
+                        : 'Selecione um plano'}
+                    </p>
+                  ) : (
+                    <p className="text-sm font-medium">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL'
+                      }).format(contratoAtual?.planos?.valor || 0)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Data de Instalação</p>
