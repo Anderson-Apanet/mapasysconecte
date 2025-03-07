@@ -49,6 +49,9 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [plano, setPlano] = useState<any>(null);
   const [isGerandoCarne, setIsGerandoCarne] = useState(false);
   const [isCriandoTitulos, setIsCriandoTitulos] = useState(false);
+  const [tituloParaExcluir, setTituloParaExcluir] = useState<number | null>(null);
+  const [showConfirmacaoExclusao, setShowConfirmacaoExclusao] = useState(false);
+  const [tituloSelecionadoParaExclusao, setTituloSelecionadoParaExclusao] = useState<any>(null);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -144,6 +147,61 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       return;
     }
     window.open(invoiceUrl, '_blank');
+  };
+
+  // Função para lidar com a exclusão de títulos
+  const handleExcluirTitulo = async (titulo: any) => {
+    try {
+      // Verificar se temos as informações necessárias
+      if (!titulo || !titulo.id || !titulo.vencimento || !pppoe) {
+        toast.error('Informações do título incompletas');
+        return;
+      }
+
+      setTituloParaExcluir(titulo.id);
+      
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        pppoe: pppoe,
+        vencimento: titulo.vencimento
+      };
+      
+      console.log('Enviando dados para webhook de exclusão de título:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      try {
+        const response = await fetch('https://webhooks.apanet.tec.br/webhook/de279cf7-aa2f-49d1-b2aa-eae061ab76a4', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookData),
+        });
+        
+        if (response.ok) {
+          console.log('Solicitação de exclusão de título enviada com sucesso');
+          toast.success('Solicitação de exclusão de título enviada com sucesso');
+          
+          // Atualizar a lista de títulos após a exclusão
+          setTimeout(() => {
+            buscarTitulosLocais();
+          }, 1000);
+        } else {
+          const errorText = await response.text();
+          console.error('Erro ao solicitar exclusão de título:', errorText);
+          toast.error('Erro ao solicitar exclusão de título');
+        }
+      } catch (error) {
+        console.error('Erro ao enviar solicitação para webhook:', error);
+        toast.error('Erro ao enviar solicitação para webhook');
+      } finally {
+        setTituloParaExcluir(null);
+      }
+    } catch (error) {
+      console.error('Erro ao processar exclusão de título:', error);
+      toast.error('Erro ao processar exclusão de título');
+      setTituloParaExcluir(null);
+    }
   };
 
   const handleGerarPDFBoletos = async () => {
@@ -361,6 +419,26 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     }
   };
 
+  // Função para abrir o modal de confirmação de exclusão
+  const abrirConfirmacaoExclusao = (titulo: any) => {
+    setTituloSelecionadoParaExclusao(titulo);
+    setShowConfirmacaoExclusao(true);
+  };
+
+  // Função para fechar o modal de confirmação de exclusão
+  const fecharConfirmacaoExclusao = () => {
+    setShowConfirmacaoExclusao(false);
+    setTituloSelecionadoParaExclusao(null);
+  };
+
+  // Função para confirmar a exclusão do título
+  const confirmarExclusaoTitulo = () => {
+    if (tituloSelecionadoParaExclusao) {
+      handleExcluirTitulo(tituloSelecionadoParaExclusao);
+      fecharConfirmacaoExclusao();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -489,6 +567,18 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                       <DocumentArrowDownIcon className="h-5 w-5" />
                                     )}
                                   </button>
+                                  <button
+                                    title="Excluir título"
+                                    className="text-red-600 hover:text-red-800"
+                                    onClick={() => abrirConfirmacaoExclusao(titulo)}
+                                    disabled={tituloParaExcluir === titulo.id}
+                                  >
+                                    {tituloParaExcluir === titulo.id ? (
+                                      <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                      <TrashIcon className="h-5 w-5" />
+                                    )}
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -599,6 +689,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   <button
                     onClick={() => setShowCriarTitulosModal(false)}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    type="button"
                   >
                     Cancelar
                   </button>
@@ -606,6 +697,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                     onClick={enviarParaN8N}
                     disabled={!dataInicialVencimento || quantidadeTitulos < 1 || isCriandoTitulos}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    type="button"
                   >
                     {isCriandoTitulos ? (
                       <>
@@ -684,6 +776,71 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmacao Exclusao Modal */}
+      {showConfirmacaoExclusao && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            {/* Overlay para fechar o modal ao clicar fora dele */}
+            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => fecharConfirmacaoExclusao()} aria-hidden="true"></div>
+            
+            {/* Conteúdo do modal */}
+            <div className="relative bg-white p-6 rounded-lg max-w-md w-full z-[10000] shadow-xl transform transition-all">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold" id="modal-title">Confirmação de Exclusão</h3>
+                <button 
+                  onClick={() => fecharConfirmacaoExclusao()} 
+                  className="text-gray-500 hover:text-gray-700"
+                  type="button"
+                  aria-label="Fechar"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-700">
+                      Esta ação não pode ser desfeita. O título será excluído permanentemente.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-gray-600 text-sm mb-2">
+                  Você tem certeza que deseja excluir o título com as seguintes informações?
+                </p>
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloSelecionadoParaExclusao?.vencimento ? new Date(tituloSelecionadoParaExclusao.vencimento + 'T00:00:00').toLocaleDateString() : ''}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Valor:</span> {tituloSelecionadoParaExclusao?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tituloSelecionadoParaExclusao.valor) : ''}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Status:</span> {tituloSelecionadoParaExclusao?.pago ? 'Pago' : 'Em Aberto'}</p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => fecharConfirmacaoExclusao()}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  type="button"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => confirmarExclusaoTitulo()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  type="button"
+                >
+                  Excluir
+                </button>
+              </div>
             </div>
           </div>
         </div>

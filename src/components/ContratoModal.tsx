@@ -479,25 +479,28 @@ Arroio do Sal, ${currentDate}
 
       if (data && data.length > 0) {
         // Atualizar o contrato local
-        setContratoAtual(data[0]);
+        setContratoAtual({
+          ...contratoAtual,
+          id_plano: selectedPlanoId,
+          planos: selectedPlano
+        });
         
-        // Enviar notificação para o webhook do n8n
+        // Enviar notificação para o webhook (n8n)
         try {
-          const webhookUrl = 'https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e';
           const webhookData = {
             pppoe: contratoAtual.pppoe,
-            acao: 'trocarplano',
+            action: "trocarplano",
             radius: selectedPlano.radius
           };
           
-          console.log('Enviando dados para webhook:', webhookData);
+          console.log('Enviando notificação de troca de plano:', webhookData);
           
-          const response = await fetch(webhookUrl, {
+          const response = await fetch('https://webhooks.apanet.tec.br/webhook/de279cf7-aa2f-49d1-b2aa-eae061ab76a4', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(webhookData),
+            body: JSON.stringify(webhookData)
           });
           
           if (response.ok) {
