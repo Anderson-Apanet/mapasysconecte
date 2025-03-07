@@ -1009,7 +1009,7 @@ export default function NovoLancamentoModal({
                       ) : contratos.length > 0 ? (
                         contratos.map((contrato) => (
                           <option key={contrato.id} value={contrato.id}>
-                            {contrato.numero} - {contrato.plano} ({contrato.status})
+                            {contrato.numero} - {contrato.pppoe} - {contrato.plano} ({contrato.status})
                           </option>
                         ))
                       ) : (
