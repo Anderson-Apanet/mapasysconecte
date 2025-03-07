@@ -8,7 +8,6 @@ import ptBrLocale from '@fullcalendar/core/locales/pt-br';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { EventModal } from '../components/Agenda/EventModal';
-import { MoreEventsPopover } from '../components/Agenda/MoreEventsPopover';
 import { AgendaEvent } from '../types/agenda';
 import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates, updateContratoStatus } from '../services/agenda';
 import { debounce } from 'lodash';
@@ -25,15 +24,19 @@ export default function Agenda() {
     cor: '#3788d8',
     responsaveis: []
   });
-  const [selectedMoreEvents, setSelectedMoreEvents] = useState<{
-    events: any[];
-    position: { top: number; left: number };
-  } | null>(null);
   const [searchResults, setSearchResults] = useState<Array<{ id: number; pppoe: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<Array<{ id: number; nome: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [currentViewType, setCurrentViewType] = useState<string>('dayGridMonth');
+  const [selectedMoreEvents, setSelectedMoreEvents] = useState<{
+    events: any[];
+    position: {
+      top: number;
+      left: number;
+    }
+  } | null>(null);
   const calendarRef = useRef<FullCalendar | null>(null);
   const lastFetchRef = useRef<{ start: string, end: string } | null>(null);
 
@@ -75,18 +78,12 @@ export default function Agenda() {
         failureCallback(error);
       }
       // Corrigindo o erro de renderização do toast
-      toast({
-        title: 'Erro ao carregar eventos',
-        description: String(error.message || 'Erro desconhecido'),
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      toast.error('Erro ao carregar eventos');
     } finally {
       setLoading(false);
       setIsLoadingEvents(false);
     }
-  }, [toast, events, isLoadingEvents]);
+  }, []);
 
   const handleDateSelect = (selectInfo: any) => {
     const startDate = new Date(selectInfo.startStr);
@@ -208,30 +205,6 @@ export default function Agenda() {
     }
   };
 
-  const handleMoreEventsClick = (info: { date: Date; events: any[]; el: HTMLElement }) => {
-    const rect = info.el.getBoundingClientRect();
-    setSelectedMoreEvents({
-      events: info.events,
-      position: {
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX
-      }
-    });
-  };
-
-  const handleSearchPPPoE = async (searchTerm: string) => {
-    setIsSearching(true);
-    try {
-      const results = await searchContratos(searchTerm);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Erro ao buscar contratos:', error);
-      toast.error('Erro ao buscar contratos');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   const handleEventDrop = async (dropInfo: any) => {
     try {
       const eventId = parseInt(dropInfo.event.id);
@@ -251,6 +224,44 @@ export default function Agenda() {
     }
   };
 
+  const handleMoreEventsClick = (info: any) => {
+    console.log('Clique em Ver mais:', info);
+    
+    // Verificar se info.el existe antes de tentar acessar getBoundingClientRect
+    if (!info || !info.el) {
+      console.error('Elemento não encontrado para posicionar o popover');
+      return 'popover'; // Retorna popover para usar o comportamento padrão
+    }
+    
+    try {
+      const rect = info.el.getBoundingClientRect();
+      setSelectedMoreEvents({
+        events: info.events || [],
+        position: {
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao posicionar popover:', error);
+    }
+    
+    return 'popover';
+  };
+
+  const handleSearchPPPoE = async (searchTerm: string) => {
+    setIsSearching(true);
+    try {
+      const results = await searchContratos(searchTerm);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Erro ao buscar contratos:', error);
+      toast.error('Erro ao buscar contratos');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   // Usar debounce para evitar múltiplas chamadas em rápida sucessão
   const debouncedLoadEvents = useCallback(
     debounce((dateInfo) => {
@@ -261,13 +272,15 @@ export default function Agenda() {
 
   const handleDatesSet = (dateInfo: any) => {
     console.log('Período visualizado:', dateInfo.startStr, 'até', dateInfo.endStr);
+    console.log('Tipo de visualização atual:', dateInfo.view.type);
+    setCurrentViewType(dateInfo.view.type);
     debouncedLoadEvents(dateInfo);
   };
 
   // Debounce para a busca de PPPoE
   const debouncedSearch = useCallback(
     debounce(handleSearchPPPoE, 300),
-    []
+    [handleSearchPPPoE]
   );
 
   useEffect(() => {
@@ -283,11 +296,30 @@ export default function Agenda() {
     loadUsers();
   }, []);
 
+  const filterEvents = (events: any[]) => {
+    // Se a visualização for mensal, oculta eventos realizados
+    if (currentViewType === 'dayGridMonth') {
+      console.log('Filtrando eventos realizados na visualização mensal');
+      console.log('Total de eventos antes do filtro:', events.length);
+      
+      // Filtra os eventos onde extendedProps.realizada é true
+      const filteredEvents = events.filter(event => {
+        // Verifica se o evento tem extendedProps e se realizada não é true
+        return !event.extendedProps || event.extendedProps.realizada !== true;
+      });
+      
+      console.log('Total de eventos após o filtro:', filteredEvents.length);
+      return filteredEvents;
+    }
+    // Para outras visualizações, mostra todos os eventos
+    return events;
+  };
+
   return (
     <Layout>
       <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="h-full" onClick={() => selectedMoreEvents && setSelectedMoreEvents(null)}>
+          <div className="h-full">
             <FullCalendar
               ref={calendarRef}
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
@@ -312,13 +344,13 @@ export default function Agenda() {
               displayEventEnd={true}
               eventDisplay="block"
               eventOrder="start,-allDay"
-              events={events}
+              events={filterEvents(events)}
               datesSet={handleDatesSet}
               select={handleDateSelect}
               eventClick={handleEventClick}
               eventDrop={handleEventDrop}
               moreLinkContent={({ num }) => `Ver mais (${num})`}
-              moreLinkClick={handleMoreEventsClick}
+              moreLinkClick="popover"
               slotEventOverlap={false}
               locale={ptBrLocale}
               nowIndicator={true}
@@ -436,14 +468,6 @@ export default function Agenda() {
             isSearching={isSearching}
             onSearchPPPoE={debouncedSearch}
           />
-
-          {selectedMoreEvents && (
-            <MoreEventsPopover
-              events={selectedMoreEvents.events}
-              position={selectedMoreEvents.position}
-              onClose={() => setSelectedMoreEvents(null)}
-            />
-          )}
         </div>
       </div>
     </Layout>

@@ -1,25 +1,21 @@
 import React from 'react';
 
 interface MoreEventsPopoverProps {
-  selectedMoreEvents: {
-    events: any[];
-    position: {
-      top: number;
-      left: number;
-    };
-  } | null;
+  events: any[];
+  position: {
+    top: number;
+    left: number;
+  };
   onClose: () => void;
 }
 
-export function MoreEventsPopover({ selectedMoreEvents, onClose }: MoreEventsPopoverProps) {
-  if (!selectedMoreEvents) return null;
-
+export function MoreEventsPopover({ events, position, onClose }: MoreEventsPopoverProps) {
   return (
     <div
-      className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 p-2 min-w-[300px] max-h-[400px] overflow-y-auto"
+      className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 p-2 min-w-[300px] max-h-[400px] overflow-y-auto more-events-popover"
       style={{
-        top: selectedMoreEvents.position.top + 'px',
-        left: selectedMoreEvents.position.left + 'px'
+        top: position.top + 'px',
+        left: position.left + 'px'
       }}
     >
       <div className="flex justify-between items-center mb-2">
@@ -32,7 +28,7 @@ export function MoreEventsPopover({ selectedMoreEvents, onClose }: MoreEventsPop
         </button>
       </div>
       <div className="space-y-2">
-        {selectedMoreEvents.events.map((event: any) => (
+        {events.map((event: any) => (
           <div
             key={event.id}
             className="p-2 rounded"
