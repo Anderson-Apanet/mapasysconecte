@@ -297,9 +297,9 @@ export default function Agenda() {
   }, []);
 
   const filterEvents = (events: any[]) => {
-    // Se a visualização for mensal, oculta eventos realizados
-    if (currentViewType === 'dayGridMonth') {
-      console.log('Filtrando eventos realizados na visualização mensal');
+    // Verifica se estamos no modo mensal ou semanal
+    if (currentViewType === 'dayGridMonth' || currentViewType === 'timeGridWeek') {
+      console.log(`Filtrando eventos realizados na visualização ${currentViewType}`);
       console.log('Total de eventos antes do filtro:', events.length);
       
       // Filtra os eventos onde extendedProps.realizada é true
@@ -415,23 +415,33 @@ export default function Agenda() {
                   ? eventInfo.timeText 
                   : '';
 
+                // Aplicar classes específicas para a visualização de lista
+                let textColorClass = '';
+                if (viewType === 'listWeek' || viewType === 'listDay' || viewType === 'listMonth') {
+                  if (isRealizada) textColorClass = 'text-gray-400';
+                  else if (isCancelado) textColorClass = 'text-red-200';
+                  else if (isParcial) textColorClass = 'text-yellow-200';
+                  else if (isPrioritario) textColorClass = 'text-orange-200';
+                  else textColorClass = 'text-white';
+                }
+
                 const commonContent = (
                   <>
-                    <div className="font-semibold text-sm">
+                    <div className={`font-semibold text-sm ${textColorClass}`}>
                       {event.title}
                     </div>
                     {timeText && (
-                      <div className="text-xs opacity-75">
+                      <div className={`text-xs opacity-75 ${textColorClass}`}>
                         {timeText}
                       </div>
                     )}
                     {extendedProps.descricao && (
-                      <div className="text-xs mt-1 opacity-75 line-clamp-2">
+                      <div className={`text-xs mt-1 opacity-75 line-clamp-2 ${textColorClass}`}>
                         {extendedProps.descricao}
                       </div>
                     )}
                     {extendedProps.usuario_resp && (
-                      <div className="text-xs mt-1 opacity-75">
+                      <div className={`text-xs mt-1 opacity-75 ${textColorClass}`}>
                         Resp: {extendedProps.usuario_resp}
                       </div>
                     )}
@@ -444,6 +454,22 @@ export default function Agenda() {
                       <div className="p-1">
                         {commonContent}
                       </div>
+                    </div>
+                  );
+                }
+
+                // Visualização de lista
+                if (viewType === 'listWeek' || viewType === 'listDay' || viewType === 'listMonth') {
+                  let listBgClass = '';
+                  if (isRealizada) listBgClass = 'bg-gray-700';
+                  else if (isCancelado) listBgClass = 'bg-red-800';
+                  else if (isParcial) listBgClass = 'bg-yellow-800';
+                  else if (isPrioritario) listBgClass = 'bg-orange-800';
+                  else listBgClass = 'bg-blue-800';
+                  
+                  return (
+                    <div className={`p-1 ${listBgClass}`}>
+                      {commonContent}
                     </div>
                   );
                 }
