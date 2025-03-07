@@ -39,7 +39,6 @@ const Financeiro: React.FC = () => {
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [contractStatusFilter, setContractStatusFilter] = useState('Todos');
-  const [showAsaasOnly, setShowAsaasOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -56,7 +55,9 @@ const Financeiro: React.FC = () => {
     { value: 'Bloqueado', label: 'Contratos Bloqueados' },
     { value: 'Liberado48', label: 'Contratos Liberados 48h' },
     { value: 'Cancelado', label: 'Contratos Cancelados' },
-    { value: 'pendencia', label: 'Contratos com Pendência' }
+    { value: 'pendencia', label: 'Contratos com Pendência' },
+    { value: 'atraso', label: 'Contratos em Atraso' },
+    { value: 'atraso15', label: 'Contratos em Atraso > 15 dias' }
   ];
 
   // Função para carregar contratos com paginação e busca
@@ -73,7 +74,44 @@ const Financeiro: React.FC = () => {
       if (searchTerm) {
         countQuery = countQuery.ilike('pppoe', `%${searchTerm}%`);
       }
-      if (status === 'pendencia') {
+      
+      // Filtros especiais que requerem consultas adicionais
+      if (status === 'atraso' || status === 'atraso15') {
+        // Para estes filtros, precisamos primeiro buscar os IDs dos contratos com títulos em atraso
+        const dataAtual = new Date().toISOString().split('T')[0];
+        
+        let titulosQuery = supabase
+          .from('titulos')
+          .select('id_contrato')
+          .eq('pago', false)
+          .lt('vencimento', dataAtual);
+        
+        // Para atraso15, adicionar filtro de 15 dias atrás
+        if (status === 'atraso15') {
+          const data15DiasAtras = new Date();
+          data15DiasAtras.setDate(data15DiasAtras.getDate() - 15);
+          const data15DiasAtrasStr = data15DiasAtras.toISOString().split('T')[0];
+          titulosQuery = titulosQuery.lt('vencimento', data15DiasAtrasStr);
+        }
+        
+        const { data: titulosAtrasados, error: titulosError } = await titulosQuery;
+        
+        if (titulosError) throw titulosError;
+        
+        if (titulosAtrasados && titulosAtrasados.length > 0) {
+          // Extrair IDs únicos de contratos com títulos em atraso
+          const idsContratosAtrasados = [...new Set(titulosAtrasados.map(t => t.id_contrato))];
+          countQuery = countQuery
+            .in('id', idsContratosAtrasados)
+            .neq('status', 'Cancelado');
+        } else {
+          // Se não houver contratos em atraso, retornar lista vazia
+          setTotalCount(0);
+          setContratos([]);
+          setLoading(false);
+          return;
+        }
+      } else if (status === 'pendencia') {
         countQuery = countQuery.eq('pendencia', true);
       } else if (status && status !== 'Todos') {
         countQuery = countQuery.eq('status', status);
@@ -81,10 +119,7 @@ const Financeiro: React.FC = () => {
         // Para "Todos", mostrar todos os contratos exceto os cancelados
         countQuery = countQuery.neq('status', 'Cancelado');
       }
-      if (showAsaasOnly) {
-        countQuery = countQuery.not('clientes.idasaas', 'is', null);
-      }
-
+      
       const { count, error: countError } = await countQuery;
 
       if (countError) throw countError;
@@ -101,16 +136,49 @@ const Financeiro: React.FC = () => {
       if (searchTerm) {
         dataQuery = dataQuery.ilike('pppoe', `%${searchTerm}%`);
       }
-      if (status === 'pendencia') {
+      
+      // Filtros especiais que requerem consultas adicionais
+      if (status === 'atraso' || status === 'atraso15') {
+        // Para estes filtros, precisamos primeiro buscar os IDs dos contratos com títulos em atraso
+        const dataAtual = new Date().toISOString().split('T')[0];
+        
+        let titulosQuery = supabase
+          .from('titulos')
+          .select('id_contrato')
+          .eq('pago', false)
+          .lt('vencimento', dataAtual);
+        
+        // Para atraso15, adicionar filtro de 15 dias atrás
+        if (status === 'atraso15') {
+          const data15DiasAtras = new Date();
+          data15DiasAtras.setDate(data15DiasAtras.getDate() - 15);
+          const data15DiasAtrasStr = data15DiasAtras.toISOString().split('T')[0];
+          titulosQuery = titulosQuery.lt('vencimento', data15DiasAtrasStr);
+        }
+        
+        const { data: titulosAtrasados, error: titulosError } = await titulosQuery;
+        
+        if (titulosError) throw titulosError;
+        
+        if (titulosAtrasados && titulosAtrasados.length > 0) {
+          // Extrair IDs únicos de contratos com títulos em atraso
+          const idsContratosAtrasados = [...new Set(titulosAtrasados.map(t => t.id_contrato))];
+          dataQuery = dataQuery
+            .in('id', idsContratosAtrasados)
+            .neq('status', 'Cancelado');
+        } else {
+          // Se não houver contratos em atraso, retornar lista vazia
+          setContratos([]);
+          setLoading(false);
+          return;
+        }
+      } else if (status === 'pendencia') {
         dataQuery = dataQuery.eq('pendencia', true);
       } else if (status && status !== 'Todos') {
         dataQuery = dataQuery.eq('status', status);
       } else if (status === 'Todos') {
         // Para "Todos", mostrar todos os contratos exceto os cancelados
         dataQuery = dataQuery.neq('status', 'Cancelado');
-      }
-      if (showAsaasOnly) {
-        dataQuery = dataQuery.not('clientes.idasaas', 'is', null);
       }
 
       // Adicionar paginação
@@ -150,7 +218,7 @@ const Financeiro: React.FC = () => {
   // Efeito para carregar os contratos quando a página, termo de busca, status ou filtro Asaas mudar
   useEffect(() => {
     fetchContratos(currentPage, searchTerm, contractStatusFilter);
-  }, [currentPage, searchTerm, contractStatusFilter, showAsaasOnly]);
+  }, [currentPage, searchTerm, contractStatusFilter]);
 
   // Handler para mudança no termo de busca
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,20 +342,6 @@ const Financeiro: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* Filtro de Asaas */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="asaasFilter"
-                      checked={showAsaasOnly}
-                      onChange={(e) => setShowAsaasOnly(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="asaasFilter" className="ml-2 text-sm text-gray-700">
-                      Apenas clientes Asaas
-                    </label>
                   </div>
 
                   {/* Contador de Resultados */}
