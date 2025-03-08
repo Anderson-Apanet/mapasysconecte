@@ -52,6 +52,21 @@ const Financeiro: React.FC = () => {
   const [contratoParaLiberar, setContratoParaLiberar] = useState<any>(null);
   const [isLiberando, setIsLiberando] = useState(false);
 
+  // Estados para o modal de confirmação de liberação por 48 horas
+  const [showLiberar48Modal, setShowLiberar48Modal] = useState(false);
+  const [contratoParaLiberar48, setContratoParaLiberar48] = useState<any>(null);
+  const [isLiberando48, setIsLiberando48] = useState(false);
+
+  // Estados para o modal de confirmação de cancelamento
+  const [showCancelarModal, setShowCancelarModal] = useState(false);
+  const [contratoParaCancelar, setContratoParaCancelar] = useState<any>(null);
+  const [isCancelando, setIsCancelando] = useState(false);
+
+  // Estados para o modal de confirmação de bloqueio
+  const [showBloquearModal, setShowBloquearModal] = useState(false);
+  const [contratoParaBloquear, setContratoParaBloquear] = useState<any>(null);
+  const [isBloqueando, setIsBloqueando] = useState(false);
+
   // Atualizar as opções de status do contrato
   const CONTRACT_STATUS_OPTIONS = [
     { value: 'Todos', label: 'Todos os Contratos' },
@@ -263,6 +278,24 @@ const Financeiro: React.FC = () => {
     setShowLiberarModal(true);
   };
 
+  // Handler para abrir o modal de confirmação de liberação por 48 horas
+  const handleOpenLiberar48Modal = (contrato: any) => {
+    setContratoParaLiberar48(contrato);
+    setShowLiberar48Modal(true);
+  };
+
+  // Handler para abrir o modal de confirmação de cancelamento
+  const handleOpenCancelarModal = (contrato: any) => {
+    setContratoParaCancelar(contrato);
+    setShowCancelarModal(true);
+  };
+
+  // Handler para abrir o modal de confirmação de bloqueio
+  const handleOpenBloquearModal = (contrato: any) => {
+    setContratoParaBloquear(contrato);
+    setShowBloquearModal(true);
+  };
+
   // Handler para confirmar a liberação do cliente
   const handleConfirmarLiberacao = async () => {
     if (!contratoParaLiberar || !contratoParaLiberar.pppoe) {
@@ -332,6 +365,224 @@ const Financeiro: React.FC = () => {
       setIsLiberando(false);
       setShowLiberarModal(false);
       setContratoParaLiberar(null);
+    }
+  };
+
+  // Handler para confirmar a liberação do cliente por 48 horas
+  const handleConfirmarLiberacao48 = async () => {
+    if (!contratoParaLiberar48 || !contratoParaLiberar48.pppoe) {
+      toast.error('Dados do contrato incompletos');
+      return;
+    }
+
+    setIsLiberando48(true);
+    try {
+      // Buscar o valor do campo radius do plano vinculado ao contrato
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', contratoParaLiberar48.id_plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+        toast.error('Erro ao buscar dados do plano');
+        setIsLiberando48(false);
+        return;
+      }
+
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        pppoe: contratoParaLiberar48.pppoe,
+        radius: planoData?.radius || '',
+        acao: 'liberar48'
+      };
+      
+      console.log('Enviando dados para webhook de liberação por 48h:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (response.ok) {
+        console.log('Solicitação de liberação por 48h enviada com sucesso');
+        toast.success('Cliente liberado por 48 horas com sucesso');
+        
+        // Atualizar o status do contrato no banco de dados
+        const { error: updateError } = await supabase
+          .from('contratos')
+          .update({ status: 'Liberado48' })
+          .eq('id', contratoParaLiberar48.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar status do contrato:', updateError);
+          toast.error('Erro ao atualizar status do contrato');
+        }
+        
+        // Atualizar a lista de contratos
+        fetchContratos(currentPage, searchTerm, contractStatusFilter);
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao solicitar liberação por 48h:', errorText);
+        toast.error('Erro ao solicitar liberação por 48h');
+      }
+    } catch (error) {
+      console.error('Erro ao processar liberação por 48h:', error);
+      toast.error('Erro ao processar liberação por 48h');
+    } finally {
+      setIsLiberando48(false);
+      setShowLiberar48Modal(false);
+      setContratoParaLiberar48(null);
+    }
+  };
+
+  // Handler para confirmar o cancelamento do contrato
+  const handleConfirmarCancelamento = async () => {
+    if (!contratoParaCancelar || !contratoParaCancelar.pppoe) {
+      toast.error('Dados do contrato incompletos');
+      return;
+    }
+
+    setIsCancelando(true);
+    try {
+      // Buscar o valor do campo radius do plano vinculado ao contrato
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', contratoParaCancelar.id_plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+        toast.error('Erro ao buscar dados do plano');
+        setIsCancelando(false);
+        return;
+      }
+
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        pppoe: contratoParaCancelar.pppoe,
+        radius: planoData?.radius || '',
+        acao: 'cancelar'
+      };
+      
+      console.log('Enviando dados para webhook de cancelamento:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (response.ok) {
+        console.log('Solicitação de cancelamento enviada com sucesso');
+        toast.success('Contrato cancelado com sucesso');
+        
+        // Atualizar o status do contrato no banco de dados
+        const { error: updateError } = await supabase
+          .from('contratos')
+          .update({ status: 'Cancelado' })
+          .eq('id', contratoParaCancelar.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar status do contrato:', updateError);
+          toast.error('Erro ao atualizar status do contrato');
+        }
+        
+        // Atualizar a lista de contratos
+        fetchContratos(currentPage, searchTerm, contractStatusFilter);
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao solicitar cancelamento:', errorText);
+        toast.error('Erro ao solicitar cancelamento');
+      }
+    } catch (error) {
+      console.error('Erro ao processar cancelamento:', error);
+      toast.error('Erro ao processar cancelamento');
+    } finally {
+      setIsCancelando(false);
+      setShowCancelarModal(false);
+      setContratoParaCancelar(null);
+    }
+  };
+
+  // Handler para confirmar o bloqueio do cliente
+  const handleConfirmarBloqueio = async () => {
+    if (!contratoParaBloquear || !contratoParaBloquear.pppoe) {
+      toast.error('Dados do contrato incompletos');
+      return;
+    }
+
+    setIsBloqueando(true);
+    try {
+      // Buscar o valor do campo radius do plano vinculado ao contrato
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', contratoParaBloquear.id_plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+        toast.error('Erro ao buscar dados do plano');
+        return;
+      }
+
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        pppoe: contratoParaBloquear.pppoe,
+        radius: planoData?.radius || '',
+        acao: 'bloquear'
+      };
+      
+      console.log('Enviando dados para webhook de bloqueio:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (response.ok) {
+        console.log('Solicitação de bloqueio enviada com sucesso');
+        toast.success('Cliente bloqueado com sucesso');
+        
+        // Atualizar o status do contrato no banco de dados
+        const { error: updateError } = await supabase
+          .from('contratos')
+          .update({ status: 'Bloqueado' })
+          .eq('id', contratoParaBloquear.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar status do contrato:', updateError);
+          toast.error('Erro ao atualizar status do contrato');
+        }
+        
+        // Atualizar a lista de contratos
+        fetchContratos(currentPage, searchTerm, contractStatusFilter);
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao solicitar bloqueio:', errorText);
+        toast.error('Erro ao solicitar bloqueio');
+      }
+    } catch (error) {
+      console.error('Erro ao processar bloqueio:', error);
+      toast.error('Erro ao processar bloqueio');
+    } finally {
+      setIsBloqueando(false);
+      setShowBloquearModal(false);
+      setContratoParaBloquear(null);
     }
   };
 
@@ -482,6 +733,7 @@ const Financeiro: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                          {/* Botão Ver Títulos - Sempre visível */}
                           <button
                             onClick={() => handleOpenTitulosModal(contrato)}
                             className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
@@ -490,60 +742,58 @@ const Financeiro: React.FC = () => {
                             <DocumentTextIcon className="h-5 w-5" />
                           </button>
                           
-                          {/* Botões de ação condicionais - Não mostrar quando o filtro estiver em "Todos" */}
-                          {contractStatusFilter !== 'Todos' && (
-                            <>
-                              {/* Botão Bloquear Cliente - Mostrar apenas quando o filtro estiver em Ativos */}
-                              {contractStatusFilter === 'Ativo' && (
-                                <button
-                                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                  title="Bloquear Cliente"
-                                >
-                                  <LockClosedIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                              
-                              {/* Botão Cancelar Cliente - Mostrar quando o filtro estiver em Bloqueados ou Agendados */}
-                              {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'Agendado') && (
-                                <button
-                                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                  title="Cancelar Cliente"
-                                >
-                                  <NoSymbolIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                              
-                              {/* Botão Liberar Cliente - Mostrar apenas quando o filtro estiver em Bloqueados */}
-                              {contractStatusFilter === 'Bloqueado' && (
-                                <button
-                                  onClick={() => handleOpenLiberarModal(contrato)}
-                                  className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                                  title="Liberar Cliente"
-                                >
-                                  <LockOpenIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                              
-                              {/* Botão Liberar Cliente 48 horas - Mostrar apenas quando o filtro estiver em Bloqueados */}
-                              {contractStatusFilter === 'Bloqueado' && (
-                                <button
-                                  className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
-                                  title="Liberar Cliente por 48 horas"
-                                >
-                                  <ClockIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                              
-                              {/* Botão Ativar Cliente - Mostrar apenas quando o filtro estiver em Agendados */}
-                              {contractStatusFilter === 'Agendado' && (
-                                <button
-                                  className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                                  title="Ativar Cliente"
-                                >
-                                  <CheckCircleIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                            </>
+                          {/* Botão Liberar Cliente - Mostrar quando o filtro estiver em Bloqueado ou Atraso */}
+                          {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'atraso') && (
+                            <button
+                              onClick={() => handleOpenLiberarModal(contrato)}
+                              className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                              title="Liberar Cliente"
+                            >
+                              <LockOpenIcon className="h-5 w-5" />
+                            </button>
+                          )}
+                          
+                          {/* Botão Bloquear Cliente - Mostrar quando o filtro estiver em Ativo ou Atraso */}
+                          {(contractStatusFilter === 'Ativo' || contractStatusFilter === 'atraso') && (
+                            <button
+                              onClick={() => handleOpenBloquearModal(contrato)}
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              title="Bloquear Contrato"
+                            >
+                              <NoSymbolIcon className="h-5 w-5" />
+                            </button>
+                          )}
+                          
+                          {/* Botão Liberar Cliente 48 horas - Mostrar apenas quando o filtro estiver em Bloqueados */}
+                          {contractStatusFilter === 'Bloqueado' && (
+                            <button
+                              onClick={() => handleOpenLiberar48Modal(contrato)}
+                              className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
+                              title="Liberar contrato por 48hs"
+                            >
+                              <ClockIcon className="h-5 w-5" />
+                            </button>
+                          )}
+                          
+                          {/* Botão Cancelar Contrato - Mostrar apenas quando o filtro estiver em Bloqueados */}
+                          {contractStatusFilter === 'Bloqueado' && (
+                            <button
+                              onClick={() => handleOpenCancelarModal(contrato)}
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              title="Cancelar Contrato"
+                            >
+                              <NoSymbolIcon className="h-5 w-5" />
+                            </button>
+                          )}
+                          
+                          {/* Botão Ativar Cliente - Mostrar apenas quando o filtro estiver em Agendados */}
+                          {contractStatusFilter === 'Agendado' && (
+                            <button
+                              className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                              title="Ativar Cliente"
+                            >
+                              <CheckCircleIcon className="h-5 w-5" />
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -627,6 +877,141 @@ const Financeiro: React.FC = () => {
                         className={`mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm ${isLiberando ? 'opacity-75 cursor-not-allowed' : ''}`}
                         onClick={() => !isLiberando && setShowLiberarModal(false)}
                         disabled={isLiberando}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal de Confirmação de Liberação por 48 horas */}
+            {showLiberar48Modal && (
+              <div className="fixed inset-0 z-[70] overflow-y-auto">
+                <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isLiberando48 && setShowLiberar48Modal(false)}></div>
+                  <span className="hidden sm:inline-block sm:h-screen sm:align-middle">&#8203;</span>
+                  <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                      <div className="sm:flex sm:items-start">
+                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+                          <ClockIcon className="h-6 w-6 text-yellow-600" />
+                        </div>
+                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                          <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar contrato por 48hs</h3>
+                          <div className="mt-2">
+                            <p className="text-sm text-gray-500">
+                              Tem certeza que deseja liberar o contrato com PPPoE <strong>{contratoParaLiberar48?.pppoe}</strong> por 48 horas? O acesso será automaticamente bloqueado após este período.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                      <button
+                        type="button"
+                        className={`inline-flex w-full justify-center rounded-md border border-transparent bg-yellow-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${isLiberando48 ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={handleConfirmarLiberacao48}
+                        disabled={isLiberando48}
+                      >
+                        {isLiberando48 ? 'Liberando...' : 'Liberar por 48h'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm ${isLiberando48 ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={() => !isLiberando48 && setShowLiberar48Modal(false)}
+                        disabled={isLiberando48}
+                      >
+                        Voltar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal de Confirmação de Cancelamento */}
+            {showCancelarModal && (
+              <div className="fixed inset-0 z-[70] overflow-y-auto">
+                <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isCancelando && setShowCancelarModal(false)}></div>
+                  <span className="hidden sm:inline-block sm:h-screen sm:align-middle">&#8203;</span>
+                  <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                      <div className="sm:flex sm:items-start">
+                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                          <NoSymbolIcon className="h-6 w-6 text-red-600" />
+                        </div>
+                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                          <h3 className="text-lg font-medium leading-6 text-gray-900">Cancelar Contrato</h3>
+                          <div className="mt-2">
+                            <p className="text-sm text-gray-500">
+                              Tem certeza que deseja cancelar o contrato com PPPoE <strong>{contratoParaCancelar?.pppoe}</strong>? Esta ação irá cancelar permanentemente o contrato do cliente.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                      <button
+                        type="button"
+                        className={`inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${isCancelando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={handleConfirmarCancelamento}
+                        disabled={isCancelando}
+                      >
+                        {isCancelando ? 'Cancelando...' : 'Cancelar Contrato'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm ${isCancelando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={() => !isCancelando && setShowCancelarModal(false)}
+                        disabled={isCancelando}
+                      >
+                        Voltar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal de Confirmação de Bloqueio */}
+            {showBloquearModal && (
+              <div className="fixed inset-0 z-[70] overflow-y-auto">
+                <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isBloqueando && setShowBloquearModal(false)}></div>
+                  <span className="hidden sm:inline-block sm:h-screen sm:align-middle">&#8203;</span>
+                  <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                      <div className="sm:flex sm:items-start">
+                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                          <NoSymbolIcon className="h-6 w-6 text-red-600" />
+                        </div>
+                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                          <h3 className="text-lg font-medium leading-6 text-gray-900">Bloquear Cliente</h3>
+                          <div className="mt-2">
+                            <p className="text-sm text-gray-500">
+                              Tem certeza que deseja bloquear o cliente com PPPoE <strong>{contratoParaBloquear?.pppoe}</strong>? Esta ação irá suspender o acesso à internet do cliente.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                      <button
+                        type="button"
+                        className={`inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${isBloqueando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={handleConfirmarBloqueio}
+                        disabled={isBloqueando}
+                      >
+                        {isBloqueando ? 'Bloqueando...' : 'Bloquear'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm ${isBloqueando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={() => !isBloqueando && setShowBloquearModal(false)}
+                        disabled={isBloqueando}
                       >
                         Cancelar
                       </button>
