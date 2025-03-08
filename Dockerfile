@@ -29,7 +29,7 @@ RUN npm ci --only=production
 # Copy built frontend files and server
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
-COPY --from=build /app/.env.production ./.env
+# COPY --from=build /app/.env.production ./.env
 
 # Set production environment variables
 ENV NODE_ENV=production
