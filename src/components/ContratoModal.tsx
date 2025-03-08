@@ -248,22 +248,190 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
         return;
       }
 
-      const styledContent = `<style>
-        .ql-editor p { text-align: justify; }
-      </style>${editorContent}`;
+      // Processar o conteúdo para garantir que todos os parágrafos estejam justificados
+      let processedContent = editorContent
+        .replace(/<p>/g, '<p style="text-align: justify;">')
+        .replace(/<p class="ql-align-justify">/g, '<p style="text-align: justify;" class="ql-align-justify">')
+        .replace(/<p class="([^"]*)"/g, '<p style="text-align: justify;" class="$1"');
+      
+      // Adicionar um wrapper para o bloco de assinaturas para garantir que fique na mesma página
+      // Usando uma abordagem mais robusta para capturar todo o bloco de assinaturas
+      const lastParagraphIndex = processedContent.lastIndexOf('</p>');
+      if (lastParagraphIndex !== -1) {
+        // Dividir o conteúdo em duas partes: antes do último parágrafo e depois
+        const contentBeforeLastParagraph = processedContent.substring(0, lastParagraphIndex + 4); // +4 para incluir o </p>
+        const contentAfterLastParagraph = processedContent.substring(lastParagraphIndex + 4);
+        
+        // Envolver todo o conteúdo após o último parágrafo (que deve conter as assinaturas) em um div com classe signature-page
+        processedContent = contentBeforeLastParagraph + `<div class="signature-page">${contentAfterLastParagraph}</div>`;
+      }
+      
+      // Melhorar a formatação das linhas de assinatura
+      processedContent = processedContent.replace(
+        /_______________________________________________<br>/g, 
+        '<div class="signature-line"></div>'
+      );
+      
+      // Estilos CSS mais completos para garantir a formatação profissional
+      const styledContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          @page {
+            margin: 2cm;
+            size: A4;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.5;
+            color: #000;
+            margin: 0;
+            padding: 0;
+          }
+          h1, h2, h3 {
+            font-weight: bold;
+            margin-top: 12pt;
+            margin-bottom: 6pt;
+          }
+          h1 {
+            font-size: 16pt;
+            text-align: center;
+          }
+          h2 {
+            font-size: 14pt;
+            margin-top: 16pt;
+          }
+          p {
+            margin: 8pt 0;
+            text-align: justify !important;
+            hyphens: auto;
+          }
+          .ql-align-justify, p {
+            text-align: justify !important;
+          }
+          .ql-align-center, h1, h2.ql-align-center {
+            text-align: center !important;
+          }
+          .signature-page {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-top: 20pt;
+            display: block;
+          }
+          .signature-line {
+            margin-top: 30pt;
+            text-align: center;
+            border-top: 1px solid #000;
+            width: 70%;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+          }
+          .signature-name {
+            margin-top: 5pt;
+            text-align: center;
+            font-weight: normal;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20pt;
+          }
+          .content {
+            margin: 0 auto;
+          }
+          strong {
+            font-weight: bold;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10pt 0;
+          }
+          table, th, td {
+            border: 1px solid #000;
+          }
+          th, td {
+            padding: 5pt;
+            text-align: left;
+          }
+          th {
+            background-color: #f2f2f2;
+          }
+          ul, ol {
+            margin: 8pt 0;
+            padding-left: 20pt;
+          }
+          li {
+            margin-bottom: 4pt;
+            text-align: justify;
+          }
+          .date {
+            text-align: right;
+            margin: 20pt 0;
+          }
+          /* Garantir que todos os parágrafos estejam justificados */
+          div.ql-editor p, 
+          div.content p {
+            text-align: justify !important;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="content">
+          ${processedContent}
+        </div>
+      </body>
+      </html>`;
 
       const options = {
-        margin: 1,
+        margin: [15, 15, 15, 15], // top, left, bottom, right - in mm
         filename: `contrato_${documentType}_${contrato.pppoe}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+        image: { type: 'jpeg', quality: 1.0 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: 800,
+          windowHeight: 1200
+        },
+        jsPDF: { 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'portrait',
+          compress: true,
+          hotfixes: ['px_scaling']
+        },
+        pagebreak: { 
+          mode: ['avoid-all', 'css', 'legacy'],
+          after: '.page-break-after',
+          before: '.page-break-before',
+          avoid: '.signature-page'
+        }
       };
 
-      html2pdf().from(styledContent).set(options).save();
-      console.log('PDF generated successfully');
+      // Mostrar indicador de carregamento com ID para poder removê-lo depois
+      const toastId = toast.loading('Gerando PDF, aguarde...');
+
+      // Usar html2pdf com as opções melhoradas
+      html2pdf().from(styledContent).set(options).save()
+        .then(() => {
+          console.log('PDF generated successfully');
+          // Remover o toast de carregamento
+          toast.dismiss(toastId);
+          toast.success('PDF gerado com sucesso!');
+        })
+        .catch((error) => {
+          console.error('Error in PDF generation:', error);
+          // Remover o toast de carregamento em caso de erro
+          toast.dismiss(toastId);
+          toast.error('Erro ao gerar o PDF');
+        });
     } catch (error) {
       console.error('Error generating PDF:', error);
+      toast.error('Erro ao gerar o PDF');
     }
   };
 
@@ -413,14 +581,16 @@ Com 12 (doze) meses de uso ------- R$ 50,00</div>
 
 <p style="text-align: justify;">7. Fica, desde já, eleito o Foro do domicílio do Assinante como o competente para dirimir qualquer conflito ou controvérsia oriunda deste Termo, em detrimento de quaisquer outros, por mais especiais ou privilegiados que sejam.</p>
 
+<div class="signature-page">
 <div style="margin-top: 10px; text-align: center; font-size: 4px;">Arroio do Sal, ${currentDate}</div>
 
 <div style="margin-top: 15px; text-align: center; font-size: 4px;">
-_______________________________________________<br>
+<div class="signature-line"></div>
 CONECTE TELECOM LTDA<br><br>
-_______________________________________________<br>
+<div class="signature-line"></div>
 ${contractData.clientName}<br>
 CPF/CNPJ: ${contractData.cpf}
+</div>
 </div>
 </div>`;
   };
@@ -438,18 +608,20 @@ CPF/CNPJ: ${contractData.cpf}
 <p style="text-align: justify;">_______________________________________________________________________________________</p>
 <p style="text-align: justify;">_______________________________________________________________________________________</p>
 
+<div class="signature-page">
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
-_______________________________________________<br>
+<div class="signature-line"></div>
 ${contractData.clientName}
 </div>
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
-_______________________________________________<br>
+<div class="signature-line"></div>
 CONECTE TELECOM
 </div>
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
 Arroio do Sal, ${currentDate}
+</div>
 </div>
 </div>`;
   };
