@@ -509,6 +509,12 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                               Pago
                             </th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Data Pagamento
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Quem Recebeu
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Ações
                             </th>
                           </tr>
@@ -517,7 +523,11 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                           {titulosLocais.map((titulo) => (
                             <tr key={titulo.id}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {titulo.vencimento ? new Date(titulo.vencimento + 'T00:00:00').toLocaleDateString() : ''}
+                                {titulo.vencimento ? new Date(titulo.vencimento + 'T00:00:00').toLocaleDateString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                }) : ''}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {new Intl.NumberFormat('pt-BR', {
@@ -533,6 +543,16 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                 }`}>
                                   {titulo.pago ? 'Pago' : 'Em Aberto'}
                                 </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {titulo.data_pgto ? new Date(titulo.data_pgto + 'T00:00:00').toLocaleDateString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                }) : '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {titulo.quemrecebeu || '-'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <div className="flex items-center space-x-3">
@@ -820,7 +840,11 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   Você tem certeza que deseja excluir o título com as seguintes informações?
                 </p>
                 <div className="bg-gray-50 p-3 rounded-md">
-                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloSelecionadoParaExclusao?.vencimento ? new Date(tituloSelecionadoParaExclusao.vencimento + 'T00:00:00').toLocaleDateString() : ''}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloSelecionadoParaExclusao?.vencimento ? new Date(tituloSelecionadoParaExclusao.vencimento + 'T00:00:00').toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }) : ''}</p>
                   <p className="text-sm text-gray-700"><span className="font-medium">Valor:</span> {tituloSelecionadoParaExclusao?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tituloSelecionadoParaExclusao.valor) : ''}</p>
                   <p className="text-sm text-gray-700"><span className="font-medium">Status:</span> {tituloSelecionadoParaExclusao?.pago ? 'Pago' : 'Em Aberto'}</p>
                 </div>

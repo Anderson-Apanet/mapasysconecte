@@ -46,6 +46,11 @@ const Financeiro: React.FC = () => {
 
   // Estados para controlar a visibilidade do histórico
   const [showHistorico, setShowHistorico] = useState(false);
+  
+  // Estados para o modal de confirmação de liberação
+  const [showLiberarModal, setShowLiberarModal] = useState(false);
+  const [contratoParaLiberar, setContratoParaLiberar] = useState<any>(null);
+  const [isLiberando, setIsLiberando] = useState(false);
 
   // Atualizar as opções de status do contrato
   const CONTRACT_STATUS_OPTIONS = [
@@ -252,6 +257,84 @@ const Financeiro: React.FC = () => {
     setShowTitulosModal(true);
   };
 
+  // Handler para abrir o modal de confirmação de liberação
+  const handleOpenLiberarModal = (contrato: any) => {
+    setContratoParaLiberar(contrato);
+    setShowLiberarModal(true);
+  };
+
+  // Handler para confirmar a liberação do cliente
+  const handleConfirmarLiberacao = async () => {
+    if (!contratoParaLiberar || !contratoParaLiberar.pppoe) {
+      toast.error('Dados do contrato incompletos');
+      return;
+    }
+
+    setIsLiberando(true);
+    try {
+      // Buscar o valor do campo radius do plano vinculado ao contrato
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', contratoParaLiberar.id_plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+        toast.error('Erro ao buscar dados do plano');
+        return;
+      }
+
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        pppoe: contratoParaLiberar.pppoe,
+        radius: planoData?.radius || '',
+        acao: 'liberar'
+      };
+      
+      console.log('Enviando dados para webhook de liberação:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (response.ok) {
+        console.log('Solicitação de liberação enviada com sucesso');
+        toast.success('Cliente liberado com sucesso');
+        
+        // Atualizar o status do contrato no banco de dados
+        const { error: updateError } = await supabase
+          .from('contratos')
+          .update({ status: 'Ativo' })
+          .eq('id', contratoParaLiberar.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar status do contrato:', updateError);
+          toast.error('Erro ao atualizar status do contrato');
+        }
+        
+        // Atualizar a lista de contratos
+        fetchContratos(currentPage, searchTerm, contractStatusFilter);
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao solicitar liberação:', errorText);
+        toast.error('Erro ao solicitar liberação');
+      }
+    } catch (error) {
+      console.error('Erro ao processar liberação:', error);
+      toast.error('Erro ao processar liberação');
+    } finally {
+      setIsLiberando(false);
+      setShowLiberarModal(false);
+      setContratoParaLiberar(null);
+    }
+  };
+
   return (
     <Layout>
       <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
@@ -433,6 +516,7 @@ const Financeiro: React.FC = () => {
                               {/* Botão Liberar Cliente - Mostrar apenas quando o filtro estiver em Bloqueados */}
                               {contractStatusFilter === 'Bloqueado' && (
                                 <button
+                                  onClick={() => handleOpenLiberarModal(contrato)}
                                   className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                                   title="Liberar Cliente"
                                 >
@@ -505,6 +589,51 @@ const Financeiro: React.FC = () => {
                 pppoe={selectedPPPoE}
                 contrato={selectedContrato}
               />
+            )}
+
+            {/* Modal de Confirmação de Liberação */}
+            {showLiberarModal && (
+              <div className="fixed inset-0 z-[70] overflow-y-auto">
+                <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isLiberando && setShowLiberarModal(false)}></div>
+                  <span className="hidden sm:inline-block sm:h-screen sm:align-middle">&#8203;</span>
+                  <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                      <div className="sm:flex sm:items-start">
+                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                          <LockOpenIcon className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                          <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar Cliente</h3>
+                          <div className="mt-2">
+                            <p className="text-sm text-gray-500">
+                              Tem certeza que deseja liberar o cliente com PPPoE <strong>{contratoParaLiberar?.pppoe}</strong>? Esta ação irá reativar o acesso à internet do cliente.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                      <button
+                        type="button"
+                        className={`inline-flex w-full justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${isLiberando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={handleConfirmarLiberacao}
+                        disabled={isLiberando}
+                      >
+                        {isLiberando ? 'Liberando...' : 'Liberar'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm ${isLiberando ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        onClick={() => !isLiberando && setShowLiberarModal(false)}
+                        disabled={isLiberando}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
