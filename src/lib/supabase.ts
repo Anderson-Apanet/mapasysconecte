@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { ENV } from '../config/env';
 
 class SupabaseService {
   private static instance: SupabaseService;
@@ -6,13 +7,19 @@ class SupabaseService {
 
   private constructor() {
     this.client = createClient(
-      import.meta.env.VITE_SUPABASE_URL || '',
-      import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+      ENV.SUPABASE_URL,
+      ENV.SUPABASE_ANON_KEY,
       {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+        },
+        global: {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          }
         }
       }
     );
