@@ -52,7 +52,20 @@ if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, '../dist');
     console.log('Caminho do dist:', distPath);
     app.use(express.static(distPath));
-    
+
+    // Registrar rotas
+    app.use('/api/asaas', asaasRouter);
+    app.use('/api/support', radiusRouter);  
+    console.log('Rotas do Asaas e Radius registradas');
+
+    // Rota de teste para verificar se o servidor está funcionando
+    app.get('/api/test', (req, res) => {
+        res.json({ 
+            message: 'API está funcionando!',
+            timestamp: new Date().toISOString()
+        });
+    });
+
     // Importante: Adicionar rota catch-all para o frontend (SPA)
     app.get('*', (req, res) => {
         // Excluir rotas de API
@@ -64,20 +77,20 @@ if (process.env.NODE_ENV === 'production') {
             res.status(404).json({ error: 'API endpoint não encontrado', path: req.path });
         }
     });
-}
+} else {
+    // Registrar rotas
+    app.use('/api/asaas', asaasRouter);
+    app.use('/api/support', radiusRouter);  
+    console.log('Rotas do Asaas e Radius registradas');
 
-// Registrar rotas
-app.use('/api/asaas', asaasRouter);
-app.use('/api/support', radiusRouter);  
-console.log('Rotas do Asaas e Radius registradas');
-
-// Rota de teste para verificar se o servidor está funcionando
-app.get('/api/test', (req, res) => {
-    res.json({ 
-        message: 'API está funcionando!',
-        timestamp: new Date().toISOString()
+    // Rota de teste para verificar se o servidor está funcionando
+    app.get('/api/test', (req, res) => {
+        res.json({ 
+            message: 'API está funcionando!',
+            timestamp: new Date().toISOString()
+        });
     });
-});
+}
 
 // Função para criar conexão com o banco MySQL
 const createConnection = async () => {
@@ -95,134 +108,134 @@ const createConnection = async () => {
     }
 };
 
-// Rota para buscar estatísticas dos concentradores
-app.get('/api/concentrator-stats', async (req, res) => {
-    try {
-        const connection = await createConnection();
+// Mover esta rota para o arquivo de rotas do radius
+// app.get('/api/concentrator-stats', async (req, res) => {
+//     try {
+//         const connection = await createConnection();
 
-        // Query para buscar os concentradores da tabela nas e contar usuários ativos por concentrador
-        const query = `
-            SELECT 
-                n.nasname,
-                n.shortname,
-                n.type,
-                n.ports,
-                n.description,
-                COUNT(DISTINCT CASE 
-                    WHEN r.acctstoptime IS NULL THEN 
-                        CASE 
-                            WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
-                            WHEN n.nasname = r.nasipaddress THEN r.username
-                            ELSE NULL
-                        END
-                    ELSE NULL 
-                END) as user_count
-            FROM nas n
-            LEFT JOIN radacct r ON 
-                CASE 
-                    WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
-                    ELSE n.nasname = r.nasipaddress
-                END
-            GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
-            ORDER BY n.nasname`;
+//         // Query para buscar os concentradores da tabela nas e contar usuários ativos por concentrador
+//         const query = `
+//             SELECT 
+//                 n.nasname,
+//                 n.shortname,
+//                 n.type,
+//                 n.ports,
+//                 n.description,
+//                 COUNT(DISTINCT CASE 
+//                     WHEN r.acctstoptime IS NULL THEN 
+//                         CASE 
+//                             WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
+//                             WHEN n.nasname = r.nasipaddress THEN r.username
+//                             ELSE NULL
+//                         END
+//                     ELSE NULL 
+//                 END) as user_count
+//             FROM nas n
+//             LEFT JOIN radacct r ON 
+//                 CASE 
+//                     WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
+//                     ELSE n.nasname = r.nasipaddress
+//                 END
+//             GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
+//             ORDER BY n.nasname`;
 
-        const [rows] = await connection.execute(query);
-        await connection.end();
-        res.json(rows);
-    } catch (error) {
-        console.error('Erro ao buscar estatísticas:', error);
-        res.status(500).json({ error: String(error) });
-    }
-});
+//         const [rows] = await connection.execute(query);
+//         await connection.end();
+//         res.json(rows);
+//     } catch (error) {
+//         console.error('Erro ao buscar estatísticas:', error);
+//         res.status(500).json({ error: String(error) });
+//     }
+// });
 
 // Rota para buscar conexões
-app.get('/api/support/connections', async (req, res) => {
-    try {
-        const connection = await createConnection();
-        const page = parseInt(req.query.page) || 1;
-        const limit = 10;
-        const offset = (page - 1) * limit;
-        const search = req.query.search || '';
-        const status = req.query.status || 'all';
-        const nasip = req.query.nasip || 'all';
+// app.get('/api/support/connections', async (req, res) => {
+//     try {
+//         const connection = await createConnection();
+//         const page = parseInt(req.query.page) || 1;
+//         const limit = 10;
+//         const offset = (page - 1) * limit;
+//         const search = req.query.search || '';
+//         const status = req.query.status || 'all';
+//         const nasip = req.query.nasip || 'all';
 
-        let whereClause = '';
-        const params = [];
+//         let whereClause = '';
+//         const params = [];
 
-        if (search) {
-            whereClause += ' AND ra.username LIKE ?';
-            params.push(`%${search}%`);
-        }
+//         if (search) {
+//             whereClause += ' AND ra.username LIKE ?';
+//             params.push(`%${search}%`);
+//         }
 
-        if (status === 'up') {
-            whereClause += ' AND ra.acctstoptime IS NULL';
-        } else if (status === 'down') {
-            whereClause += ' AND ra.acctstoptime IS NOT NULL';
-        }
+//         if (status === 'up') {
+//             whereClause += ' AND ra.acctstoptime IS NULL';
+//         } else if (status === 'down') {
+//             whereClause += ' AND ra.acctstoptime IS NOT NULL';
+//         }
 
-        if (nasip !== 'all') {
-            whereClause += ' AND ra.nasipaddress = ?';
-            params.push(nasip);
-        }
+//         if (nasip !== 'all') {
+//             whereClause += ' AND ra.nasipaddress = ?';
+//             params.push(nasip);
+//         }
 
-        // Count total records
-        const [countRows] = await connection.execute(
-            `WITH LastConnection AS (
-                SELECT username, MAX(radacctid) as last_id
-                FROM radacct
-                GROUP BY username
-            )
-            SELECT COUNT(*) as total 
-            FROM LastConnection lc
-            JOIN radacct ra ON ra.radacctid = lc.last_id
-            WHERE 1=1 ${whereClause}`,
-            params
-        );
-        const totalRecords = countRows[0].total;
+//         // Count total records
+//         const [countRows] = await connection.execute(
+//             `WITH LastConnection AS (
+//                 SELECT username, MAX(radacctid) as last_id
+//                 FROM radacct
+//                 GROUP BY username
+//             )
+//             SELECT COUNT(*) as total 
+//             FROM LastConnection lc
+//             JOIN radacct ra ON ra.radacctid = lc.last_id
+//             WHERE 1=1 ${whereClause}`,
+//             params
+//         );
+//         const totalRecords = countRows[0].total;
 
-        // Get paginated records
-        const query = `
-            WITH LastConnection AS (
-                SELECT username, MAX(radacctid) as last_id
-                FROM radacct
-                GROUP BY username
-            )
-            SELECT 
-                ra.radacctid,
-                ra.username,
-                ra.nasipaddress,
-                ra.nasportid,
-                ra.acctstarttime,
-                ra.acctstoptime,
-                ra.acctinputoctets,
-                ra.acctoutputoctets,
-                ra.acctterminatecause,
-                ra.framedipaddress,
-                ra.callingstationid
-            FROM LastConnection lc
-            JOIN radacct ra ON ra.radacctid = lc.last_id
-            WHERE 1=1 ${whereClause}
-            ORDER BY ra.acctstarttime DESC 
-            LIMIT ? OFFSET ?`;
+//         // Get paginated records
+//         const query = `
+//             WITH LastConnection AS (
+//                 SELECT username, MAX(radacctid) as last_id
+//                 FROM radacct
+//                 GROUP BY username
+//             )
+//             SELECT 
+//                 ra.radacctid,
+//                 ra.username,
+//                 ra.nasipaddress,
+//                 ra.nasportid,
+//                 ra.acctstarttime,
+//                 ra.acctstoptime,
+//                 ra.acctinputoctets,
+//                 ra.acctoutputoctets,
+//                 ra.acctterminatecause,
+//                 ra.framedipaddress,
+//                 ra.callingstationid
+//             FROM LastConnection lc
+//             JOIN radacct ra ON ra.radacctid = lc.last_id
+//             WHERE 1=1 ${whereClause}
+//             ORDER BY ra.acctstarttime DESC 
+//             LIMIT ? OFFSET ?`;
 
-        const [rows] = await connection.execute(query, [...params, limit, offset]);
+//         const [rows] = await connection.execute(query, [...params, limit, offset]);
 
-        await connection.end();
+//         await connection.end();
 
-        res.json({
-            data: rows,
-            pagination: {
-                currentPage: page,
-                totalPages: Math.ceil(totalRecords / limit),
-                totalRecords,
-                recordsPerPage: limit
-            }
-        });
-    } catch (error) {
-        console.error('Erro ao buscar conexões:', error);
-        res.status(500).json({ error: String(error) });
-    }
-});
+//         res.json({
+//             data: rows,
+//             pagination: {
+//                 currentPage: page,
+//                 totalPages: Math.ceil(totalRecords / limit),
+//                 totalRecords,
+//                 recordsPerPage: limit
+//             }
+//         });
+//     } catch (error) {
+//         console.error('Erro ao buscar conexões:', error);
+//         res.status(500).json({ error: String(error) });
+//     }
+// });
 
 // Rota para buscar consumo do usuário
 app.get('/api/user-consumption/:username', async (req, res) => {

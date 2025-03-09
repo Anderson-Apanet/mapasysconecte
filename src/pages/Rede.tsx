@@ -105,14 +105,15 @@ export default function Rede() {
       // Update the list of all unique NAS IPs only on initial load or refresh
       if (nasIpFilter === 'all' && page === 1 && !search) {
         const ips = Array.from(new Set((data.data || []).map((conn: Connection) => conn.nasipaddress))).sort();
-        setAllNasIps(ips);
+        setAllNasIps(ips as string[]);
         
-        // Update concentrator stats
-        await fetchConcentratorStats();
+        // Atualizar estatísticas dos concentradores
+        fetchConcentratorStats();
       }
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError(`${error}`);
+      setConnections([]);
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,8 @@ export default function Rede() {
 
   const fetchConcentratorStats = async () => {
     try {
-      const url = `${apiUrl}/concentrator-stats`;
+      const url = `${apiUrl}/support/concentrator-stats`;
+      console.log('Fetching concentrator stats from:', url);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch concentrator stats');
@@ -131,9 +133,9 @@ export default function Rede() {
       
       // Atualiza a lista de IPs dos concentradores para o filtro
       const ips = data.map((concentrator: ConcentratorStats) => concentrator.nasname);
-      setAllNasIps(ips);
-    } catch (err) {
-      console.error('Error fetching concentrator stats:', err);
+      setAllNasIps(ips as string[]);
+    } catch (error) {
+      console.error('Error fetching concentrator stats:', error);
     }
   };
 

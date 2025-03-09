@@ -99,28 +99,133 @@ router.post('/add-contract-credentials', async (req, res) => {
 router.get('/support/concentrators', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    try {
-      const [rows] = await connection.query(`
-        SELECT n.*, COUNT(DISTINCT r.username) as user_count 
-        FROM nas n 
-        LEFT JOIN radacct r ON n.nasname = r.nasipaddress 
-        WHERE n.nasname NOT IN ('localhost', '127.0.0.1')
-        GROUP BY n.id, n.nasname
-      `);
-      
-      res.json({ 
-        success: true, 
-        data: rows 
-      });
-    } finally {
-      connection.release();
-    }
+    const [rows] = await connection.query(`
+      SELECT n.*, COUNT(DISTINCT r.username) as user_count
+      FROM nas n
+      LEFT JOIN radacct r ON n.nasname = r.nasipaddress
+      GROUP BY n.id
+    `);
+    connection.release();
+    res.json(rows);
   } catch (error) {
     console.error('Erro ao buscar concentradores:', error);
-    res.status(500).json({ 
-      error: 'Erro ao buscar concentradores',
-      details: error.message 
+    res.status(500).json({ error: 'Erro ao buscar concentradores', details: error.message });
+  }
+});
+
+// Rota para buscar conexões com paginação e filtros
+router.get('/connections', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const status = req.query.status || 'all';
+    const nasip = req.query.nasip || 'all';
+
+    console.log('Buscando conexões com parâmetros:', { page, limit, search, status, nasip });
+
+    // Construir a consulta base
+    let query = `
+      SELECT * FROM radacct
+      WHERE 1=1
+    `;
+    
+    // Adicionar filtros
+    const params = [];
+    
+    if (search) {
+      query += ` AND (username LIKE ? OR callingstationid LIKE ? OR framedipaddress LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    
+    if (status === 'up') {
+      query += ` AND acctstoptime IS NULL`;
+    } else if (status === 'down') {
+      query += ` AND acctstoptime IS NOT NULL`;
+    }
+    
+    if (nasip !== 'all') {
+      query += ` AND nasipaddress = ?`;
+      params.push(nasip);
+    }
+    
+    // Adicionar ordenação
+    query += ` ORDER BY acctstarttime DESC`;
+    
+    // Consulta para contar total de registros
+    const countQuery = `SELECT COUNT(*) as total FROM (${query}) as subquery`;
+    
+    // Adicionar paginação à consulta principal
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+    
+    const connection = await pool.getConnection();
+    
+    // Executar consulta principal
+    const [rows] = await connection.query(query, params);
+    
+    // Executar consulta de contagem
+    const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
+    const totalRecords = countResult[0].total;
+    
+    connection.release();
+    
+    // Calcular informações de paginação
+    const totalPages = Math.ceil(totalRecords / limit);
+    
+    res.json({
+      data: rows,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalRecords,
+        recordsPerPage: limit
+      }
     });
+  } catch (error) {
+    console.error('Erro ao buscar conexões:', error);
+    res.status(500).json({ error: 'Erro ao buscar conexões', details: error.message });
+  }
+});
+
+// Rota para estatísticas de concentradores
+router.get('/concentrator-stats', async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    
+    // Query para buscar os concentradores da tabela nas e contar usuários ativos por concentrador
+    const query = `
+      SELECT 
+        n.nasname,
+        n.shortname,
+        n.type,
+        n.ports,
+        n.description,
+        COUNT(DISTINCT CASE 
+          WHEN r.acctstoptime IS NULL THEN 
+            CASE 
+              WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
+              WHEN n.nasname = r.nasipaddress THEN r.username
+              ELSE NULL
+            END
+          ELSE NULL 
+        END) as user_count
+      FROM nas n
+      LEFT JOIN radacct r ON 
+        CASE 
+          WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
+          ELSE n.nasname = r.nasipaddress
+        END
+      GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
+      ORDER BY n.nasname`;
+
+    const [rows] = await connection.query(query);
+    connection.release();
+    res.json(rows);
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas de concentradores:', error);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas de concentradores', details: error.message });
   }
 });
 
