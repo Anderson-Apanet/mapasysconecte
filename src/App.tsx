@@ -30,6 +30,9 @@ const App: React.FC = () => {
         {/* Rota pública */}
         <Route path={ROUTES.LOGIN} element={<Login />} />
         <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
+        <Route path={ROUTES.RESETPW} element={<ResetPassword />} />
+        {/* Rota coringa para redefinição de senha - captura qualquer caminho que o Supabase possa adicionar */}
+        <Route path="/resetpw/*" element={<ResetPassword />} />
 
         {/* Rotas protegidas */}
         <Route path={ROUTES.HOME} element={

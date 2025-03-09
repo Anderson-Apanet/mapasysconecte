@@ -14,6 +14,7 @@ export const ROUTES = {
   ESTOQUE: '/estoque',
   SUPORTE: '/suporte',
   RESET_PASSWORD: '/reset-password',
+  RESETPW: '/resetpw',
 
   // Rotas administrativas
   ADM_BAIRROS: '/adm/bairros',

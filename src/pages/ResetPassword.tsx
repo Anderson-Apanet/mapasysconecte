@@ -10,14 +10,103 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Verificar se estamos na página de redefinição de senha
+    console.log('URL atual:', window.location.href);
+    
     // Extrair o hash da URL
     const hashFragment = window.location.hash;
+    console.log('Hash fragment:', hashFragment);
+    
+    // Verificar se há parâmetros de consulta (para o caso do Supabase usar ?token= em vez de #access_token=)
+    const queryParams = new URLSearchParams(window.location.search);
+    const queryToken = queryParams.get('token') || queryParams.get('access_token');
+    console.log('Query token:', queryToken ? 'Presente' : 'Ausente');
+    
+    // Tentar diferentes abordagens para obter o token
     if (hashFragment) {
-      // O formato é #access_token=...&type=recovery
-      const accessToken = new URLSearchParams(hashFragment.substring(1)).get('access_token');
-      setHash(accessToken);
+      try {
+        // O formato é #access_token=...&type=recovery
+        const params = new URLSearchParams(hashFragment.substring(1));
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
+        
+        console.log('Parâmetros do hash encontrados:', {
+          accessToken: accessToken ? 'Presente' : 'Ausente',
+          refreshToken: refreshToken ? 'Presente' : 'Ausente',
+          type
+        });
+        
+        if (accessToken) {
+          setHash(accessToken);
+          
+          // Configurar o token na sessão do Supabase
+          supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          }).then(({ data, error }) => {
+            if (error) {
+              console.error('Erro ao configurar sessão:', error);
+              setError('Erro ao configurar a sessão: ' + error.message);
+            } else {
+              console.log('Sessão configurada com sucesso:', data.session ? 'Válida' : 'Inválida');
+            }
+          });
+        } else if (queryToken) {
+          // Tentar usar o token da query string se o hash não tiver um token
+          setHash(queryToken);
+          
+          // Configurar o token na sessão do Supabase
+          supabase.auth.setSession({
+            access_token: queryToken,
+            refresh_token: '',
+          }).then(({ data, error }) => {
+            if (error) {
+              console.error('Erro ao configurar sessão com token da query:', error);
+              setError('Erro ao configurar a sessão: ' + error.message);
+            } else {
+              console.log('Sessão configurada com sucesso (token da query):', data.session ? 'Válida' : 'Inválida');
+            }
+          });
+        } else {
+          setError('Token de acesso não encontrado na URL');
+        }
+      } catch (err) {
+        console.error('Erro ao processar o hash da URL:', err);
+        setError('Erro ao processar o link de redefinição de senha');
+      }
+    } else if (queryToken) {
+      // Se não houver hash, mas houver um token na query string
+      setHash(queryToken);
+      
+      // Configurar o token na sessão do Supabase
+      supabase.auth.setSession({
+        access_token: queryToken,
+        refresh_token: '',
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Erro ao configurar sessão com token da query:', error);
+          setError('Erro ao configurar a sessão: ' + error.message);
+        } else {
+          console.log('Sessão configurada com sucesso (token da query):', data.session ? 'Válida' : 'Inválida');
+        }
+      });
+    } else {
+      // Verificar se o usuário já está autenticado
+      supabase.auth.getSession().then(({ data, error }) => {
+        if (error) {
+          console.error('Erro ao verificar sessão existente:', error);
+          setError('Link de redefinição de senha inválido ou expirado');
+        } else if (data.session) {
+          console.log('Usuário já está autenticado, permitindo redefinição de senha');
+          setHash('session-exists');
+        } else {
+          setError('Link de redefinição de senha inválido ou expirado');
+        }
+      });
     }
   }, []);
 
@@ -37,12 +126,18 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      console.log('Tentando atualizar a senha...');
+      
+      const { data, error } = await supabase.auth.updateUser({
         password: password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao atualizar senha:', error);
+        throw error;
+      }
 
+      console.log('Senha atualizada com sucesso:', data.user ? 'Usuário válido' : 'Usuário inválido');
       toast.success('Senha atualizada com sucesso!');
       
       // Redirecionar para a página de login após 2 segundos
@@ -70,9 +165,9 @@ export default function ResetPassword() {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleResetPassword}>
-          <div className="rounded-md shadow-sm -space-y-px">
+          <div className="space-y-4">
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Nova Senha
               </label>
               <input
@@ -81,14 +176,15 @@ export default function ResetPassword() {
                 type="password"
                 autoComplete="new-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="Nova senha"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading || !hash}
               />
             </div>
             <div>
-              <label htmlFor="confirmPassword" className="sr-only">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                 Confirmar Senha
               </label>
               <input
@@ -97,10 +193,11 @@ export default function ResetPassword() {
                 type="password"
                 autoComplete="new-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="Confirmar senha"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading || !hash}
               />
             </div>
           </div>
@@ -109,42 +206,25 @@ export default function ResetPassword() {
             <button
               type="submit"
               disabled={loading || !hash}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                </span>
-              ) : null}
-              {loading ? 'Processando...' : 'Redefinir Senha'}
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                  Processando...
+                </div>
+              ) : (
+                'Redefinir Senha'
+              )}
             </button>
           </div>
 
-          {!hash && (
-            <div className="rounded-md bg-yellow-50 p-4">
+          {error && (
+            <div className="rounded-md bg-red-50 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg
-                    className="h-5 w-5 text-yellow-400"
+                    className="h-5 w-5 text-red-400"
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 20 20"
                     fill="currentColor"
@@ -152,20 +232,17 @@ export default function ResetPassword() {
                   >
                     <path
                       fillRule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                       clipRule="evenodd"
                     />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">
-                    Link inválido
+                  <h3 className="text-sm font-medium text-red-800">
+                    Erro na redefinição de senha
                   </h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p>
-                      Este link de redefinição de senha parece ser inválido ou expirou.
-                      Por favor, solicite um novo link de redefinição de senha.
-                    </p>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>{error}</p>
                   </div>
                 </div>
               </div>
@@ -176,7 +253,7 @@ export default function ResetPassword() {
             <button
               type="button"
               onClick={() => navigate(ROUTES.LOGIN)}
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary-600 hover:text-primary-500 focus:outline-none focus:underline transition duration-150 ease-in-out"
             >
               Voltar para o login
             </button>
