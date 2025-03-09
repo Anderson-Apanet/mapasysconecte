@@ -52,6 +52,18 @@ if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, '../dist');
     console.log('Caminho do dist:', distPath);
     app.use(express.static(distPath));
+    
+    // Importante: Adicionar rota catch-all para o frontend (SPA)
+    app.get('*', (req, res) => {
+        // Excluir rotas de API
+        if (!req.path.startsWith('/api')) {
+            console.log(`Redirecionando rota SPA: ${req.path} para index.html`);
+            res.sendFile(path.join(distPath, 'index.html'));
+        } else {
+            // Para rotas de API não encontradas
+            res.status(404).json({ error: 'API endpoint não encontrado', path: req.path });
+        }
+    });
 }
 
 // Registrar rotas
@@ -308,14 +320,6 @@ app.use((req, res) => {
         path: req.path
     });
 });
-
-// Rota para todas as outras requisições em produção
-if (process.env.NODE_ENV === 'production') {
-    app.get('*', (req, res) => {
-        console.log('Servindo index.html para:', req.url);
-        res.sendFile(path.resolve(__dirname, '../dist/index.html'));
-    });
-}
 
 // Iniciar o servidor
 app.listen(port, () => {
