@@ -67,8 +67,16 @@ export default function Rede() {
   const [showModal, setShowModal] = useState(false);
 
   // Usar a URL base correta dependendo do ambiente
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
   const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : `/api`;
+  
+  // Log para depuração
+  console.log('API URL configuration:', { 
+    baseUrl, 
+    apiUrl, 
+    env: import.meta.env.MODE,
+    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL
+  });
 
   const fetchConnections = async (page: number = 1, search: string = '') => {
     setLoading(true);

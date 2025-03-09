@@ -12,7 +12,7 @@ services:
       - key: VITE_API_URL
         value: /api
       - key: VITE_API_BASE_URL
-        value: https://mapasys.onrender.com
+        value: https://mapasysconecte.onrender.com
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
