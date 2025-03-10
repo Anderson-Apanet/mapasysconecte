@@ -13,7 +13,8 @@ import {
   EyeIcon,
   PrinterIcon,
   CheckCircleIcon,
-  DocumentArrowDownIcon
+  DocumentArrowDownIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import { 
   findCustomerByCpfCnpj, 
@@ -52,6 +53,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [tituloParaExcluir, setTituloParaExcluir] = useState<number | null>(null);
   const [showConfirmacaoExclusao, setShowConfirmacaoExclusao] = useState(false);
   const [tituloSelecionadoParaExclusao, setTituloSelecionadoParaExclusao] = useState<any>(null);
+  const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<number | null>(null);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -207,7 +209,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const handleGerarPDFBoletos = async () => {
     if (isGerandoCarne) return;
 
-    let pdfUrl = null;
+    let pdfUrl: string | null = null;
     
     try {
       setIsGerandoCarne(true);
@@ -313,7 +315,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       // Limpa a URL do objeto após um breve delay
       if (pdfUrl) {
         setTimeout(() => {
-          URL.revokeObjectURL(pdfUrl);
+          URL.revokeObjectURL(pdfUrl as string);
           console.log('URL do PDF liberada');
         }, 1000);
       }
@@ -399,7 +401,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
           statusText: response.statusText,
           body: errorText
         });
-        throw new Error(`Erro ao enviar dados: ${response.status} - ${errorText || response.statusText}`);
+        throw new Error(`Erro ao enviar dados: ${response.status} - ${response.statusText}`);
       }
 
       toast.success('Títulos gerados com sucesso!');
@@ -436,6 +438,57 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     if (tituloSelecionadoParaExclusao) {
       handleExcluirTitulo(tituloSelecionadoParaExclusao);
       fecharConfirmacaoExclusao();
+    }
+  };
+
+  // Função para enviar mensagem WhatsApp
+  const handleEnviarWhatsApp = async (titulo: any) => {
+    if (!cliente || !pppoe) {
+      toast.error('Informações do cliente incompletas');
+      return;
+    }
+
+    setEnviandoWhatsApp(titulo.id);
+    
+    try {
+      // Preparar os dados para enviar ao webhook
+      const webhookData = {
+        nome: cliente.nome,
+        pppoe: pppoe,
+        fonewhats: cliente.fonewhats,
+        titulo: {
+          id: titulo.id,
+          valor: titulo.valor,
+          vencimento: titulo.vencimento,
+          pago: titulo.pago,
+          invoiceurl: titulo.invoiceurl
+        }
+      };
+      
+      console.log('Enviando dados para webhook de WhatsApp:', webhookData);
+      
+      // Enviar para o endpoint do n8n
+      const response = await fetch('https://webhooksn8nconecte.apanet.info/webhook/d0a98ca5-6889-45e7-a203-5ce7e6154805', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (response.ok) {
+        console.log('Mensagem WhatsApp enviada com sucesso');
+        toast.success('Mensagem WhatsApp enviada com sucesso');
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao enviar mensagem WhatsApp:', errorText);
+        toast.error('Erro ao enviar mensagem WhatsApp');
+      }
+    } catch (error: any) {
+      console.error('Erro ao enviar mensagem WhatsApp:', error);
+      toast.error(`Erro ao enviar mensagem WhatsApp: ${error.message || 'Erro desconhecido'}`);
+    } finally {
+      setEnviandoWhatsApp(null);
     }
   };
 
@@ -597,6 +650,18 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                       <ArrowPathIcon className="h-5 w-5 animate-spin" />
                                     ) : (
                                       <TrashIcon className="h-5 w-5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    title="Enviar mensagem WhatsApp"
+                                    className="text-green-600 hover:text-green-800"
+                                    onClick={() => handleEnviarWhatsApp(titulo)}
+                                    disabled={enviandoWhatsApp === titulo.id || !cliente?.fonewhats}
+                                  >
+                                    {enviandoWhatsApp === titulo.id ? (
+                                      <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                      <ChatBubbleLeftRightIcon className="h-5 w-5" />
                                     )}
                                   </button>
                                 </div>
@@ -784,7 +849,9 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                 </div>
               ) : (
                 <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-2">Clique para copiar:</p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Clique para copiar:
+                  </p>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(linhaDigitavel);

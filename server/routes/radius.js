@@ -100,10 +100,29 @@ router.get('/support/concentrators', async (req, res) => {
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.query(`
-      SELECT n.*, COUNT(DISTINCT r.username) as user_count
+      SELECT 
+        n.nasname,
+        n.shortname,
+        n.type,
+        n.ports,
+        n.description,
+        COUNT(DISTINCT CASE 
+          WHEN r.acctstoptime IS NULL THEN 
+            CASE 
+              WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
+              WHEN n.nasname = r.nasipaddress THEN r.username
+              ELSE NULL
+            END
+          ELSE NULL 
+        END) as user_count
       FROM nas n
-      LEFT JOIN radacct r ON n.nasname = r.nasipaddress
-      GROUP BY n.id
+      LEFT JOIN radacct r ON 
+        CASE 
+          WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
+          ELSE n.nasname = r.nasipaddress
+        END
+      GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
+      ORDER BY n.nasname
     `);
     connection.release();
     res.json(rows);
