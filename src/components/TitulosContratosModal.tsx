@@ -461,7 +461,8 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
           valor: titulo.valor,
           vencimento: titulo.vencimento,
           pago: titulo.pago,
-          invoiceurl: titulo.invoiceurl
+          invoiceurl: titulo.invoiceurl,
+          nossonumero: titulo.nossonumero
         }
       };
       
