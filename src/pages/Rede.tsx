@@ -58,14 +58,15 @@ export default function Rede() {
 
   // Usar a URL base correta dependendo do ambiente
   const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-  const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : `/api`;
+  const apiUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
   
   // Log para depuração
   console.log('API URL configuration:', { 
     baseUrl, 
     apiUrl, 
     env: import.meta.env.MODE,
-    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL
+    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+    windowOrigin: window.location.origin
   });
 
   const fetchConnections = async (page: number = 1, search: string = '') => {
@@ -107,40 +108,87 @@ export default function Rede() {
   };
 
   const handleUserClick = async (username: string) => {
+    setSelectedUser(username);
+    setShowModal(true);
+    
     try {
-      setSelectedUser(username);
-      setShowModal(true);
-      
       // Buscar histórico de conexões do usuário
-      const response = await fetch(`${apiUrl}/support/connections/user/${username}/history`);
-      if (!response.ok) {
-        throw new Error('Falha ao buscar histórico de conexões');
+      console.log(`Fetching connection history for user: ${username}`);
+      
+      // Tenta primeiro o endpoint de desenvolvimento
+      let response;
+      let data;
+      let success = false;
+      
+      try {
+        response = await fetch(`${apiUrl}/support/connections/user/${username}/history`);
+        if (response.ok) {
+          data = await response.json();
+          if (data && data.data) {
+            success = true;
+          }
+        }
+      } catch (devError) {
+        console.log("Endpoint de desenvolvimento falhou, tentando endpoint de produção:", devError);
       }
       
-      const data = await response.json();
+      // Se o primeiro endpoint falhar, tenta o endpoint de produção
+      if (!success) {
+        try {
+          response = await fetch(`${apiUrl}/connection-history/${username}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error response from server: ${response.status} - ${errorText}`);
+            throw new Error(`Falha ao buscar histórico de conexões: ${response.status}`);
+          }
+          
+          data = await response.json();
+          console.log("Connection history data from production endpoint:", data);
+          
+          if (!data || (!data.data && !data.connections)) {
+            console.error("Invalid data format received:", data);
+            throw new Error("Formato de dados inválido recebido do servidor");
+          }
+          
+          // Normaliza o formato dos dados
+          if (data.connections && !data.data) {
+            data.data = data.connections;
+          }
+        } catch (prodError) {
+          console.error("Ambos endpoints falharam:", prodError);
+          throw prodError;
+        }
+      }
+      
+      console.log("Final connection history data:", data);
       setConnectionHistory(data.data || []);
       
       // Processar dados de consumo para o gráfico
-      const consumptionByDay = data.data.reduce((acc: Record<string, { upload: number, download: number }>, conn: Connection) => {
-        const date = new Date(conn.acctstarttime).toISOString().split('T')[0];
-        if (!acc[date]) {
-          acc[date] = { upload: 0, download: 0 };
-        }
+      if (data.data && data.data.length > 0) {
+        const consumptionByDay = data.data.reduce((acc: Record<string, { upload: number, download: number }>, conn: Connection) => {
+          const date = new Date(conn.acctstarttime).toISOString().split('T')[0];
+          if (!acc[date]) {
+            acc[date] = { upload: 0, download: 0 };
+          }
+          
+          // Converter bytes para GB
+          acc[date].upload += conn.acctoutputoctets / (1024 * 1024 * 1024);
+          acc[date].download += conn.acctinputoctets / (1024 * 1024 * 1024);
+          
+          return acc;
+        }, {});
         
-        // Converter bytes para GB
-        acc[date].upload += conn.acctoutputoctets / (1024 * 1024 * 1024);
-        acc[date].download += conn.acctinputoctets / (1024 * 1024 * 1024);
+        const chartData = Object.keys(consumptionByDay).map(date => ({
+          date,
+          upload_gb: parseFloat(consumptionByDay[date].upload.toFixed(2)),
+          download_gb: parseFloat(consumptionByDay[date].download.toFixed(2))
+        }));
         
-        return acc;
-      }, {});
-      
-      const chartData = Object.keys(consumptionByDay).map(date => ({
-        date,
-        upload_gb: parseFloat(consumptionByDay[date].upload.toFixed(2)),
-        download_gb: parseFloat(consumptionByDay[date].download.toFixed(2))
-      }));
-      
-      setConsumptionData(chartData);
+        setConsumptionData(chartData);
+      } else {
+        console.log("No connection data available for chart");
+        setConsumptionData([]);
+      }
     } catch (error) {
       console.error('Error fetching user connection history:', error);
       setConnectionHistory([]);

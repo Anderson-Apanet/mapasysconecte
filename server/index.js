@@ -108,135 +108,6 @@ const createConnection = async () => {
     }
 };
 
-// Mover esta rota para o arquivo de rotas do radius
-// app.get('/api/concentrator-stats', async (req, res) => {
-//     try {
-//         const connection = await createConnection();
-
-//         // Query para buscar os concentradores da tabela nas e contar usuários ativos por concentrador
-//         const query = `
-//             SELECT 
-//                 n.nasname,
-//                 n.shortname,
-//                 n.type,
-//                 n.ports,
-//                 n.description,
-//                 COUNT(DISTINCT CASE 
-//                     WHEN r.acctstoptime IS NULL THEN 
-//                         CASE 
-//                             WHEN n.nasname = '172.16.0.25' AND r.nasipaddress = '172.16.255.13' THEN r.username
-//                             WHEN n.nasname = r.nasipaddress THEN r.username
-//                             ELSE NULL
-//                         END
-//                     ELSE NULL 
-//                 END) as user_count
-//             FROM nas n
-//             LEFT JOIN radacct r ON 
-//                 CASE 
-//                     WHEN n.nasname = '172.16.0.25' THEN r.nasipaddress = '172.16.255.13'
-//                     ELSE n.nasname = r.nasipaddress
-//                 END
-//             GROUP BY n.nasname, n.shortname, n.type, n.ports, n.description
-//             ORDER BY n.nasname`;
-
-//         const [rows] = await connection.execute(query);
-//         await connection.end();
-//         res.json(rows);
-//     } catch (error) {
-//         console.error('Erro ao buscar estatísticas:', error);
-//         res.status(500).json({ error: String(error) });
-//     }
-// });
-
-// Rota para buscar conexões
-// app.get('/api/support/connections', async (req, res) => {
-//     try {
-//         const connection = await createConnection();
-//         const page = parseInt(req.query.page) || 1;
-//         const limit = 10;
-//         const offset = (page - 1) * limit;
-//         const search = req.query.search || '';
-//         const status = req.query.status || 'all';
-//         const nasip = req.query.nasip || 'all';
-
-//         let whereClause = '';
-//         const params = [];
-
-//         if (search) {
-//             whereClause += ' AND ra.username LIKE ?';
-//             params.push(`%${search}%`);
-//         }
-
-//         if (status === 'up') {
-//             whereClause += ' AND ra.acctstoptime IS NULL';
-//         } else if (status === 'down') {
-//             whereClause += ' AND ra.acctstoptime IS NOT NULL';
-//         }
-
-//         if (nasip !== 'all') {
-//             whereClause += ' AND ra.nasipaddress = ?';
-//             params.push(nasip);
-//         }
-
-//         // Count total records
-//         const [countRows] = await connection.execute(
-//             `WITH LastConnection AS (
-//                 SELECT username, MAX(radacctid) as last_id
-//                 FROM radacct
-//                 GROUP BY username
-//             )
-//             SELECT COUNT(*) as total 
-//             FROM LastConnection lc
-//             JOIN radacct ra ON ra.radacctid = lc.last_id
-//             WHERE 1=1 ${whereClause}`,
-//             params
-//         );
-//         const totalRecords = countRows[0].total;
-
-//         // Get paginated records
-//         const query = `
-//             WITH LastConnection AS (
-//                 SELECT username, MAX(radacctid) as last_id
-//                 FROM radacct
-//                 GROUP BY username
-//             )
-//             SELECT 
-//                 ra.radacctid,
-//                 ra.username,
-//                 ra.nasipaddress,
-//                 ra.nasportid,
-//                 ra.acctstarttime,
-//                 ra.acctstoptime,
-//                 ra.acctinputoctets,
-//                 ra.acctoutputoctets,
-//                 ra.acctterminatecause,
-//                 ra.framedipaddress,
-//                 ra.callingstationid
-//             FROM LastConnection lc
-//             JOIN radacct ra ON ra.radacctid = lc.last_id
-//             WHERE 1=1 ${whereClause}
-//             ORDER BY ra.acctstarttime DESC 
-//             LIMIT ? OFFSET ?`;
-
-//         const [rows] = await connection.execute(query, [...params, limit, offset]);
-
-//         await connection.end();
-
-//         res.json({
-//             data: rows,
-//             pagination: {
-//                 currentPage: page,
-//                 totalPages: Math.ceil(totalRecords / limit),
-//                 totalRecords,
-//                 recordsPerPage: limit
-//             }
-//         });
-//     } catch (error) {
-//         console.error('Erro ao buscar conexões:', error);
-//         res.status(500).json({ error: String(error) });
-//     }
-// });
-
 // Rota para buscar consumo do usuário
 app.get('/api/user-consumption/:username', async (req, res) => {
     try {
@@ -273,6 +144,51 @@ app.get('/api/user-consumption/:username', async (req, res) => {
     } catch (error) {
         console.error('Erro ao buscar consumo do usuário:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
+// Rota para buscar histórico de conexões de um usuário
+app.get('/api/connection-history/:username', async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const username = req.params.username;
+
+        console.log(`Buscando histórico de conexões para o usuário: ${username}`);
+
+        const query = `
+            SELECT 
+                radacctid,
+                username,
+                nasipaddress,
+                nasportid,
+                acctstarttime,
+                acctstoptime,
+                acctinputoctets,
+                acctoutputoctets,
+                acctterminatecause,
+                framedipaddress,
+                callingstationid
+            FROM radacct 
+            WHERE username = ?
+            ORDER BY acctstarttime DESC
+            LIMIT 10`;
+
+        const [rows] = await connection.execute(query, [username]);
+        
+        console.log(`Encontradas ${rows.length} conexões para o usuário ${username}`);
+        
+        await connection.end();
+
+        res.json({
+            success: true,
+            data: rows
+        });
+    } catch (error) {
+        console.error('Erro ao buscar histórico de conexões:', error);
+        res.status(500).json({ 
+            error: 'Erro ao buscar histórico de conexões',
+            details: error.message 
+        });
     }
 });
 
