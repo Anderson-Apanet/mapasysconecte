@@ -1,79 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  MagnifyingGlassIcon,
-  DocumentTextIcon,
-  ArrowUpTrayIcon,
-  XMarkIcon,
-  PencilIcon,
-  TrashIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  NoSymbolIcon,
-  LockClosedIcon,
-  LockOpenIcon,
-  ClockIcon,
-  CheckCircleIcon
-} from '@heroicons/react/24/outline';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { TitulosContratosModal } from '../components/TitulosContratosModal';
+import { Contrato } from '../types/contrato';
 import Layout from '../components/Layout';
 import ListaCaixas from '../components/ListaCaixas';
-import {
-  CONTRACT_STATUS_OPTIONS,
-  Cliente,
-  Contrato,
-  Titulo
-} from '../types/financeiro';
+import { TitulosContratosModal } from '../components/TitulosContratosModal';
 import { Transition } from '@headlessui/react';
-import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../constants/routes';
+import { 
+  MagnifyingGlassIcon, 
+  LockOpenIcon, 
+  ClockIcon, 
+  NoSymbolIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  DocumentTextIcon,
+  CheckCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
+} from '@heroicons/react/24/outline';
+
+interface ContratoExtended extends Contrato {
+  cliente_nome?: string;
+  cliente_idasaas?: string | null;
+  plano?: {
+    radius?: string;
+  };
+  plano_radius?: string;
+}
 
 const Financeiro: React.FC = () => {
   // Estados para contratos e títulos
-  const [contratos, setContratos] = useState<(Contrato & { cliente_nome?: string, cliente_idasaas?: string | null })[]>([]);
-  const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
+  const [contratos, setContratos] = useState<ContratoExtended[]>([]);
+  const [selectedContrato, setSelectedContrato] = useState<ContratoExtended | null>(null);
   const [showTitulosModal, setShowTitulosModal] = useState(false);
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [contractStatusFilter, setContractStatusFilter] = useState('Todos');
-  const [loading, setLoading] = useState(true);
+  const [contractStatusFilter, setContractStatusFilter] = useState('atraso');
+  const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
 
   // Estados para controlar a visibilidade do histórico
   const [showHistorico, setShowHistorico] = useState(false);
-  
-  // Estados para o modal de confirmação de liberação
+
+  // Estados para os modais de ação
   const [showLiberarModal, setShowLiberarModal] = useState(false);
-  const [contratoParaLiberar, setContratoParaLiberar] = useState<any>(null);
-  const [isLiberando, setIsLiberando] = useState(false);
-
-  // Estados para o modal de confirmação de liberação por 48 horas
   const [showLiberar48Modal, setShowLiberar48Modal] = useState(false);
-  const [contratoParaLiberar48, setContratoParaLiberar48] = useState<any>(null);
-  const [isLiberando48, setIsLiberando48] = useState(false);
-
-  // Estados para o modal de confirmação de cancelamento
   const [showCancelarModal, setShowCancelarModal] = useState(false);
-  const [contratoParaCancelar, setContratoParaCancelar] = useState<any>(null);
-  const [isCancelando, setIsCancelando] = useState(false);
-
-  // Estados para o modal de confirmação de bloqueio
   const [showBloquearModal, setShowBloquearModal] = useState(false);
-  const [contratoParaBloquear, setContratoParaBloquear] = useState<any>(null);
-  const [isBloqueando, setIsBloqueando] = useState(false);
-
-  // Estados para o modal de confirmação de bloqueio em massa
   const [showBloquearEmMassaModal, setShowBloquearEmMassaModal] = useState(false);
+
+  // Estados para controlar o loading das ações
+  const [isLiberando, setIsLiberando] = useState(false);
+  const [isLiberando48, setIsLiberando48] = useState(false);
+  const [isCancelando, setIsCancelando] = useState(false);
+  const [isBloqueando, setIsBloqueando] = useState(false);
   const [isBloqueandoEmMassa, setIsBloqueandoEmMassa] = useState(false);
 
-  // Atualizar as opções de status do contrato
   const CONTRACT_STATUS_OPTIONS = [
     { value: 'Todos', label: 'Todos os Contratos' },
     { value: 'Ativo', label: 'Contratos Ativos' },
@@ -86,61 +70,92 @@ const Financeiro: React.FC = () => {
     { value: 'atraso15', label: 'Contratos em Atraso > 15 dias' }
   ];
 
-  // Função para carregar contratos com paginação e busca
   const fetchContratos = async (page: number, searchTerm: string = '', status: string = '') => {
+    setIsLoading(true);
     try {
-      setLoading(true);
-      
-      // Primeiro, buscar o total de registros para paginação
       let countQuery = supabase
         .from('contratos')
         .select('*, clientes!inner(idasaas)', { count: 'exact', head: true });
 
-      // Aplicar filtros na query de contagem
       if (searchTerm) {
         countQuery = countQuery.ilike('pppoe', `%${searchTerm}%`);
       }
       
-      // Filtros especiais que requerem consultas adicionais
-      if (status === 'atraso' || status === 'atraso15') {
-        // Para estes filtros, precisamos primeiro buscar os IDs dos contratos com títulos em atraso
-        const diasAtraso = status === 'atraso15' ? 15 : 0;
+      if (status === 'atraso') {
+        // Use the contratosatraso view for this filter
+        const { count, error: countError } = await supabase
+          .from('contratosatraso')
+          .select('*', { count: 'exact', head: true });
+
+        if (countError) throw countError;
+        console.log('Total de registros em atraso encontrados:', count);
+        setTotalCount(count || 0);
+
+        const from = (page - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
         
-        const dataLimite = new Date();
-        dataLimite.setDate(dataLimite.getDate() - diasAtraso);
-        const dataLimiteStr = dataLimite.toISOString().split('T')[0];
-        
-        // Buscar títulos em atraso com o nome correto da coluna (id_contrato)
-        console.log('Buscando títulos com vencimento anterior a:', dataLimiteStr);
-        const { data: titulosAtrasados, error: titulosError } = await supabase
-          .from('titulos')
-          .select('id_contrato')
-          .lt('vencimento', dataLimiteStr)
-          .eq('pago', false);
-        
-        console.log('Resultado da busca de títulos:', { titulosAtrasados, titulosError });
-        
-        if (titulosError) throw titulosError;
-        
-        if (titulosAtrasados && titulosAtrasados.length > 0) {
-          // Extrair IDs únicos de contratos com títulos em atraso
-          const idsContratosAtrasados = [...new Set(titulosAtrasados.map(t => t.id_contrato))];
-          countQuery = countQuery
-            .in('id', idsContratosAtrasados)
-            .neq('status', 'Cancelado');
+        const { data: contratosAtraso, error: contratosError } = await supabase
+          .from('contratosatraso')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (contratosError) throw contratosError;
+
+        if (contratosAtraso) {
+          const contratosFormatados = contratosAtraso.map(contrato => ({
+            ...contrato,
+            cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
+            cliente_idasaas: contrato.cliente_idasaas
+          }));
+
+          setContratos(contratosFormatados);
         } else {
-          // Se não houver contratos em atraso, retornar lista vazia
-          setTotalCount(0);
           setContratos([]);
-          setLoading(false);
-          return;
         }
+        
+        setIsLoading(false);
+        return;
+      } else if (status === 'atraso15') {
+        // Use the contratosatrasodias view for this filter
+        const { count, error: countError } = await supabase
+          .from('contratosatrasodias')
+          .select('*', { count: 'exact', head: true });
+
+        if (countError) throw countError;
+        console.log('Total de registros em atraso > 15 dias encontrados:', count);
+        setTotalCount(count || 0);
+
+        const from = (page - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+        
+        const { data: contratosAtraso, error: contratosError } = await supabase
+          .from('contratosatrasodias')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (contratosError) throw contratosError;
+
+        if (contratosAtraso) {
+          const contratosFormatados = contratosAtraso.map(contrato => ({
+            ...contrato,
+            cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
+            cliente_idasaas: contrato.cliente_idasaas
+          }));
+
+          setContratos(contratosFormatados);
+        } else {
+          setContratos([]);
+        }
+        
+        setIsLoading(false);
+        return;
       } else if (status === 'pendencia') {
         countQuery = countQuery.eq('pendencia', true);
       } else if (status && status !== 'Todos') {
         countQuery = countQuery.eq('status', status);
       } else if (status === 'Todos') {
-        // Para "Todos", mostrar todos os contratos exceto os cancelados
         countQuery = countQuery.neq('status', 'Cancelado');
       }
       
@@ -150,60 +165,23 @@ const Financeiro: React.FC = () => {
       console.log('Total de registros encontrados:', count);
       setTotalCount(count || 0);
 
-      // Agora, buscar os registros da página atual
       let dataQuery = supabase
         .from('contratos')
         .select('*, clientes!inner(id, nome, idasaas)')
         .order('created_at', { ascending: false });
 
-      // Aplicar os mesmos filtros na query de dados
       if (searchTerm) {
         dataQuery = dataQuery.ilike('pppoe', `%${searchTerm}%`);
       }
       
-      // Filtros especiais que requerem consultas adicionais
-      if (status === 'atraso' || status === 'atraso15') {
-        // Para estes filtros, precisamos primeiro buscar os IDs dos contratos com títulos em atraso
-        const diasAtraso = status === 'atraso15' ? 15 : 0;
-        
-        const dataLimite = new Date();
-        dataLimite.setDate(dataLimite.getDate() - diasAtraso);
-        const dataLimiteStr = dataLimite.toISOString().split('T')[0];
-        
-        // Buscar títulos em atraso com o nome correto da coluna (id_contrato)
-        console.log('Buscando títulos com vencimento anterior a:', dataLimiteStr);
-        const { data: titulosAtrasados, error: titulosError } = await supabase
-          .from('titulos')
-          .select('id_contrato')
-          .lt('vencimento', dataLimiteStr)
-          .eq('pago', false);
-        
-        console.log('Resultado da busca de títulos:', { titulosAtrasados, titulosError });
-        
-        if (titulosError) throw titulosError;
-        
-        if (titulosAtrasados && titulosAtrasados.length > 0) {
-          // Extrair IDs únicos de contratos com títulos em atraso
-          const idsContratosAtrasados = [...new Set(titulosAtrasados.map(t => t.id_contrato))];
-          dataQuery = dataQuery
-            .in('id', idsContratosAtrasados)
-            .neq('status', 'Cancelado');
-        } else {
-          // Se não houver contratos em atraso, retornar lista vazia
-          setContratos([]);
-          setLoading(false);
-          return;
-        }
-      } else if (status === 'pendencia') {
+      if (status === 'pendencia') {
         dataQuery = dataQuery.eq('pendencia', true);
       } else if (status && status !== 'Todos') {
         dataQuery = dataQuery.eq('status', status);
       } else if (status === 'Todos') {
-        // Para "Todos", mostrar todos os contratos exceto os cancelados
         dataQuery = dataQuery.neq('status', 'Cancelado');
       }
 
-      // Adicionar paginação
       const from = (page - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       
@@ -227,422 +205,199 @@ const Financeiro: React.FC = () => {
       console.error('Erro ao carregar contratos:', error.message);
       toast.error('Erro ao carregar contratos');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Efeito para garantir que a busca inicial seja feita com o filtro "Ativo"
   useEffect(() => {
-    // Iniciar com contratos ativos
-    fetchContratos(1, '', 'Todos');
+    fetchContratos(1, '', 'atraso');
   }, []);
 
-  // Efeito para carregar os contratos quando a página, termo de busca, status ou filtro Asaas mudar
   useEffect(() => {
     fetchContratos(currentPage, searchTerm, contractStatusFilter);
   }, [currentPage, searchTerm, contractStatusFilter]);
 
-  // Handler para mudança no termo de busca
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setCurrentPage(1); // Volta para a primeira página ao pesquisar
+    setCurrentPage(1);
   };
 
-  // Handler para mudança no filtro de status
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setContractStatusFilter(e.target.value);
-    setCurrentPage(1); // Volta para a primeira página ao mudar o filtro
+    setCurrentPage(1);
   };
 
-  // Funções de navegação
-  const goToNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, totalPages));
-  };
-
-  const goToPreviousPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 1));
-  };
-
-  // Cálculo do total de páginas
-  const totalPages = Math.ceil(totalCount / itemsPerPage);
-
-  // Handler para abrir o modal de títulos
-  const handleOpenTitulosModal = (contrato: any) => {
-    console.log('Abrindo modal com contrato:', contrato);
+  const handleOpenTitulosModal = (contrato: ContratoExtended) => {
     setSelectedContrato(contrato);
     setSelectedPPPoE(contrato.pppoe || '');
     setShowTitulosModal(true);
   };
 
-  // Handler para abrir o modal de confirmação de liberação
-  const handleOpenLiberarModal = (contrato: any) => {
-    setContratoParaLiberar(contrato);
+  const handleOpenLiberarModal = (contrato: ContratoExtended) => {
+    setSelectedContrato(contrato);
     setShowLiberarModal(true);
   };
 
-  // Handler para abrir o modal de confirmação de liberação por 48 horas
-  const handleOpenLiberar48Modal = (contrato: any) => {
-    setContratoParaLiberar48(contrato);
+  const handleOpenLiberar48Modal = (contrato: ContratoExtended) => {
+    setSelectedContrato(contrato);
     setShowLiberar48Modal(true);
   };
 
-  // Handler para abrir o modal de confirmação de cancelamento
-  const handleOpenCancelarModal = (contrato: any) => {
-    setContratoParaCancelar(contrato);
+  const handleOpenCancelarModal = (contrato: ContratoExtended) => {
+    setSelectedContrato(contrato);
     setShowCancelarModal(true);
   };
 
-  // Handler para abrir o modal de confirmação de bloqueio
-  const handleOpenBloquearModal = (contrato: any) => {
-    setContratoParaBloquear(contrato);
+  const handleOpenBloquearModal = (contrato: ContratoExtended) => {
+    setSelectedContrato(contrato);
     setShowBloquearModal(true);
   };
 
-  // Handler para abrir o modal de confirmação de bloqueio em massa
   const handleOpenBloquearEmMassaModal = () => {
     setShowBloquearEmMassaModal(true);
   };
 
-  // Handler para confirmar a liberação do cliente
   const handleConfirmarLiberacao = async () => {
-    if (!contratoParaLiberar || !contratoParaLiberar.pppoe) {
-      toast.error('Dados do contrato incompletos');
-      return;
-    }
-
+    if (!selectedContrato) return;
+    
     setIsLiberando(true);
     try {
-      // Buscar o valor do campo radius do plano vinculado ao contrato
-      const { data: planoData, error: planoError } = await supabase
-        .from('planos')
-        .select('radius')
-        .eq('id', contratoParaLiberar.id_plano)
-        .single();
-
-      if (planoError) {
-        console.error('Erro ao buscar dados do plano:', planoError);
-        toast.error('Erro ao buscar dados do plano');
-        return;
-      }
-
-      // Preparar os dados para enviar ao webhook
-      const webhookData = {
-        pppoe: contratoParaLiberar.pppoe,
-        radius: planoData?.radius || '',
-        acao: 'liberar'
-      };
-      
-      console.log('Enviando dados para webhook de liberação:', webhookData);
-      
-      // Enviar para o endpoint do n8n
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+      const response = await fetch('http://localhost:5678/webhook/liberarcliente', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(webhookData),
+        body: JSON.stringify({
+          pppoe: selectedContrato.pppoe,
+          radius: selectedContrato.plano?.radius
+        }),
       });
-      
-      if (response.ok) {
-        console.log('Solicitação de liberação enviada com sucesso');
-        toast.success('Cliente liberado com sucesso');
-        
-        // Atualizar o status do contrato no banco de dados
-        const { error: updateError } = await supabase
-          .from('contratos')
-          .update({ status: 'Ativo' })
-          .eq('id', contratoParaLiberar.id);
-          
-        if (updateError) {
-          console.error('Erro ao atualizar status do contrato:', updateError);
-          toast.error('Erro ao atualizar status do contrato');
-        }
-        
-        // Atualizar a lista de contratos
-        fetchContratos(currentPage, searchTerm, contractStatusFilter);
-      } else {
-        const errorText = await response.text();
-        console.error('Erro ao solicitar liberação:', errorText);
-        toast.error('Erro ao solicitar liberação');
+
+      if (!response.ok) {
+        throw new Error('Erro ao liberar cliente');
       }
+
+      toast.success('Cliente liberado com sucesso!');
+      setShowLiberarModal(false);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
     } catch (error) {
-      console.error('Erro ao processar liberação:', error);
-      toast.error('Erro ao processar liberação');
+      console.error('Erro ao liberar cliente:', error);
+      toast.error('Erro ao liberar cliente');
     } finally {
       setIsLiberando(false);
-      setShowLiberarModal(false);
-      setContratoParaLiberar(null);
+      setSelectedContrato(null);
     }
   };
 
-  // Handler para confirmar a liberação do cliente por 48 horas
   const handleConfirmarLiberacao48 = async () => {
-    if (!contratoParaLiberar48 || !contratoParaLiberar48.pppoe) {
-      toast.error('Dados do contrato incompletos');
-      return;
-    }
-
+    if (!selectedContrato) return;
+    
     setIsLiberando48(true);
     try {
-      // Buscar o valor do campo radius do plano vinculado ao contrato
-      const { data: planoData, error: planoError } = await supabase
-        .from('planos')
-        .select('radius')
-        .eq('id', contratoParaLiberar48.id_plano)
-        .single();
-
-      if (planoError) {
-        console.error('Erro ao buscar dados do plano:', planoError);
-        toast.error('Erro ao buscar dados do plano');
-        setIsLiberando48(false);
-        return;
-      }
-
-      // Preparar os dados para enviar ao webhook
-      const webhookData = {
-        pppoe: contratoParaLiberar48.pppoe,
-        radius: planoData?.radius || '',
-        acao: 'liberar48'
-      };
-      
-      console.log('Enviando dados para webhook de liberação por 48h:', webhookData);
-      
-      // Enviar para o endpoint do n8n
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+      const response = await fetch('http://localhost:5678/webhook/liberarcliente48', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(webhookData),
+        body: JSON.stringify({
+          pppoe: selectedContrato.pppoe,
+          radius: selectedContrato.plano?.radius
+        }),
       });
-      
-      if (response.ok) {
-        console.log('Solicitação de liberação por 48h enviada com sucesso');
-        toast.success('Cliente liberado por 48 horas com sucesso');
-        
-        // Atualizar o status do contrato no banco de dados
-        const { error: updateError } = await supabase
-          .from('contratos')
-          .update({ status: 'Liberado48' })
-          .eq('id', contratoParaLiberar48.id);
-          
-        if (updateError) {
-          console.error('Erro ao atualizar status do contrato:', updateError);
-          toast.error('Erro ao atualizar status do contrato');
-        }
-        
-        // Atualizar a lista de contratos
-        fetchContratos(currentPage, searchTerm, contractStatusFilter);
-      } else {
-        const errorText = await response.text();
-        console.error('Erro ao solicitar liberação por 48h:', errorText);
-        toast.error('Erro ao solicitar liberação por 48h');
+
+      if (!response.ok) {
+        throw new Error('Erro ao liberar cliente por 48h');
       }
+
+      toast.success('Cliente liberado por 48h com sucesso!');
+      setShowLiberar48Modal(false);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
     } catch (error) {
-      console.error('Erro ao processar liberação por 48h:', error);
-      toast.error('Erro ao processar liberação por 48h');
+      console.error('Erro ao liberar cliente por 48h:', error);
+      toast.error('Erro ao liberar cliente por 48h');
     } finally {
       setIsLiberando48(false);
-      setShowLiberar48Modal(false);
-      setContratoParaLiberar48(null);
+      setSelectedContrato(null);
     }
   };
 
-  // Handler para confirmar o cancelamento do contrato
   const handleConfirmarCancelamento = async () => {
-    if (!contratoParaCancelar || !contratoParaCancelar.pppoe) {
-      toast.error('Dados do contrato incompletos');
-      return;
-    }
-
+    if (!selectedContrato) return;
+    
     setIsCancelando(true);
     try {
-      // Buscar o valor do campo radius do plano vinculado ao contrato
-      const { data: planoData, error: planoError } = await supabase
-        .from('planos')
-        .select('radius')
-        .eq('id', contratoParaCancelar.id_plano)
-        .single();
-
-      if (planoError) {
-        console.error('Erro ao buscar dados do plano:', planoError);
-        toast.error('Erro ao buscar dados do plano');
-        setIsCancelando(false);
-        return;
-      }
-
-      // Preparar os dados para enviar ao webhook
-      const webhookData = {
-        pppoe: contratoParaCancelar.pppoe,
-        radius: planoData?.radius || '',
-        acao: 'cancelar'
-      };
-      
-      console.log('Enviando dados para webhook de cancelamento:', webhookData);
-      
-      // Enviar para o endpoint do n8n
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+      const response = await fetch('http://localhost:5678/webhook/cancelarcontrato', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(webhookData),
+        body: JSON.stringify({
+          pppoe: selectedContrato.pppoe,
+          radius: selectedContrato.plano?.radius
+        }),
       });
-      
-      if (response.ok) {
-        console.log('Solicitação de cancelamento enviada com sucesso');
-        toast.success('Contrato cancelado com sucesso');
-        
-        // Atualizar o status do contrato no banco de dados
-        const { error: updateError } = await supabase
-          .from('contratos')
-          .update({ status: 'Cancelado' })
-          .eq('id', contratoParaCancelar.id);
-          
-        if (updateError) {
-          console.error('Erro ao atualizar status do contrato:', updateError);
-          toast.error('Erro ao atualizar status do contrato');
-        }
-        
-        // Atualizar a lista de contratos
-        fetchContratos(currentPage, searchTerm, contractStatusFilter);
-      } else {
-        const errorText = await response.text();
-        console.error('Erro ao solicitar cancelamento:', errorText);
-        toast.error('Erro ao solicitar cancelamento');
+
+      if (!response.ok) {
+        throw new Error('Erro ao cancelar contrato');
       }
+
+      toast.success('Contrato cancelado com sucesso!');
+      setShowCancelarModal(false);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
     } catch (error) {
-      console.error('Erro ao processar cancelamento:', error);
-      toast.error('Erro ao processar cancelamento');
+      console.error('Erro ao cancelar contrato:', error);
+      toast.error('Erro ao cancelar contrato');
     } finally {
       setIsCancelando(false);
-      setShowCancelarModal(false);
-      setContratoParaCancelar(null);
+      setSelectedContrato(null);
     }
   };
 
-  // Handler para confirmar o bloqueio do cliente
   const handleConfirmarBloqueio = async () => {
-    if (!contratoParaBloquear || !contratoParaBloquear.pppoe) {
-      toast.error('Dados do contrato incompletos');
-      return;
-    }
-
+    if (!selectedContrato) return;
+    
     setIsBloqueando(true);
     try {
-      // Buscar o valor do campo radius do plano vinculado ao contrato
-      const { data: planoData, error: planoError } = await supabase
-        .from('planos')
-        .select('radius')
-        .eq('id', contratoParaBloquear.id_plano)
-        .single();
-
-      if (planoError) {
-        console.error('Erro ao buscar dados do plano:', planoError);
-        toast.error('Erro ao buscar dados do plano');
-        return;
-      }
-
-      // Preparar os dados para enviar ao webhook
-      const webhookData = {
-        pppoe: contratoParaBloquear.pppoe,
-        radius: planoData?.radius || '',
-        acao: 'bloquear'
-      };
-      
-      console.log('Enviando dados para webhook de bloqueio:', webhookData);
-      
-      // Enviar para o endpoint do n8n
-      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+      const response = await fetch('http://localhost:5678/webhook/bloquearcontrato', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(webhookData),
+        body: JSON.stringify({
+          pppoe: selectedContrato.pppoe,
+          radius: selectedContrato.plano?.radius
+        }),
       });
-      
-      if (response.ok) {
-        console.log('Solicitação de bloqueio enviada com sucesso');
-        toast.success('Cliente bloqueado com sucesso');
-        
-        // Atualizar o status do contrato no banco de dados
-        const { error: updateError } = await supabase
-          .from('contratos')
-          .update({ status: 'Bloqueado' })
-          .eq('id', contratoParaBloquear.id);
-          
-        if (updateError) {
-          console.error('Erro ao atualizar status do contrato:', updateError);
-          toast.error('Erro ao atualizar status do contrato');
-        }
-        
-        // Atualizar a lista de contratos
-        fetchContratos(currentPage, searchTerm, contractStatusFilter);
-      } else {
-        const errorText = await response.text();
-        console.error('Erro ao solicitar bloqueio:', errorText);
-        toast.error('Erro ao solicitar bloqueio');
+
+      if (!response.ok) {
+        throw new Error('Erro ao bloquear contrato');
       }
+
+      toast.success('Contrato bloqueado com sucesso!');
+      setShowBloquearModal(false);
+      fetchContratos(currentPage, searchTerm, contractStatusFilter);
     } catch (error) {
-      console.error('Erro ao processar bloqueio:', error);
-      toast.error('Erro ao processar bloqueio');
+      console.error('Erro ao bloquear contrato:', error);
+      toast.error('Erro ao bloquear contrato');
     } finally {
       setIsBloqueando(false);
-      setShowBloquearModal(false);
-      setContratoParaBloquear(null);
+      setSelectedContrato(null);
     }
   };
 
-  // Handler para confirmar o bloqueio em massa
   const handleConfirmarBloqueioEmMassa = async () => {
     setIsBloqueandoEmMassa(true);
     try {
-      // Para filtros de atraso, precisamos buscar todos os contratos com títulos em atraso
-      if (contractStatusFilter === 'atraso' || contractStatusFilter === 'atraso15') {
-        const diasAtraso = contractStatusFilter === 'atraso15' ? 15 : 0;
-        
-        const dataLimite = new Date();
-        dataLimite.setDate(dataLimite.getDate() - diasAtraso);
-        const dataLimiteStr = dataLimite.toISOString().split('T')[0];
-        
-        // Buscar títulos em atraso com o nome correto da coluna (id_contrato)
-        console.log('Buscando títulos com vencimento anterior a:', dataLimiteStr);
-        const { data: titulosAtraso, error: titulosError } = await supabase
-          .from('titulos')
-          .select('id_contrato')
-          .lt('vencimento', dataLimiteStr)
-          .eq('pago', false);
-        
-        console.log('Resultado da busca de títulos:', { titulosAtraso, titulosError });
-        
-        if (titulosError) {
-          console.error('Erro ao buscar títulos em atraso:', titulosError);
-          toast.error('Erro ao buscar contratos em atraso');
-          setIsBloqueandoEmMassa(false);
-          return;
-        }
-        
-        if (!titulosAtraso || titulosAtraso.length === 0) {
-          toast.error('Não foram encontrados contratos em atraso');
-          setIsBloqueandoEmMassa(false);
-          return;
-        }
-        
-        // Extrair IDs únicos dos contratos com títulos em atraso
-        const contratosIds = [...new Set(titulosAtraso.map(titulo => titulo.id_contrato))];
-        console.log('IDs de contratos em atraso:', contratosIds);
-        
-        // Buscar todos os contratos em atraso de uma vez
+      if (contractStatusFilter === 'atraso') {
+        // Use the contratosatraso view for this filter - get ALL contracts, not just the current page
         const { data: contratosAtraso, error: contratosError } = await supabase
-          .from('contratos')
-          .select('*, planos(radius)')
-          .in('id', contratosIds)
-          .neq('status', 'Cancelado');
+          .from('contratosatraso')
+          .select('*');
         
-        console.log('Contratos em atraso encontrados:', contratosAtraso?.length || 0);
+        console.log('Total de contratos em atraso encontrados via view:', contratosAtraso?.length || 0);
         
         if (contratosError) {
-          console.error('Erro ao buscar contratos:', contratosError);
+          console.error('Erro ao buscar contratos em atraso:', contratosError);
           toast.error('Erro ao buscar detalhes dos contratos');
           setIsBloqueandoEmMassa(false);
           return;
@@ -654,67 +409,87 @@ const Financeiro: React.FC = () => {
           return;
         }
         
-        // Preparar dados para o webhook
-        const blockedContracts = contratosAtraso.map(contrato => ({
-          pppoe: contrato.pppoe,
-          radius: contrato.planos?.radius || ''
-        }));
+        // Log the structure of the first contract to debug
+        console.log('Estrutura do primeiro contrato:', JSON.stringify(contratosAtraso[0], null, 2));
         
-        console.log('Contratos a serem bloqueados:', blockedContracts);
+        // Extract all PPPoEs and radius values from ALL contracts
+        const blockedContracts = contratosAtraso.map(contrato => {
+          return {
+            pppoe: contrato.pppoe,
+            radius: contrato.radius || '' // Use the radius field directly from the view
+          };
+        });
         
-        // Enviar dados para o webhook
-        const webhookUrl = 'https://webhooksn8nconecte.apanet.info/webhook/fbc34600-9d9c-4dcc-86ed-ae1b962a2f72';
-        const webhookData = {
-          contratos: blockedContracts,
-          acao: 'bloquear_em_massa'
-        };
+        console.log(`Enviando ${blockedContracts.length} contratos para bloqueio em massa:`, blockedContracts);
         
-        console.log('Enviando dados para webhook:', webhookUrl);
-        const response = await fetch(webhookUrl, {
+        // Use the correct n8n webhook URL
+        const response = await fetch('https://webhooksn8nconecte.apanet.info/webhook/fbc34600-9d9c-4dcc-86ed-ae1b962a2f72', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(webhookData),
+          body: JSON.stringify({
+            contratos: blockedContracts
+          }),
         });
         
-        console.log('Resposta do webhook:', response.status, response.statusText);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Resposta de erro do webhook:', errorText);
+          throw new Error('Erro ao bloquear contratos em massa');
+        }
+
+        toast.success(`${blockedContracts.length} contratos bloqueados com sucesso!`);
+        setShowBloquearEmMassaModal(false);
+        fetchContratos(currentPage, searchTerm, contractStatusFilter);
+      } else if (contractStatusFilter === 'atraso15') {
+        // Use the contratosatrasodias view for this filter
+        const { data: contratosAtraso, error: contratosError } = await supabase
+          .from('contratosatrasodias')
+          .select('*');
+        
+        console.log('Total de contratos em atraso > 15 dias encontrados via view:', contratosAtraso?.length || 0);
+        
+        if (contratosError) {
+          console.error('Erro ao buscar contratos em atraso > 15 dias:', contratosError);
+          toast.error('Erro ao buscar detalhes dos contratos');
+          setIsBloqueandoEmMassa(false);
+          return;
+        }
+        
+        if (!contratosAtraso || contratosAtraso.length === 0) {
+          toast.error('Não foram encontrados contratos válidos para bloquear');
+          setIsBloqueandoEmMassa(false);
+          return;
+        }
+        
+        // Log the structure of the first contract to debug
+        console.log('Estrutura do primeiro contrato:', JSON.stringify(contratosAtraso[0], null, 2));
+        
+        // Extract only PPPoEs from ALL contracts (no radius needed)
+        const pppoes = contratosAtraso.map(contrato => contrato.pppoe).filter(Boolean);
+        
+        console.log(`Enviando ${pppoes.length} PPPoEs para bloqueio em massa:`, pppoes);
+        
+        // Use the same n8n webhook URL but send only PPPoEs
+        const response = await fetch('https://webhooksn8nconecte.apanet.info/webhook/fbc34600-9d9c-4dcc-86ed-ae1b962a2f72', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pppoes: pppoes
+          }),
+        });
         
         if (!response.ok) {
-          throw new Error(`Erro ao enviar dados para o webhook: ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('Resposta de erro do webhook:', errorText);
+          throw new Error('Erro ao bloquear contratos em massa');
         }
-        
-        // Atualizar status dos contratos no banco de dados
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const contrato of contratosAtraso) {
-          try {
-            const { error: updateError } = await supabase
-              .from('contratos')
-              .update({ status: 'Bloqueado' })
-              .eq('id', contrato.id);
-            
-            if (updateError) {
-              console.error(`Erro ao atualizar status do contrato ${contrato.id}:`, updateError);
-              errorCount++;
-            } else {
-              successCount++;
-            }
-          } catch (error) {
-            console.error(`Erro ao atualizar status do contrato ${contrato.id}:`, error);
-            errorCount++;
-          }
-        }
-        
-        // Exibir mensagem de sucesso
-        if (errorCount > 0) {
-          toast.success(`${successCount} contratos bloqueados com sucesso, ${errorCount} contratos com erro`);
-        } else {
-          toast.success(`${contratosAtraso.length} contratos bloqueados com sucesso`);
-        }
-        
-        // Atualizar a lista de contratos
+
+        toast.success(`${pppoes.length} contratos bloqueados com sucesso!`);
+        setShowBloquearEmMassaModal(false);
         fetchContratos(currentPage, searchTerm, contractStatusFilter);
       }
     } catch (error) {
@@ -722,8 +497,15 @@ const Financeiro: React.FC = () => {
       toast.error('Erro ao bloquear contratos em massa');
     } finally {
       setIsBloqueandoEmMassa(false);
-      setShowBloquearEmMassaModal(false);
     }
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalCount / itemsPerPage)));
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
   };
 
   return (
@@ -791,10 +573,7 @@ const Financeiro: React.FC = () => {
                     <input
                       type="text"
                       value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1);
-                      }}
+                      onChange={handleSearchChange}
                       placeholder="Buscar por PPPoE..."
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
@@ -804,10 +583,7 @@ const Financeiro: React.FC = () => {
                   <div className="min-w-[200px]">
                     <select
                       value={contractStatusFilter}
-                      onChange={(e) => {
-                        setContractStatusFilter(e.target.value);
-                        setCurrentPage(1);
-                      }}
+                      onChange={handleStatusChange}
                       className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     >
                       {CONTRACT_STATUS_OPTIONS.map((option) => (
@@ -823,8 +599,8 @@ const Financeiro: React.FC = () => {
                     {totalCount} resultados encontrados
                   </div>
 
-                  {/* Botão Bloquear em Massa - Mostrar apenas quando o filtro for Atraso ou Atraso > 15 dias */}
-                  {(contractStatusFilter === 'atraso' || contractStatusFilter === 'atraso15') && (
+                  {/* Botão Bloquear em Massa - Mostrar apenas quando o filtro for Atraso > 15 dias */}
+                  {contractStatusFilter === 'atraso15' && (
                     <button
                       onClick={handleOpenBloquearEmMassaModal}
                       className="ml-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -838,6 +614,12 @@ const Financeiro: React.FC = () => {
 
               {/* Tabela de Contratos */}
               <div className="overflow-x-auto">
+                {isLoading ? (
+                  <div className="flex justify-center items-center p-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                    <span className="ml-3 text-gray-600 dark:text-gray-300">Carregando...</span>
+                  </div>
+                ) : (
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
@@ -951,6 +733,7 @@ const Financeiro: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             </div>
 
@@ -965,11 +748,11 @@ const Financeiro: React.FC = () => {
                   <ChevronLeftIcon className="h-5 w-5" />
                 </button>
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Página {currentPage} de {totalPages} ({totalCount} registros)
+                  Página {currentPage} de {Math.ceil(totalCount / itemsPerPage)} ({totalCount} registros)
                 </span>
                 <button
                   onClick={goToNextPage}
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === Math.ceil(totalCount / itemsPerPage)}
                   className="p-2 rounded-md bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 disabled:opacity-50"
                 >
                   <ChevronRightIcon className="h-5 w-5" />
@@ -1008,7 +791,7 @@ const Financeiro: React.FC = () => {
                           <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar Cliente</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja liberar o cliente {contratoParaLiberar?.cliente_nome}? Esta ação irá restaurar o acesso à internet.
+                              Tem certeza que deseja liberar o cliente {selectedContrato?.cliente_nome}? Esta ação irá restaurar o acesso à internet.
                             </p>
                           </div>
                         </div>
@@ -1053,7 +836,7 @@ const Financeiro: React.FC = () => {
                           <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar por 48 horas</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja liberar o cliente {contratoParaLiberar48?.cliente_nome} por 48 horas? Esta ação irá restaurar o acesso à internet temporariamente.
+                              Tem certeza que deseja liberar o cliente {selectedContrato?.cliente_nome} por 48 horas? Esta ação irá restaurar o acesso à internet temporariamente.
                             </p>
                           </div>
                         </div>
@@ -1098,7 +881,7 @@ const Financeiro: React.FC = () => {
                           <h3 className="text-lg font-medium leading-6 text-gray-900">Cancelar Contrato</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja cancelar o contrato do cliente {contratoParaCancelar?.cliente_nome}? Esta ação não pode ser desfeita.
+                              Tem certeza que deseja cancelar o contrato do cliente {selectedContrato?.cliente_nome}? Esta ação não pode ser desfeita.
                             </p>
                           </div>
                         </div>
@@ -1143,7 +926,7 @@ const Financeiro: React.FC = () => {
                           <h3 className="text-lg font-medium leading-6 text-gray-900">Bloquear Contrato</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja bloquear o contrato do cliente {contratoParaBloquear?.cliente_nome}? Esta ação irá suspender o acesso à internet.
+                              Tem certeza que deseja bloquear o contrato do cliente {selectedContrato?.cliente_nome}? Esta ação irá suspender o acesso à internet.
                             </p>
                           </div>
                         </div>
