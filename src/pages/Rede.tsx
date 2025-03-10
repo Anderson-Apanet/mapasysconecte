@@ -37,20 +37,11 @@ interface ConsumptionData {
   download_gb: number;
 }
 
-interface ConcentratorStats {
-  nasname: string;
-  shortname: string;
-  type: string;
-  ports: number;
-  description: string;
-  user_count: number;
-}
-
 export default function Rede() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
     totalPages: 1,
@@ -60,7 +51,6 @@ export default function Rede() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down'>('all');
   const [nasIpFilter, setNasIpFilter] = useState<string>('all');
   const [allNasIps, setAllNasIps] = useState<string[]>([]);
-  const [concentrators, setConcentrators] = useState<ConcentratorStats[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [consumptionData, setConsumptionData] = useState<ConsumptionData[]>([]);
   const [connectionHistory, setConnectionHistory] = useState<Connection[]>([]);
@@ -106,9 +96,6 @@ export default function Rede() {
       if (nasIpFilter === 'all' && page === 1 && !search) {
         const ips = Array.from(new Set((data.data || []).map((conn: Connection) => conn.nasipaddress))).sort();
         setAllNasIps(ips as string[]);
-        
-        // Atualizar estatísticas dos concentradores
-        fetchConcentratorStats();
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -119,66 +106,45 @@ export default function Rede() {
     }
   };
 
-  const fetchConcentratorStats = async () => {
-    try {
-      const url = `${apiUrl}/support/concentrator-stats`;
-      console.log('Fetching concentrator stats from:', url);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Failed to fetch concentrator stats');
-      }
-      const data = await response.json();
-      console.log('Dados dos concentradores:', data);
-      setConcentrators(data);
-      
-      // Atualiza a lista de IPs dos concentradores para o filtro
-      const ips = data.map((concentrator: ConcentratorStats) => concentrator.nasname);
-      setAllNasIps(ips as string[]);
-    } catch (error) {
-      console.error('Error fetching concentrator stats:', error);
-    }
-  };
-
   const handleUserClick = async (username: string) => {
     try {
       setSelectedUser(username);
       setShowModal(true);
       
-      // Busca os dados de consumo e histórico em paralelo
-      const [consumptionResponse, historyResponse] = await Promise.all([
-        fetch(`${apiUrl}/user-consumption/${username}`),
-        fetch(`${apiUrl}/support/connections/user/${username}/history`)
-      ]);
-
-      if (!consumptionResponse.ok) {
-        throw new Error('Erro ao buscar dados de consumo');
-      }
-      if (!historyResponse.ok) {
-        throw new Error('Erro ao buscar histórico de conexões');
-      }
-
-      const consumptionData = await consumptionResponse.json();
-      const historyData = await historyResponse.json();
-
-      setConsumptionData(consumptionData);
-      setConnectionHistory(historyData.data || []);
-    } catch (err) {
-      console.error('Erro ao buscar dados do usuário:', err);
-      // toast.error('Erro ao buscar dados do usuário');
-    }
-  };
-
-  const fetchUserConnectionHistory = async (username: string) => {
-    try {
+      // Buscar histórico de conexões do usuário
       const response = await fetch(`${apiUrl}/support/connections/user/${username}/history`);
       if (!response.ok) {
-        throw new Error('Failed to fetch user connection history');
+        throw new Error('Falha ao buscar histórico de conexões');
       }
+      
       const data = await response.json();
-      setConnectionHistory(data.data || []); 
-    } catch (err) {
-      console.error('Error fetching user connection history:', err);
-      setConnectionHistory([]); 
+      setConnectionHistory(data.data || []);
+      
+      // Processar dados de consumo para o gráfico
+      const consumptionByDay = data.data.reduce((acc: Record<string, { upload: number, download: number }>, conn: Connection) => {
+        const date = new Date(conn.acctstarttime).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { upload: 0, download: 0 };
+        }
+        
+        // Converter bytes para GB
+        acc[date].upload += conn.acctoutputoctets / (1024 * 1024 * 1024);
+        acc[date].download += conn.acctinputoctets / (1024 * 1024 * 1024);
+        
+        return acc;
+      }, {});
+      
+      const chartData = Object.keys(consumptionByDay).map(date => ({
+        date,
+        upload_gb: parseFloat(consumptionByDay[date].upload.toFixed(2)),
+        download_gb: parseFloat(consumptionByDay[date].download.toFixed(2))
+      }));
+      
+      setConsumptionData(chartData);
+    } catch (error) {
+      console.error('Error fetching user connection history:', error);
+      setConnectionHistory([]);
+      setConsumptionData([]);
     }
   };
 
@@ -204,65 +170,41 @@ export default function Rede() {
     fetchConnections(pagination.currentPage, searchTerm);
   }, [pagination.currentPage, searchTerm, statusFilter, nasIpFilter]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Não atualizar se o modal estiver aberto
-      if (!showModal) {
-        fetchConcentratorStats();
-      }
-    }, 30000);
-    
-    // Fetch inicial apenas se o modal não estiver aberto
-    if (!showModal) {
-      fetchConcentratorStats();
-    }
-    
-    return () => clearInterval(interval);
-  }, [showModal]);
-
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       setPagination({ ...pagination, currentPage: newPage });
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   const formatDate = (date: string | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleString();
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleString('pt-BR');
   };
 
   const getConnectionStatus = (connection: Connection) => {
-    // A connection is DOWN if it has an acctstoptime (end time)
     return connection.acctstoptime ? 'down' : 'up';
   };
 
-  const getRowBackgroundColor = (connection: Connection) => {
+  const getRowClass = (connection: Connection) => {
+    const isActive = !connection.acctstoptime;
+    if (isActive) {
+      return 'bg-green-50 dark:bg-green-900/20'; // Add dark mode background
+    }
     return 'hover:bg-gray-50 dark:hover:bg-gray-700'; // Add dark mode hover state
   };
 
-  const filteredConnections = connections.filter(conn => {
-    // Log connection details for debugging
-    console.log('Connection:', {
-      username: conn.username,
-      acctstoptime: conn.acctstoptime,
-      isDown: Boolean(conn.acctstoptime),
-      currentFilter: statusFilter
-    });
-
+  const filteredConnections = connections.filter((conn) => {
     // Search filter
-    const matchesSearch = 
-      conn.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conn.framedipaddress.includes(searchTerm) ||
-      conn.nasipaddress.includes(searchTerm);
-    
+    let matchesSearch = true;
+    if (searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase();
+      matchesSearch = 
+        conn.username.toLowerCase().includes(searchLower) ||
+        conn.framedipaddress.toLowerCase().includes(searchLower) ||
+        conn.nasipaddress.toLowerCase().includes(searchLower) ||
+        conn.callingstationid.toLowerCase().includes(searchLower);
+    }
+
     // Status filter
     let matchesStatus = true;
     if (statusFilter !== 'all') {
@@ -280,23 +222,8 @@ export default function Rede() {
       matchesNasIp = conn.nasipaddress === nasIpFilter;
     }
 
-    // Log filter result
-    console.log('Filter result:', {
-      username: conn.username,
-      matchesSearch,
-      matchesStatus,
-      matchesNasIp,
-      willShow: matchesSearch && matchesStatus && matchesNasIp
-    });
-
     return matchesSearch && matchesStatus && matchesNasIp;
   });
-
-  // Log filtered results
-  console.log('Total connections:', connections.length);
-  console.log('Filtered connections:', filteredConnections.length);
-  console.log('Current status filter:', statusFilter);
-  console.log('Current NAS IP filter:', nasIpFilter);
 
   return (
     <Layout>
@@ -312,55 +239,6 @@ export default function Rede() {
             <p className="text-white">
               Visualize o histórico de conexões dos clientes
             </p>
-          </div>
-
-          {/* Cards dos Concentradores */}
-          <div className="mb-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {concentrators
-                .filter(concentrator => 
-                  concentrator.nasname !== 'localhost' && 
-                  concentrator.nasname !== '127.0.0.1'
-                )
-                .map((concentrator) => (
-                <div
-                  key={concentrator.nasname}
-                  className="bg-white dark:bg-gray-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-100 dark:border-gray-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {concentrator.shortname || 'Concentrador'}
-                      </h3>
-                      <p className="text-gray-600 dark:text-gray-300">
-                        {concentrator.nasname}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {concentrator.description || 'Sem descrição'}
-                      </p>
-                      <p className="mt-2">
-                        <span className="font-bold text-gray-900 dark:text-white text-xl">
-                          {concentrator.user_count}
-                        </span>{' '}
-                        <span className="text-gray-600 dark:text-gray-300">
-                          usuários
-                        </span>
-                      </p>
-                      {concentrator.ports && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          Portas: {concentrator.ports}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-blue-600 dark:text-blue-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="mb-6 bg-white dark:bg-gray-700 rounded-xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
@@ -452,7 +330,7 @@ export default function Rede() {
                         filteredConnections.map((conn, index) => (
                           <tr 
                             key={index} 
-                            className={`hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${getRowBackgroundColor(conn)}`}
+                            className={`hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${getRowClass(conn)}`}
                             onClick={() => handleUserClick(conn.username)}
                           >
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
