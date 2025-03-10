@@ -125,14 +125,14 @@ router.get('/support/connections', async (req, res) => {
 
     console.log('Buscando conexões com parâmetros:', { page, limit, search, status, nasip });
 
-    // Construir a consulta base usando uma subconsulta para obter apenas o último registro de cada username
+    // Usar uma abordagem mais simples e robusta para obter o último registro de cada username
     let query = `
-      SELECT r.* FROM radacct r
-      INNER JOIN (
-        SELECT username, MAX(radacctid) as max_id
+      SELECT ra.* FROM radacct ra
+      JOIN (
+        SELECT username, MAX(acctstarttime) as latest_start
         FROM radacct
         GROUP BY username
-      ) as latest ON r.radacctid = latest.max_id
+      ) latest ON ra.username = latest.username AND ra.acctstarttime = latest.latest_start
       WHERE 1=1
     `;
     
@@ -140,23 +140,23 @@ router.get('/support/connections', async (req, res) => {
     const params = [];
     
     if (search) {
-      query += ` AND (r.username LIKE ? OR r.callingstationid LIKE ? OR r.framedipaddress LIKE ?)`;
+      query += ` AND (ra.username LIKE ? OR ra.callingstationid LIKE ? OR ra.framedipaddress LIKE ?)`;
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     
     if (status === 'up') {
-      query += ` AND r.acctstoptime IS NULL`;
+      query += ` AND ra.acctstoptime IS NULL`;
     } else if (status === 'down') {
-      query += ` AND r.acctstoptime IS NOT NULL`;
+      query += ` AND ra.acctstoptime IS NOT NULL`;
     }
     
     if (nasip !== 'all') {
-      query += ` AND r.nasipaddress = ?`;
+      query += ` AND ra.nasipaddress = ?`;
       params.push(nasip);
     }
     
     // Adicionar ordenação
-    query += ` ORDER BY r.acctstarttime DESC`;
+    query += ` ORDER BY ra.acctstarttime DESC`;
     
     // Consulta para contar total de registros
     const countQuery = `SELECT COUNT(*) as total FROM (${query}) as subquery`;
@@ -167,27 +167,35 @@ router.get('/support/connections', async (req, res) => {
     
     const connection = await pool.getConnection();
     
-    // Executar consulta principal
-    const [rows] = await connection.query(query, params);
-    
-    // Executar consulta de contagem
-    const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
-    const totalRecords = countResult[0].total;
-    
-    connection.release();
-    
-    // Calcular informações de paginação
-    const totalPages = Math.ceil(totalRecords / limit);
-    
-    res.json({
-      data: rows,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalRecords,
-        recordsPerPage: limit
-      }
-    });
+    try {
+      // Executar consulta principal
+      const [rows] = await connection.query(query, params);
+      
+      // Executar consulta de contagem
+      const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
+      const totalRecords = countResult[0].total;
+      
+      // Calcular informações de paginação
+      const totalPages = Math.ceil(totalRecords / limit);
+      
+      res.json({
+        data: rows,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalRecords,
+          recordsPerPage: limit
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao executar consulta:', error);
+      res.status(500).json({ 
+        error: 'Erro ao buscar conexões',
+        details: error.message 
+      });
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Erro ao buscar conexões:', error);
     res.status(500).json({ 
@@ -209,14 +217,14 @@ router.get('/connections', async (req, res) => {
 
     console.log('Buscando conexões com parâmetros:', { page, limit, search, status, nasip });
 
-    // Construir a consulta base usando uma subconsulta para obter apenas o último registro de cada username
+    // Usar a mesma abordagem robusta da rota /support/connections
     let query = `
-      SELECT r.* FROM radacct r
-      INNER JOIN (
-        SELECT username, MAX(radacctid) as max_id
+      SELECT ra.* FROM radacct ra
+      JOIN (
+        SELECT username, MAX(acctstarttime) as latest_start
         FROM radacct
         GROUP BY username
-      ) as latest ON r.radacctid = latest.max_id
+      ) latest ON ra.username = latest.username AND ra.acctstarttime = latest.latest_start
       WHERE 1=1
     `;
     
@@ -224,23 +232,23 @@ router.get('/connections', async (req, res) => {
     const params = [];
     
     if (search) {
-      query += ` AND (r.username LIKE ? OR r.callingstationid LIKE ? OR r.framedipaddress LIKE ?)`;
+      query += ` AND (ra.username LIKE ? OR ra.callingstationid LIKE ? OR ra.framedipaddress LIKE ?)`;
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     
     if (status === 'up') {
-      query += ` AND r.acctstoptime IS NULL`;
+      query += ` AND ra.acctstoptime IS NULL`;
     } else if (status === 'down') {
-      query += ` AND r.acctstoptime IS NOT NULL`;
+      query += ` AND ra.acctstoptime IS NOT NULL`;
     }
     
     if (nasip !== 'all') {
-      query += ` AND r.nasipaddress = ?`;
+      query += ` AND ra.nasipaddress = ?`;
       params.push(nasip);
     }
     
     // Adicionar ordenação
-    query += ` ORDER BY r.acctstarttime DESC`;
+    query += ` ORDER BY ra.acctstarttime DESC`;
     
     // Consulta para contar total de registros
     const countQuery = `SELECT COUNT(*) as total FROM (${query}) as subquery`;
@@ -251,27 +259,35 @@ router.get('/connections', async (req, res) => {
     
     const connection = await pool.getConnection();
     
-    // Executar consulta principal
-    const [rows] = await connection.query(query, params);
-    
-    // Executar consulta de contagem
-    const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
-    const totalRecords = countResult[0].total;
-    
-    connection.release();
-    
-    // Calcular informações de paginação
-    const totalPages = Math.ceil(totalRecords / limit);
-    
-    res.json({
-      data: rows,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalRecords,
-        recordsPerPage: limit
-      }
-    });
+    try {
+      // Executar consulta principal
+      const [rows] = await connection.query(query, params);
+      
+      // Executar consulta de contagem
+      const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
+      const totalRecords = countResult[0].total;
+      
+      // Calcular informações de paginação
+      const totalPages = Math.ceil(totalRecords / limit);
+      
+      res.json({
+        data: rows,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalRecords,
+          recordsPerPage: limit
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao executar consulta:', error);
+      res.status(500).json({ 
+        error: 'Erro ao buscar conexões',
+        details: error.message 
+      });
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Erro ao buscar conexões:', error);
     res.status(500).json({ 
