@@ -10,7 +10,10 @@ export const CONTRACT_STATUS_OPTIONS = [
   { value: 'Agendado', label: 'Contratos Agendados' },
   { value: 'Bloqueado', label: 'Contratos Bloqueados' },
   { value: 'Liberado48', label: 'Contratos Liberados 48h' },
-  { value: 'Cancelado', label: 'Contratos Cancelados' }
+  { value: 'Cancelado', label: 'Contratos Cancelados' },
+  { value: 'pendencia', label: 'Contratos com Pendência' },
+  { value: 'atraso', label: 'Contratos com Atraso' },
+  { value: 'atraso15dias', label: 'Contratos com Atraso > 15 dias' }
 ] as const;
 
 // Categorias

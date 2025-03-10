@@ -36,7 +36,7 @@ export default function Planos() {
     radius: '',
     ativo: true
   });
-  const velocidades = ['100M', '200M', '300M', '400M', '500M', '600M', '700M', '1GB'];
+  const velocidades = ['100M', '200M', '300M', '400M', '500M', '600M', '700M', '800M', '1GB'];
 
   const handleNewPlanoChange = (field: keyof Plano, value: any) => {
     setNewPlano(prev => ({ ...prev, [field]: value }));

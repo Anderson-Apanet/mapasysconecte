@@ -477,6 +477,10 @@ export default function Tecnicos() {
     fetchDayEvents(selectedDate);
   }, [selectedDate, fetchDayEvents]);
 
+  const handleInstalacaoRegistered = useCallback(() => {
+    fetchDayEvents(selectedDate);
+  }, [selectedDate, fetchDayEvents]);
+
   // Memoize funções de estilo
   const getStatusColor = useCallback((event: AgendaEvent) => {
     if (event.realizada) return 'bg-green-50 text-green-700';
@@ -817,7 +821,7 @@ export default function Tecnicos() {
           isOpen={isInstalacaoModalOpen}
           onClose={handleCloseInstalacaoModal}
           event={selectedEvent}
-          onEventUpdated={() => fetchDayEvents(selectedDate)}
+          onEventUpdated={handleInstalacaoRegistered}
         />
 
         {selectedEvent && (

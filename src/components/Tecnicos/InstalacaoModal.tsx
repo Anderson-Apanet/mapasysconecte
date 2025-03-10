@@ -12,6 +12,7 @@ interface InstalacaoModalProps {
   isOpen: boolean;
   onClose: () => void;
   event: AgendaEvent;
+  onEventUpdated?: () => void;
 }
 
 interface Cliente {
@@ -156,7 +157,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ endereco, complemento, bair
   );
 };
 
-export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoModalProps) {
+export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated }: InstalacaoModalProps) {
   const [loading, setLoading] = useState(false);
   const [observacao, setObservacao] = useState('');
   const [acompanhante, setAcompanhante] = useState('');
@@ -309,6 +310,10 @@ export default function InstalacaoModal({ isOpen, onClose, event }: InstalacaoMo
         ...event,
         realizada: true
       });
+
+      if (onEventUpdated) {
+        onEventUpdated();
+      }
 
       toast.success('Instalação registrada com sucesso!');
       onClose();
