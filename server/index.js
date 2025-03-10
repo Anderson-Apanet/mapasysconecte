@@ -80,7 +80,7 @@ if (process.env.NODE_ENV === 'production') {
 } else {
     // Registrar rotas
     app.use('/api/asaas', asaasRouter);
-    app.use('/api/support', radiusRouter);  
+    app.use('/api/support', radiusRouter);
     console.log('Rotas do Asaas e Radius registradas');
 
     // Rota de teste para verificar se o servidor está funcionando

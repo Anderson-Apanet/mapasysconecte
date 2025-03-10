@@ -113,7 +113,91 @@ router.get('/support/concentrators', async (req, res) => {
   }
 });
 
-// Rota para buscar conexões com paginação e filtros
+// Rota para buscar conexões
+router.get('/support/connections', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const status = req.query.status || 'all';
+    const nasip = req.query.nasip || 'all';
+
+    console.log('Buscando conexões com parâmetros:', { page, limit, search, status, nasip });
+
+    // Construir a consulta base usando uma subconsulta para obter apenas o último registro de cada username
+    let query = `
+      SELECT r.* FROM radacct r
+      INNER JOIN (
+        SELECT username, MAX(radacctid) as max_id
+        FROM radacct
+        GROUP BY username
+      ) as latest ON r.radacctid = latest.max_id
+      WHERE 1=1
+    `;
+    
+    // Adicionar filtros
+    const params = [];
+    
+    if (search) {
+      query += ` AND (r.username LIKE ? OR r.callingstationid LIKE ? OR r.framedipaddress LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    
+    if (status === 'up') {
+      query += ` AND r.acctstoptime IS NULL`;
+    } else if (status === 'down') {
+      query += ` AND r.acctstoptime IS NOT NULL`;
+    }
+    
+    if (nasip !== 'all') {
+      query += ` AND r.nasipaddress = ?`;
+      params.push(nasip);
+    }
+    
+    // Adicionar ordenação
+    query += ` ORDER BY r.acctstarttime DESC`;
+    
+    // Consulta para contar total de registros
+    const countQuery = `SELECT COUNT(*) as total FROM (${query}) as subquery`;
+    
+    // Adicionar paginação à consulta principal
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+    
+    const connection = await pool.getConnection();
+    
+    // Executar consulta principal
+    const [rows] = await connection.query(query, params);
+    
+    // Executar consulta de contagem
+    const [countResult] = await connection.query(countQuery, params.slice(0, params.length - 2));
+    const totalRecords = countResult[0].total;
+    
+    connection.release();
+    
+    // Calcular informações de paginação
+    const totalPages = Math.ceil(totalRecords / limit);
+    
+    res.json({
+      data: rows,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalRecords,
+        recordsPerPage: limit
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar conexões:', error);
+    res.status(500).json({ 
+      error: 'Erro ao buscar conexões',
+      details: error.message 
+    });
+  }
+});
+
+// Manter a rota /connections para compatibilidade, mas fazer redirecionamento para /support/connections
 router.get('/connections', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -190,7 +274,10 @@ router.get('/connections', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar conexões:', error);
-    res.status(500).json({ error: 'Erro ao buscar conexões', details: error.message });
+    res.status(500).json({ 
+      error: 'Erro ao buscar conexões',
+      details: error.message 
+    });
   }
 });
 
