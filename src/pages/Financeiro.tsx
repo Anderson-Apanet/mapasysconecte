@@ -25,6 +25,7 @@ interface ContratoExtended extends Contrato {
   plano?: {
     radius?: string;
   };
+  radius?: string;
   plano_radius?: string;
 }
 
@@ -262,14 +263,15 @@ const Financeiro: React.FC = () => {
     
     setIsLiberando(true);
     try {
-      const response = await fetch('http://localhost:5678/webhook/liberarcliente', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius
+          radius: selectedContrato.plano?.radius,
+          acao: 'liberar'
         }),
       });
 
@@ -294,27 +296,30 @@ const Financeiro: React.FC = () => {
     
     setIsLiberando48(true);
     try {
-      const response = await fetch('http://localhost:5678/webhook/liberarcliente48', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius
+          radius: selectedContrato.plano?.radius,
+          acao: 'liberar48h'
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Erro ao liberar cliente por 48h');
+        const errorText = await response.text();
+        console.error('Resposta de erro do webhook:', errorText);
+        throw new Error('Erro ao liberar cliente por 48 horas');
       }
 
-      toast.success('Cliente liberado por 48h com sucesso!');
+      toast.success('Cliente liberado por 48 horas com sucesso!');
       setShowLiberar48Modal(false);
       fetchContratos(currentPage, searchTerm, contractStatusFilter);
     } catch (error) {
-      console.error('Erro ao liberar cliente por 48h:', error);
-      toast.error('Erro ao liberar cliente por 48h');
+      console.error('Erro ao liberar cliente por 48 horas:', error);
+      toast.error('Erro ao liberar cliente por 48 horas');
     } finally {
       setIsLiberando48(false);
       setSelectedContrato(null);
@@ -326,19 +331,30 @@ const Financeiro: React.FC = () => {
     
     setIsCancelando(true);
     try {
-      const response = await fetch('http://localhost:5678/webhook/cancelarcontrato', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius
+          acao: 'cancelar'
         }),
       });
 
       if (!response.ok) {
         throw new Error('Erro ao cancelar contrato');
+      }
+
+      // Atualizar o status do contrato no banco de dados
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ status: 'Cancelado' })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar status do contrato:', updateError);
+        throw new Error('Erro ao atualizar status do contrato');
       }
 
       toast.success('Contrato cancelado com sucesso!');
@@ -358,14 +374,14 @@ const Financeiro: React.FC = () => {
     
     setIsBloqueando(true);
     try {
-      const response = await fetch('http://localhost:5678/webhook/bloquearcontrato', {
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius
+          acao: 'Bloquear'
         }),
       });
 
@@ -394,7 +410,7 @@ const Financeiro: React.FC = () => {
           .from('contratosatraso')
           .select('*');
         
-        console.log('Total de contratos em atraso encontrados via view:', contratosAtraso?.length || 0);
+        console.log('Total de registros em atraso encontrados via view:', contratosAtraso?.length || 0);
         
         if (contratosError) {
           console.error('Erro ao buscar contratos em atraso:', contratosError);
