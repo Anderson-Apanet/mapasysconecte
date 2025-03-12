@@ -97,7 +97,10 @@ const Financeiro: React.FC = () => {
         
         const { data: contratosAtraso, error: contratosError } = await supabase
           .from('contratosatraso')
-          .select('*')
+          .select(`
+            *,
+            planos(id, nome, radius)
+          `)
           .order('created_at', { ascending: false })
           .range(from, to);
 
@@ -107,7 +110,8 @@ const Financeiro: React.FC = () => {
           const contratosFormatados = contratosAtraso.map(contrato => ({
             ...contrato,
             cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.cliente_idasaas
+            cliente_idasaas: contrato.cliente_idasaas,
+            plano: contrato.planos || null
           }));
 
           setContratos(contratosFormatados);
@@ -132,7 +136,10 @@ const Financeiro: React.FC = () => {
         
         const { data: contratosAtraso, error: contratosError } = await supabase
           .from('contratosatrasodias')
-          .select('*')
+          .select(`
+            *,
+            planos(id, nome, radius)
+          `)
           .order('created_at', { ascending: false })
           .range(from, to);
 
@@ -142,7 +149,8 @@ const Financeiro: React.FC = () => {
           const contratosFormatados = contratosAtraso.map(contrato => ({
             ...contrato,
             cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.cliente_idasaas
+            cliente_idasaas: contrato.cliente_idasaas,
+            plano: contrato.planos || null
           }));
 
           setContratos(contratosFormatados);
@@ -168,7 +176,7 @@ const Financeiro: React.FC = () => {
 
       let dataQuery = supabase
         .from('contratos')
-        .select('*, clientes!inner(id, nome, idasaas)')
+        .select('*, clientes!inner(id, nome, idasaas), planos(id, nome, radius)')
         .order('created_at', { ascending: false });
 
       if (searchTerm) {
@@ -195,7 +203,8 @@ const Financeiro: React.FC = () => {
         const contratosFormatados = contratosData.map(contrato => ({
           ...contrato,
           cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
-          cliente_idasaas: contrato.clientes?.idasaas
+          cliente_idasaas: contrato.clientes?.idasaas,
+          plano: contrato.planos || null
         }));
 
         setContratos(contratosFormatados);
@@ -261,8 +270,33 @@ const Financeiro: React.FC = () => {
   const handleConfirmarLiberacao = async () => {
     if (!selectedContrato) return;
     
+    let radius = selectedContrato.plano?.radius;
+    
+    if (!radius && selectedContrato.id_plano) {
+      try {
+        const { data: planoData } = await supabase
+          .from('planos')
+          .select('radius')
+          .eq('id', selectedContrato.id_plano)
+          .single();
+          
+        if (planoData) {
+          radius = planoData.radius;
+          console.log('Radius recuperado do banco:', radius);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar radius do plano:', error);
+      }
+    }
+    
     setIsLiberando(true);
     try {
+      console.log('Enviando dados para liberar cliente:', {
+        pppoe: selectedContrato.pppoe,
+        radius,
+        acao: 'liberar'
+      });
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -270,7 +304,7 @@ const Financeiro: React.FC = () => {
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius,
+          radius,
           acao: 'liberar'
         }),
       });
@@ -294,6 +328,25 @@ const Financeiro: React.FC = () => {
   const handleConfirmarLiberacao48 = async () => {
     if (!selectedContrato) return;
     
+    let radius = selectedContrato.plano?.radius;
+    
+    if (!radius && selectedContrato.id_plano) {
+      try {
+        const { data: planoData } = await supabase
+          .from('planos')
+          .select('radius')
+          .eq('id', selectedContrato.id_plano)
+          .single();
+          
+        if (planoData) {
+          radius = planoData.radius;
+          console.log('Radius recuperado do banco:', radius);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar radius do plano:', error);
+      }
+    }
+    
     setIsLiberando48(true);
     try {
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
@@ -303,7 +356,7 @@ const Financeiro: React.FC = () => {
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
-          radius: selectedContrato.plano?.radius,
+          radius,
           acao: 'liberar48h'
         }),
       });
@@ -329,8 +382,33 @@ const Financeiro: React.FC = () => {
   const handleConfirmarCancelamento = async () => {
     if (!selectedContrato) return;
     
+    let radius = selectedContrato.plano?.radius;
+    
+    if (!radius && selectedContrato.id_plano) {
+      try {
+        const { data: planoData } = await supabase
+          .from('planos')
+          .select('radius')
+          .eq('id', selectedContrato.id_plano)
+          .single();
+          
+        if (planoData) {
+          radius = planoData.radius;
+          console.log('Radius recuperado do banco:', radius);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar radius do plano:', error);
+      }
+    }
+    
     setIsCancelando(true);
     try {
+      console.log('Enviando dados para cancelar contrato:', {
+        pppoe: selectedContrato.pppoe,
+        radius,
+        acao: 'cancelar'
+      });
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -338,6 +416,7 @@ const Financeiro: React.FC = () => {
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
+          radius,
           acao: 'cancelar'
         }),
       });
@@ -372,6 +451,25 @@ const Financeiro: React.FC = () => {
   const handleConfirmarBloqueio = async () => {
     if (!selectedContrato) return;
     
+    let radius = selectedContrato.plano?.radius;
+    
+    if (!radius && selectedContrato.id_plano) {
+      try {
+        const { data: planoData } = await supabase
+          .from('planos')
+          .select('radius')
+          .eq('id', selectedContrato.id_plano)
+          .single();
+          
+        if (planoData) {
+          radius = planoData.radius;
+          console.log('Radius recuperado do banco:', radius);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar radius do plano:', error);
+      }
+    }
+    
     setIsBloqueando(true);
     try {
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
@@ -381,6 +479,7 @@ const Financeiro: React.FC = () => {
         },
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
+          radius,
           acao: 'Bloquear'
         }),
       });
@@ -429,12 +528,33 @@ const Financeiro: React.FC = () => {
         console.log('Estrutura do primeiro contrato:', JSON.stringify(contratosAtraso[0], null, 2));
         
         // Extract all PPPoEs and radius values from ALL contracts
-        const blockedContracts = contratosAtraso.map(contrato => {
+        const promises = contratosAtraso.map(async (contrato) => {
+          let radius = contrato.planos?.radius;
+          
+          if (!radius && contrato.id_plano) {
+            try {
+              const { data: planoData } = await supabase
+                .from('planos')
+                .select('radius')
+                .eq('id', contrato.id_plano)
+                .single();
+                
+              if (planoData) {
+                radius = planoData.radius;
+                console.log('Radius recuperado do banco:', radius);
+              }
+            } catch (error) {
+              console.error('Erro ao buscar radius do plano:', error);
+            }
+          }
+          
           return {
             pppoe: contrato.pppoe,
-            radius: contrato.radius || '' // Use the radius field directly from the view
+            radius
           };
         });
+        
+        const blockedContracts = await Promise.all(promises);
         
         console.log(`Enviando ${blockedContracts.length} contratos para bloqueio em massa:`, blockedContracts);
         

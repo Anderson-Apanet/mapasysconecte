@@ -358,13 +358,34 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
 
     setIsCriandoTitulos(true);
 
+    // Sempre buscar o idasaas diretamente do banco para garantir o valor mais atualizado
+    let clienteIdasaas = null;
+    
+    try {
+      console.log('Buscando idasaas diretamente do banco de dados...');
+      const { data: clienteAtualizado, error } = await supabase
+        .from('clientes')
+        .select('idasaas')
+        .eq('id', cliente.id)
+        .single();
+        
+      if (error) {
+        console.error('Erro ao buscar idasaas do cliente:', error);
+      } else if (clienteAtualizado) {
+        console.log('idasaas recuperado do banco:', clienteAtualizado.idasaas);
+        clienteIdasaas = clienteAtualizado.idasaas;
+      }
+    } catch (error) {
+      console.error('Exceção ao buscar idasaas do cliente:', error);
+    }
+
     const valorFinal = valorPersonalizado ? parseFloat(valorPersonalizado) : plano.valor;
 
     const payload = {
       nome: cliente.nome,
       cpf_cnpj: cliente.cpf_cnpj,
       valor: valorFinal,
-      idasaas: cliente.idasaas,
+      idasaas: clienteIdasaas, // Usar o valor recuperado diretamente do banco
       billingType: "BOLETO",
       nextDueDate: dataInicialVencimento,
       cycle: "MONTHLY",
