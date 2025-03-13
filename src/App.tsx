@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Clientes from './pages/Clientes';
+// Importação dinâmica para resolver problema de tipagem
+const ClientesDetalhes = React.lazy(() => import('./pages/ClientesDetalhes'));
 import Financeiro from './pages/Financeiro';
 import Agenda from './pages/Agenda';
 import Planos from './pages/Planos';
@@ -48,6 +50,13 @@ const App: React.FC = () => {
         <Route path={ROUTES.CLIENTES} element={
           <PrivateRoute>
             <Clientes />
+          </PrivateRoute>
+        } />
+        <Route path={ROUTES.CLIENTES_DETALHES} element={
+          <PrivateRoute>
+            <React.Suspense fallback={<div>Carregando...</div>}>
+              <ClientesDetalhes />
+            </React.Suspense>
           </PrivateRoute>
         } />
         <Route path={ROUTES.FINANCEIRO} element={

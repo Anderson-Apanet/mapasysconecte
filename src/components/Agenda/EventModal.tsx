@@ -9,7 +9,7 @@ interface EventModalProps {
   onEventChange: (event: Partial<AgendaEvent>) => void;
   onSave: () => void;
   users: Array<{ id: number; nome: string }>;
-  searchResults: Array<{ id: number; pppoe: string }>;
+  searchResults: Array<{ id: number; pppoe: string; endereco: string }>;
   isSearching: boolean;
   onSearchPPPoE: (term: string) => void;
 }
@@ -95,6 +95,18 @@ export function EventModal({
                     )}
                   </div>
                   
+                  {/* Campo de endereço somente leitura */}
+                  {event.endereco && (
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Endereço do Contrato
+                      </label>
+                      <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300">
+                        {event.endereco}
+                      </div>
+                    </div>
+                  )}
+                  
                   {searchResults.length > 0 && event.pppoe && (
                     <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
                       {searchResults.map((contrato) => (
@@ -106,6 +118,7 @@ export function EventModal({
                             onEventChange({ 
                               ...event, 
                               pppoe,
+                              endereco: contrato.endereco, // Adiciona o endereço ao evento
                               nome: event.tipo_evento === 'Visita' ? `Visita - ${pppoe}` : event.nome
                             });
                             onSearchPPPoE(''); // Limpa os resultados após selecionar

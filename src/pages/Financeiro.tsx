@@ -99,7 +99,8 @@ const Financeiro: React.FC = () => {
           .from('contratosatraso')
           .select(`
             *,
-            planos(id, nome, radius)
+            planos(id, nome, radius),
+            clientes(id, nome, idasaas)
           `)
           .order('created_at', { ascending: false })
           .range(from, to);
@@ -109,8 +110,8 @@ const Financeiro: React.FC = () => {
         if (contratosAtraso) {
           const contratosFormatados = contratosAtraso.map(contrato => ({
             ...contrato,
-            cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.cliente_idasaas,
+            cliente_nome: contrato.clientes?.nome || contrato.cliente_nome || 'Cliente não encontrado',
+            cliente_idasaas: contrato.clientes?.idasaas || contrato.cliente_idasaas,
             plano: contrato.planos || null
           }));
 
@@ -138,7 +139,8 @@ const Financeiro: React.FC = () => {
           .from('contratosatrasodias')
           .select(`
             *,
-            planos(id, nome, radius)
+            planos(id, nome, radius),
+            clientes(id, nome, idasaas)
           `)
           .order('created_at', { ascending: false })
           .range(from, to);
@@ -148,8 +150,8 @@ const Financeiro: React.FC = () => {
         if (contratosAtraso) {
           const contratosFormatados = contratosAtraso.map(contrato => ({
             ...contrato,
-            cliente_nome: contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.cliente_idasaas,
+            cliente_nome: contrato.clientes?.nome || contrato.cliente_nome || 'Cliente não encontrado',
+            cliente_idasaas: contrato.clientes?.idasaas || contrato.cliente_idasaas,
             plano: contrato.planos || null
           }));
 

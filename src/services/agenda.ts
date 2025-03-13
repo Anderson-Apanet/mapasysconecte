@@ -273,14 +273,14 @@ export async function saveEvent(event: Partial<AgendaEvent>) {
   }
 }
 
-export async function searchContratos(searchTerm: string) {
+export async function searchContratos(searchTerm: string): Promise<Array<{ id: number; pppoe: string; endereco: string }>> {
   if (!searchTerm) {
     return [];
   }
 
   const { data, error } = await supabase
     .from('contratos')
-    .select('id, pppoe')
+    .select('id, pppoe, endereco')
     .ilike('pppoe', `%${searchTerm}%`)
     .limit(10);
 

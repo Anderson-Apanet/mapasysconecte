@@ -13,6 +13,7 @@ export interface AgendaEvent {
   parcial: boolean;
   cancelado: boolean;
   pppoe: string;
+  endereco?: string; // Campo opcional para o endereço do contrato
   data_cad_evento: string;
   criador: string;
 }

@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   MagnifyingGlassIcon,
   EyeIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
-import { Cliente } from '../types/financeiro';
+import { Cliente } from '../types/cliente';
+import { Contrato } from '../types/contrato';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { default as ClienteModal } from '../components/ClienteModal';
 import { default as ContractDetails } from '../components/ContractDetails';
+import { default as ClienteDetails } from '../components/ClienteDetails';
+import { useNavigate } from 'react-router-dom';
 
 const Clientes: React.FC = () => {
   const navigate = useNavigate();
@@ -26,8 +28,9 @@ const Clientes: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
+  const [selectedContrato, setSelectedContrato] = useState<any>(null);
   const [showContractDetails, setShowContractDetails] = useState(false);
+  const [showClienteDetails, setShowClienteDetails] = useState(false);
   const itemsPerPage = 5;
 
   // Função para buscar clientes com paginação e busca no servidor
@@ -107,6 +110,11 @@ const Clientes: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Handler para visualizar detalhes do cliente
+  const handleViewClienteDetails = (cliente: Cliente) => {
+    navigate(`/clientes/${cliente.id}`);
+  };
+
   // Handler para fechar o modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -119,12 +127,12 @@ const Clientes: React.FC = () => {
   };
 
   // Função para atualizar o contrato após edição
-  const handleContratoUpdate = (updatedContrato: Contrato) => {
+  const handleContratoUpdate = (updatedContrato: any) => {
     setSelectedContrato(updatedContrato);
   };
 
   // Função para exibir detalhes do contrato
-  const handleShowContractDetails = (contrato: Contrato) => {
+  const handleShowContractDetails = (contrato: any) => {
     setSelectedContrato(contrato);
     setShowContractDetails(true);
   };
@@ -229,9 +237,17 @@ const Clientes: React.FC = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <button
                                 onClick={() => handleViewCliente(cliente)}
-                                className="text-[#1976D2] hover:text-[#0D47A1] dark:text-[#E1F5FE] dark:hover:text-[#1976D2] transition-colors duration-200"
+                                className="text-[#1976D2] hover:text-[#0D47A1] dark:text-[#E1F5FE] dark:hover:text-[#1976D2] transition-colors duration-200 mr-2"
+                                title="Editar cliente"
                               >
                                 <EyeIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                onClick={() => handleViewClienteDetails(cliente)}
+                                className="text-[#1976D2] hover:text-[#0D47A1] dark:text-[#E1F5FE] dark:hover:text-[#1976D2] transition-colors duration-200"
+                                title="Detalhes do Cliente"
+                              >
+                                <InformationCircleIcon className="h-5 w-5" />
                               </button>
                             </td>
                           </tr>
@@ -321,6 +337,14 @@ const Clientes: React.FC = () => {
               contrato={selectedContrato}
               onClose={() => setShowContractDetails(false)}
               onUpdate={handleContratoUpdate}
+            />
+          )}
+
+          {/* Detalhes do Cliente */}
+          {showClienteDetails && (
+            <ClienteDetails
+              cliente={selectedCliente}
+              onClose={() => setShowClienteDetails(false)}
             />
           )}
         </div>
