@@ -104,7 +104,7 @@ const Financeiro: React.FC = () => {
             clientes(id, nome, idasaas)
           `)
           .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .order('created_at', { ascending: false })
+          .order('pppoe', { ascending: true }) // Ordenar por PPPoE em ordem alfabética ascendente
           .range(from, to);
 
         if (contratosError) throw contratosError;
@@ -146,7 +146,7 @@ const Financeiro: React.FC = () => {
             clientes(id, nome, idasaas)
           `)
           .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .order('created_at', { ascending: false })
+          .order('pppoe', { ascending: true }) // Ordenar por PPPoE em ordem alfabética ascendente
           .range(from, to);
 
         if (contratosError) throw contratosError;
