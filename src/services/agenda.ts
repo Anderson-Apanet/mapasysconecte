@@ -140,12 +140,33 @@ export async function fetchEvents(startDate?: Date | string | number, endDate?: 
   }
 }
 
-export async function saveEvent(event: Partial<AgendaEvent>) {
+export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: AgendaEvent | null) {
   try {
     console.log('Salvando evento:', event);
     
     // Se não tem ID, é um novo evento
     if (!event.id) {
+      // Obtém o usuário atual do Supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || 'sistema';
+      
+      // Cria a data atual no formato ISO com o timezone local
+      // Isso garante que a data seja salva com o horário correto de Brasília (UTC-3)
+      const now = new Date();
+      // Formata a data manualmente para garantir o fuso horário correto
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      
+      // Cria a string no formato ISO 8601 com o timezone de Brasília explícito
+      const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
+      
+      console.log('Usuário atual:', userEmail);
+      console.log('Data de criação:', currentDateTime);
+      
       // Insere o evento
       const { data: newEvent, error: eventError } = await supabase
         .from('agenda')
@@ -161,7 +182,9 @@ export async function saveEvent(event: Partial<AgendaEvent>) {
           parcial: event.parcial,
           cancelado: event.cancelado,
           pppoe: event.pppoe,
-          cor: event.cor
+          cor: event.cor,
+          criador: userEmail,
+          data_cad_evento: currentDateTime
         })
         .select()
         .single();
@@ -215,6 +238,7 @@ export async function saveEvent(event: Partial<AgendaEvent>) {
           cancelado: event.cancelado,
           pppoe: event.pppoe,
           cor: event.cor
+          // Não atualiza os campos criador e data_cad_evento para manter o registro original de criação
         })
         .eq('id', event.id)
         .select()

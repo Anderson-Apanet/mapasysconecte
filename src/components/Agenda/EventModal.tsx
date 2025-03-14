@@ -1,6 +1,29 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog } from '@headlessui/react';
 import { AgendaEvent } from '../../types/agenda';
+import { supabase } from '../../lib/supabase';
+
+// Função para buscar o nome do usuário pelo email
+const buscarNomeUsuario = async (email: string): Promise<string> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('nome')
+      .eq('email', email)
+      .single();
+    
+    if (error || !data || !data.nome) {
+      // Se houver erro ou não encontrar o nome, retorna o email
+      return email;
+    }
+    
+    return data.nome;
+  } catch (error) {
+    console.error('Erro ao buscar nome do usuário:', error);
+    // Em caso de erro, retorna o email
+    return email;
+  }
+};
 
 interface EventModalProps {
   isOpen: boolean;
@@ -27,6 +50,16 @@ export function EventModal({
 }: EventModalProps) {
   const isEditMode = Boolean(event?.id);
   const modalTitle = isEditMode ? 'Editar Evento' : 'Novo Evento';
+  const [criadorNome, setCriadorNome] = useState<string>('');
+
+  // Buscar o nome do criador quando o evento mudar
+  useEffect(() => {
+    if (event?.criador) {
+      buscarNomeUsuario(event.criador)
+        .then(nome => setCriadorNome(nome))
+        .catch(error => console.error('Erro ao buscar nome do criador:', error));
+    }
+  }, [event?.criador]);
 
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
@@ -276,6 +309,26 @@ export function EventModal({
                   Salvar
                 </button>
               </div>
+              
+              {/* Informação do criador do evento */}
+              {isEditMode && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {event.criador ? (
+                      <>
+                        Criado por <span className="font-medium">{criadorNome}</span>
+                        {event.data_cad_evento && (
+                          <> em <span className="font-medium">
+                            {new Date(event.data_cad_evento).toLocaleString('pt-BR')}
+                          </span></>
+                        )}
+                      </>
+                    ) : (
+                      <>Informações do criador não disponíveis</>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </form>
         </Dialog.Panel>

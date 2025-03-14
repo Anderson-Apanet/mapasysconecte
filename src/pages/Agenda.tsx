@@ -141,7 +141,9 @@ export default function Agenda() {
           cancelado: event.cancelado,
           pppoe: event.pppoe,
           endereco: endereco, // Adiciona o endereço do contrato
-          cor: event.cor
+          cor: event.cor,
+          criador: event.criador, // Adiciona o criador do evento
+          data_cad_evento: event.data_cad_evento // Adiciona a data de criação do evento
         };
 
         console.log('Dados do evento formatados:', eventData);
@@ -199,8 +201,25 @@ export default function Agenda() {
       // Atualiza o calendário com o novo evento
       const calendarApi = calendarRef.current?.getApi();
       if (calendarApi) {
-        const dateRange = calendarApi.view.getCurrentData().dateProfile.activeRange;
-        await loadEvents(calendarApi.view.getCurrentData(), (events) => setEvents(events), (error) => console.error(error));
+        // Obtém a visualização atual do calendário
+        const view = calendarApi.view;
+        // Obtém as datas de início e fim da visualização atual
+        const start = calendarApi.view.activeStart;
+        const end = calendarApi.view.activeEnd;
+        
+        // Recarrega os eventos para o período atual
+        try {
+          // Buscar eventos para o período atual
+          const events = await fetchEvents(start.toISOString(), end.toISOString());
+          // Transformar eventos para o formato do FullCalendar
+          const transformedEvents = await transformEvents(events);
+          // Atualiza os eventos no estado
+          setEvents(transformedEvents);
+          // Força o calendário a renderizar novamente
+          calendarApi.refetchEvents();
+        } catch (error) {
+          console.error('Erro ao recarregar eventos:', error);
+        }
       }
 
       setSelectedEvent(null);
