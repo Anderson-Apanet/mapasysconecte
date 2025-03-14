@@ -86,7 +86,8 @@ const Financeiro: React.FC = () => {
         // Use the contratosatraso view for this filter
         const { count, error: countError } = await supabase
           .from('contratosatraso')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .neq('status', 'Bloqueado'); // Excluir contratos já bloqueados
 
         if (countError) throw countError;
         console.log('Total de registros em atraso encontrados:', count);
@@ -102,6 +103,7 @@ const Financeiro: React.FC = () => {
             planos(id, nome, radius),
             clientes(id, nome, idasaas)
           `)
+          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
           .order('created_at', { ascending: false })
           .range(from, to);
 
@@ -126,7 +128,8 @@ const Financeiro: React.FC = () => {
         // Use the contratosatrasodias view for this filter
         const { count, error: countError } = await supabase
           .from('contratosatrasodias')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .neq('status', 'Bloqueado'); // Excluir contratos já bloqueados
 
         if (countError) throw countError;
         console.log('Total de registros em atraso > 15 dias encontrados:', count);
@@ -142,6 +145,7 @@ const Financeiro: React.FC = () => {
             planos(id, nome, radius),
             clientes(id, nome, idasaas)
           `)
+          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
           .order('created_at', { ascending: false })
           .range(from, to);
 

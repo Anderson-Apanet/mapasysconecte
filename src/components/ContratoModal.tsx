@@ -661,31 +661,43 @@ Arroio do Sal, ${currentDate}
         try {
           const webhookData = {
             pppoe: contratoAtual.pppoe,
-            action: "trocarplano",
+            acao: "trocarplano",
             radius: selectedPlano.radius
           };
           
           console.log('Enviando notificação de troca de plano:', webhookData);
           
-          const response = await fetch('https://webhooks.apanet.tec.br/webhook/de279cf7-aa2f-49d1-b2aa-eae061ab76a4', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(webhookData)
-          });
-          
-          if (response.ok) {
-            console.log('Notificação de troca de plano enviada com sucesso');
+          // Verificar se temos todos os dados necessários
+          if (!webhookData.pppoe || !webhookData.radius) {
+            console.error('Dados incompletos para envio ao webhook:', webhookData);
+            toast.warning('Aviso: Não foi possível enviar a notificação para o N8N devido a dados incompletos');
           } else {
-            console.error('Erro ao enviar notificação de troca de plano:', await response.text());
+            // Usando o endpoint correto do webhook
+            const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(webhookData)
+            });
+            
+            if (response.ok) {
+              console.log('Notificação de troca de plano enviada com sucesso');
+              toast.success('Plano atualizado e notificação enviada ao N8N com sucesso!');
+            } else {
+              const errorText = await response.text();
+              console.error('Erro ao enviar notificação de troca de plano. Status:', response.status, 'Resposta:', errorText);
+              toast.warning('Plano atualizado, mas houve um erro ao enviar a notificação para o N8N');
+            }
           }
         } catch (webhookError) {
           console.error('Erro ao enviar notificação para webhook:', webhookError);
+          toast.warning('Plano atualizado, mas houve um erro ao enviar a notificação para o N8N');
           // Não vamos interromper o fluxo se o webhook falhar
         }
         
-        toast.success('Plano do contrato atualizado com sucesso!');
+        // Removendo esta mensagem para evitar duplicação com as mensagens acima
+        // toast.success('Plano do contrato atualizado com sucesso!');
         
         // Notificar o componente pai
         if (onSave) {
