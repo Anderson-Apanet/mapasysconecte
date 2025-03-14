@@ -68,7 +68,10 @@ const Financeiro: React.FC = () => {
     { value: 'Cancelado', label: 'Contratos Cancelados' },
     { value: 'pendencia', label: 'Contratos com Pendência' },
     { value: 'atraso', label: 'Contratos em Atraso' },
-    { value: 'atraso15', label: 'Contratos em Atraso > 15 dias' }
+    { value: 'atraso15', label: 'Contratos em Atraso > 15 dias' },
+    { value: 'Anual', label: 'Contratos Anuais' },
+    { value: 'Anual_Aluguel', label: 'Contratos Anuais Aluguel' },
+    { value: 'Cliente Bonificado', label: 'Contratos Bonificados' }
   ];
 
   const fetchContratos = async (page: number, searchTerm: string = '', status: string = '') => {
@@ -87,7 +90,10 @@ const Financeiro: React.FC = () => {
         const { count, error: countError } = await supabase
           .from('contratosatraso')
           .select('*', { count: 'exact', head: true })
-          .neq('status', 'Bloqueado'); // Excluir contratos já bloqueados
+          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
 
         if (countError) throw countError;
         console.log('Total de registros em atraso encontrados:', count);
@@ -104,7 +110,10 @@ const Financeiro: React.FC = () => {
             clientes(id, nome, idasaas)
           `)
           .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .order('pppoe', { ascending: true }) // Ordenar por PPPoE em ordem alfabética ascendente
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado')
+          .order('pppoe', { ascending: true })
           .range(from, to);
 
         if (contratosError) throw contratosError;
@@ -129,7 +138,10 @@ const Financeiro: React.FC = () => {
         const { count, error: countError } = await supabase
           .from('contratosatrasodias')
           .select('*', { count: 'exact', head: true })
-          .neq('status', 'Bloqueado'); // Excluir contratos já bloqueados
+          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
 
         if (countError) throw countError;
         console.log('Total de registros em atraso > 15 dias encontrados:', count);
@@ -146,7 +158,10 @@ const Financeiro: React.FC = () => {
             clientes(id, nome, idasaas)
           `)
           .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .order('pppoe', { ascending: true }) // Ordenar por PPPoE em ordem alfabética ascendente
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado')
+          .order('pppoe', { ascending: true })
           .range(from, to);
 
         if (contratosError) throw contratosError;
@@ -168,10 +183,24 @@ const Financeiro: React.FC = () => {
         return;
       } else if (status === 'pendencia') {
         countQuery = countQuery.eq('pendencia', true);
+      } else if (status === 'Anual') {
+        countQuery = countQuery.eq('tipo', 'Anual');
+      } else if (status === 'Anual_Aluguel') {
+        countQuery = countQuery.eq('tipo', 'Anual_Aluguel');
+      } else if (status === 'Cliente Bonificado') {
+        countQuery = countQuery.eq('tipo', 'Cliente Bonificado');
       } else if (status && status !== 'Todos') {
         countQuery = countQuery.eq('status', status);
       } else if (status === 'Todos') {
         countQuery = countQuery.neq('status', 'Cancelado');
+      }
+      
+      // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
+      if (status !== 'Todos' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+        countQuery = countQuery
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
       }
       
       const { count, error: countError } = await countQuery;
@@ -191,10 +220,24 @@ const Financeiro: React.FC = () => {
       
       if (status === 'pendencia') {
         dataQuery = dataQuery.eq('pendencia', true);
+      } else if (status === 'Anual') {
+        dataQuery = dataQuery.eq('tipo', 'Anual');
+      } else if (status === 'Anual_Aluguel') {
+        dataQuery = dataQuery.eq('tipo', 'Anual_Aluguel');
+      } else if (status === 'Cliente Bonificado') {
+        dataQuery = dataQuery.eq('tipo', 'Cliente Bonificado');
       } else if (status && status !== 'Todos') {
         dataQuery = dataQuery.eq('status', status);
       } else if (status === 'Todos') {
         dataQuery = dataQuery.neq('status', 'Cancelado');
+      }
+
+      // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
+      if (status !== 'Todos' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+        dataQuery = dataQuery
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
       }
 
       const from = (page - 1) * itemsPerPage;
@@ -775,9 +818,6 @@ const Financeiro: React.FC = () => {
                         Status
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Asaas ID
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Ações
                       </th>
                     </tr>
@@ -800,22 +840,17 @@ const Financeiro: React.FC = () => {
                             {contrato.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${contrato.cliente_idasaas ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' : 
-                            'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'}`}>
-                            {contrato.cliente_idasaas ? 'Integrado' : 'Não Integrado'}
-                          </span>
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                          {/* Botão Ver Títulos - Sempre visível */}
-                          <button
-                            onClick={() => handleOpenTitulosModal(contrato)}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                            title="Ver Títulos"
-                          >
-                            <DocumentTextIcon className="h-5 w-5" />
-                          </button>
+                          {/* Botão Ver Títulos - Visível para todos os contratos, exceto Bonificados */}
+                          {contractStatusFilter !== 'Cliente Bonificado' && (
+                            <button
+                              onClick={() => handleOpenTitulosModal(contrato)}
+                              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              title="Ver Títulos"
+                            >
+                              <DocumentTextIcon className="h-5 w-5" />
+                            </button>
+                          )}
                           
                           {/* Botão Liberar Cliente - Mostrar quando o filtro estiver em Bloqueado ou Atraso */}
                           {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'atraso') && (

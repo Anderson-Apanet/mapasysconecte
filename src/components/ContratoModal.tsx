@@ -84,6 +84,9 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   const [bairroSearchTerm, setBairroSearchTerm] = useState('');
   const [selectedBairro, setSelectedBairro] = useState<Bairro | null>(null);
   const [showBairrosList, setShowBairrosList] = useState(false);
+  
+  // Estado para controlar se o contrato é bonificado
+  const [isBonificado, setIsBonificado] = useState(false);
 
   // Estados para gerenciar a alteração de plano
   const [planos, setPlanos] = useState<any[]>([]);
@@ -105,6 +108,9 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
         setSelectedBairro(contrato.bairros);
         setBairroSearchTerm(contrato.bairros.nome);
       }
+      
+      // Verificar se o contrato é do tipo "Cliente Bonificado"
+      setIsBonificado(contrato.tipo === "Cliente Bonificado");
       
       // Definir o plano atual como selecionado
       if (contrato.planos?.id) {
@@ -714,6 +720,43 @@ Arroio do Sal, ${currentDate}
     }
   };
 
+  const handleBonificadoChange = async (checked: boolean) => {
+    if (!contratoAtual) return;
+    
+    try {
+      const novoTipo = checked ? "Cliente Bonificado" : "Cliente";
+      
+      // Atualizar o contrato no banco de dados
+      const { error } = await supabase
+        .from('contratos')
+        .update({ tipo: novoTipo })
+        .eq('id', contratoAtual.id);
+      
+      if (error) throw error;
+      
+      // Atualizar o estado local
+      setContratoAtual({
+        ...contratoAtual,
+        tipo: novoTipo
+      });
+      
+      setIsBonificado(checked);
+      
+      toast.success(`Contrato atualizado como ${novoTipo}`);
+      
+      // Notificar o componente pai
+      if (onSave) {
+        onSave({
+          ...contratoAtual,
+          tipo: novoTipo
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar tipo do contrato:', error);
+      toast.error('Erro ao atualizar tipo do contrato');
+    }
+  };
+
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
@@ -959,6 +1002,33 @@ Arroio do Sal, ${currentDate}
                 <div>
                   <p className="text-sm text-gray-500">Status</p>
                   <p className="text-sm font-medium">{contratoAtual?.status}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Card de Detalhes do Contrato */}
+            <div className="bg-white shadow rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-medium mb-3">Detalhes do Contrato</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Tipo do Contrato</p>
+                  <p className="text-sm font-medium mb-2">{contratoAtual?.tipo || 'Cliente'}</p>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="bonificado-checkbox"
+                      checked={isBonificado}
+                      onChange={(e) => handleBonificadoChange(e.target.checked)}
+                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="bonificado-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Marcar como Cliente Bonificado
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="text-sm font-medium">{contratoAtual?.status || '-'}</p>
                 </div>
               </div>
             </div>
