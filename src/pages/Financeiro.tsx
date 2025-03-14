@@ -852,19 +852,19 @@ const Financeiro: React.FC = () => {
                             </button>
                           )}
                           
-                          {/* Botão Liberar Cliente - Mostrar quando o filtro estiver em Bloqueado ou Atraso */}
-                          {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'atraso') && (
+                          {/* Botão Liberar Contrato - Mostrar quando o filtro estiver em Bloqueado ou Atraso ou Liberado48 */}
+                          {(contractStatusFilter === 'Bloqueado' || contractStatusFilter === 'atraso' || contractStatusFilter === 'Liberado48') && (
                             <button
                               onClick={() => handleOpenLiberarModal(contrato)}
                               className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                              title="Liberar Cliente"
+                              title="Liberar Contrato"
                             >
                               <LockOpenIcon className="h-5 w-5" />
                             </button>
                           )}
                           
-                          {/* Botão Bloquear Cliente - Mostrar quando o filtro estiver em Ativo ou Atraso */}
-                          {(contractStatusFilter === 'Ativo' || contractStatusFilter === 'atraso') && (
+                          {/* Botão Bloquear Contrato - Mostrar quando o filtro estiver em Ativo ou Atraso ou Liberado48 */}
+                          {(contractStatusFilter === 'Ativo' || contractStatusFilter === 'atraso' || contractStatusFilter === 'Liberado48') && (
                             <button
                               onClick={() => handleOpenBloquearModal(contrato)}
                               className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
@@ -965,10 +965,10 @@ const Financeiro: React.FC = () => {
                           <LockOpenIcon className="h-6 w-6 text-green-600" />
                         </div>
                         <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                          <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar Cliente</h3>
+                          <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar Contrato</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja liberar o cliente {selectedContrato?.cliente_nome}? Esta ação irá restaurar o acesso à internet.
+                              Tem certeza que deseja liberar o contrato do cliente {selectedContrato?.cliente_nome}? Esta ação irá restaurar o acesso à internet.
                             </p>
                           </div>
                         </div>
@@ -1013,7 +1013,7 @@ const Financeiro: React.FC = () => {
                           <h3 className="text-lg font-medium leading-6 text-gray-900">Liberar por 48 horas</h3>
                           <div className="mt-2">
                             <p className="text-sm text-gray-500">
-                              Tem certeza que deseja liberar o cliente {selectedContrato?.cliente_nome} por 48 horas? Esta ação irá restaurar o acesso à internet temporariamente.
+                              Tem certeza que deseja liberar o contrato do cliente {selectedContrato?.cliente_nome} por 48 horas? Esta ação irá restaurar o acesso à internet temporariamente.
                             </p>
                           </div>
                         </div>
