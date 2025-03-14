@@ -464,7 +464,21 @@ export default function Agenda() {
                       opacity: isPastEvent ? 0.7 : 1
                     }}
                   >
-                    {event.title}
+                    {eventInfo.view.type === 'dayGridMonth' && event.start ? (
+                      <>
+                        <span style={{ fontWeight: 'bold' }}>
+                          {new Date(event.start as Date).toLocaleTimeString('pt-BR', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: false 
+                          })}
+                        </span>
+                        {' - '}
+                        {event.title}
+                      </>
+                    ) : (
+                      event.title
+                    )}
                   </div>
                 );
               }}

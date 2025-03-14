@@ -48,7 +48,13 @@ export default function VisualizarLancamentoModal({
             </Dialog.Title>
             <div className="flex space-x-2">
               <button
-                onClick={() => gerarReciboTermico(lancamento)}
+                onClick={() => {
+                  if (lancamento) {
+                    gerarReciboTermico(lancamento).catch(error => {
+                      console.error('Erro ao gerar recibo:', error);
+                    });
+                  }
+                }}
                 className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 title="Imprimir recibo"
               >

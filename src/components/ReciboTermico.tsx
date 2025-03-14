@@ -1,9 +1,32 @@
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { supabase } from '../lib/supabase';
+
+// Função para buscar o nome do usuário pelo email
+const buscarNomeUsuario = async (email: string): Promise<string> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('nome')
+      .eq('email', email)
+      .single();
+    
+    if (error || !data || !data.nome) {
+      // Se houver erro ou não encontrar o nome, retorna a parte antes do @
+      return email.split('@')[0];
+    }
+    
+    return data.nome;
+  } catch (error) {
+    console.error('Erro ao buscar nome do usuário:', error);
+    // Em caso de erro, retorna a parte antes do @
+    return email.split('@')[0];
+  }
+};
 
 // Aceita tanto o tipo Lancamento do módulo financeiro quanto do módulo caixa
-export const gerarReciboTermico = (lancamento: any) => {
+export const gerarReciboTermico = async (lancamento: any) => {
   // Criar novo documento PDF
   const doc = new jsPDF({
     unit: 'mm',
@@ -158,7 +181,9 @@ export const gerarReciboTermico = (lancamento: any) => {
 
   // Operador
   if (lancamento.quemrecebeu) {
-    doc.text(`Operador: ${lancamento.quemrecebeu}`, margin, y);
+    // Buscar o nome real do operador na tabela users
+    const nomeOperador = await buscarNomeUsuario(lancamento.quemrecebeu);
+    doc.text(`Operador: ${nomeOperador}`, margin, y);
     y += 6;
   }
 
