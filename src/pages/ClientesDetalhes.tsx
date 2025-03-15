@@ -286,7 +286,7 @@ const ClientesDetalhes: React.FC = () => {
           <div className="flex items-center">
             <button
               onClick={handleVoltar}
-              className="mr-4 p-2 rounded-full hover:bg-white/10 text-white"
+              className="mr-4 p-2 rounded-full bg-[#1976D2] hover:bg-[#0D47A1] text-white"
             >
               <ArrowLeftIcon className="h-5 w-5" />
             </button>

@@ -51,6 +51,8 @@ export default function NovoContratoModal({
   const [loading, setLoading] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<google.maps.LatLngLiteral>(defaultCenter);
   const [isAddressBeingUpdatedByMap, setIsAddressBeingUpdatedByMap] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [vendedor, setVendedor] = useState("");
 
   // Função para gerar o PPPoE baseado no nome do cliente e data atual
   const generatePPPoE = () => {
@@ -148,38 +150,45 @@ export default function NovoContratoModal({
   }, [getAddressFromLatLng]);
 
   useEffect(() => {
-    // Carregar bairros da tabela
-    const fetchBairros = async () => {
-      const { data: bairrosData, error } = await supabase
-        .from('bairros')
-        .select('*');
-      
-      if (error) {
-        console.error('Erro ao carregar bairros:', error);
-        return;
+    const fetchData = async () => {
+      try {
+        // Buscar planos
+        const { data: planosData, error: planosError } = await supabase
+          .from('planos')
+          .select('*')
+          .order('nome', { ascending: true });
+
+        if (planosError) throw planosError;
+        setPlanos(planosData || []);
+
+        // Buscar bairros
+        const { data: bairrosData, error: bairrosError } = await supabase
+          .from('bairros')
+          .select('*')
+          .order('nome', { ascending: true });
+
+        if (bairrosError) throw bairrosError;
+        setBairros(bairrosData || []);
+        
+        // Buscar usuários (vendedores)
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .order('nome', { ascending: true });
+          
+        if (usersError) throw usersError;
+        setUsers(usersData || []);
+        
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+        toast.error('Erro ao carregar dados. Por favor, tente novamente.');
       }
-      
-      setBairros(bairrosData || []);
     };
 
-    // Carregar planos da tabela
-    const fetchPlanos = async () => {
-      const { data: planosData, error } = await supabase
-        .from('planos')
-        .select('*')
-        .order('nome');
-      
-      if (error) {
-        console.error('Erro ao carregar planos:', error);
-        return;
-      }
-      
-      setPlanos(planosData || []);
-    };
-
-    fetchBairros();
-    fetchPlanos();
-  }, []);
+    if (isOpen) {
+      fetchData();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -197,7 +206,7 @@ export default function NovoContratoModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!clienteData?.id) {
+    if (!clienteData.id) {
       toast.error('Erro: ID do cliente não encontrado');
       return;
     }
@@ -237,7 +246,8 @@ export default function NovoContratoModal({
         contratoassinado: false,
         pendencia: false,
         locallat: selectedLocation.lat,
-        locallon: selectedLocation.lng
+        locallon: selectedLocation.lng,
+        vendedor: vendedor || null
       };
 
       console.log('Dados a serem salvos:', contratoData);
@@ -415,6 +425,24 @@ export default function NovoContratoModal({
                   {bairros.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Vendedor
+                </label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  value={vendedor}
+                  onChange={(e) => setVendedor(e.target.value)}
+                >
+                  <option value="">Selecione um vendedor</option>
+                  {users.map((user) => (
+                    <option key={user.id_user} value={user.nome || ""}>
+                      {user.nome}
                     </option>
                   ))}
                 </select>
