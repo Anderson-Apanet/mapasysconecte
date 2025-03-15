@@ -13,6 +13,7 @@ import { toast } from 'react-hot-toast';
 interface ContratoDetalhes {
   endereco: string;
   complemento: string;
+  senha?: string;
   bairro: {
     nome: string;
   };
@@ -98,6 +99,11 @@ const EventCard: React.FC<EventCardProps> = ({
           <span className="text-xs px-2 py-1 bg-sky-50 text-sky-700 rounded-full">
             PPPoE: {event.pppoe}
           </span>
+          {contratoDetalhes?.senha && (
+            <span className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-full">
+              Senha: {contratoDetalhes.senha}
+            </span>
+          )}
           {contratoDetalhes?.plano && !compact && (
             <span className="text-xs px-2 py-1 bg-violet-50 text-violet-700 rounded-full">
               {contratoDetalhes.plano.nome}
@@ -204,6 +210,7 @@ export default function Tecnicos() {
           pppoe,
           endereco,
           complemento,
+          senha,
           bairro:id_bairro (
             nome
           ),
@@ -220,6 +227,7 @@ export default function Tecnicos() {
         [contrato.pppoe]: {
           endereco: contrato.endereco,
           complemento: contrato.complemento,
+          senha: contrato.senha,
           bairro: contrato.bairro,
           plano: contrato.plano
         }

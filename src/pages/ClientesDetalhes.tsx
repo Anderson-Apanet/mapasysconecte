@@ -5,7 +5,6 @@ import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
 import { Cliente } from '../types/cliente';
 import { formatPhone } from '../utils/formatters';
-import { formatDate } from '../utils/formatDate';
 import ContratoAccordion from '../components/ContratoAccordion';
 import VisitasAgendamentos from '../components/VisitasAgendamentos';
 
@@ -16,6 +15,8 @@ interface Contrato {
     id: number;
     nome: string;
     valor: number;
+    radius?: string;
+    ativo?: boolean;
   };
   status: string;
   created_at: string;
@@ -26,6 +27,7 @@ interface Contrato {
     id: number;
     nome: string;
   };
+  tipo?: string;
   titulos?: any[];
 }
 
@@ -113,39 +115,85 @@ const ClientesDetalhes: React.FC = () => {
             data_instalacao,
             dia_vencimento,
             endereco,
-            plano:id_plano (id, nome, valor),
-            bairro:id_bairro (id, nome)
+            id_plano,
+            tipo,
+            id_bairro
           `)
           .eq('id_cliente', id);
         
         if (contratosError) throw contratosError;
         
-        // Para cada contrato, buscar seus títulos
+        console.log('Contratos data antes de buscar planos:', JSON.stringify(contratosData, null, 2));
+        
+        // Para cada contrato, buscar o plano associado
         if (contratosData) {
-          const contratosComTitulos = await Promise.all(
+          const contratosComPlanos = await Promise.all(
             contratosData.map(async (contrato) => {
+              // Buscar plano do contrato
+              const { data: planoData, error: planoError } = await supabase
+                .from('planos')
+                .select('id, nome, valor, radius, ativo')
+                .eq('id', contrato.id_plano)
+                .single();
+              
+              // Buscar bairro do contrato
+              const { data: bairroData, error: bairroError } = await supabase
+                .from('bairros')
+                .select('id, nome')
+                .eq('id', contrato.id_bairro)
+                .single();
+              
+              if (planoError) {
+                console.error('Erro ao buscar plano:', planoError);
+              }
+              
+              if (bairroError) {
+                console.error('Erro ao buscar bairro:', bairroError);
+              }
+              
+              return {
+                ...contrato,
+                plano: planoData || { id: 0, nome: '', valor: 0, radius: '', ativo: false },
+                bairro: bairroData || { id: 0, nome: '' }
+              };
+            })
+          );
+          
+          console.log('Contratos com planos:', JSON.stringify(contratosComPlanos, null, 2));
+          
+          // Para cada contrato, buscar seus títulos
+          const contratosComTitulos = await Promise.all(
+            contratosComPlanos.map(async (contrato) => {
               const { data: titulosData, error: titulosError } = await supabase
                 .from('titulos')
-                .select('*')
+                .select(`
+                  id,
+                  valor,
+                  vencimento,
+                  status,
+                  data_pag,
+                  valorpago,
+                  nrdocumento,
+                  formapgto,
+                  nossonumero,
+                  pago
+                `)
                 .eq('id_contrato', contrato.id)
-                .order('vencimento', { ascending: false });
+                .order('vencimento', { ascending: true });
               
               if (titulosError) {
                 console.error('Erro ao buscar títulos:', titulosError);
+                
                 return { 
                   ...contrato, 
-                  plano: contrato.plano?.[0] || { id: 0, nome: '', valor: 0 },
-                  bairro: contrato.bairro?.[0] || { id: 0, nome: '' },
                   titulos: [] 
-                } as Contrato;
+                } as unknown as Contrato;
               }
               
               return { 
                 ...contrato, 
-                plano: contrato.plano?.[0] || { id: 0, nome: '', valor: 0 },
-                bairro: contrato.bairro?.[0] || { id: 0, nome: '' },
                 titulos: titulosData || [] 
-              } as Contrato;
+              } as unknown as Contrato;
             })
           );
           
@@ -238,11 +286,11 @@ const ClientesDetalhes: React.FC = () => {
           <div className="flex items-center">
             <button
               onClick={handleVoltar}
-              className="mr-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="mr-4 p-2 rounded-full hover:bg-white/10 text-white"
             >
-              <ArrowLeftIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+              <ArrowLeftIcon className="h-5 w-5" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+            <h1 className="text-2xl font-bold text-white">
               Detalhes do Cliente
             </h1>
           </div>
@@ -260,37 +308,37 @@ const ClientesDetalhes: React.FC = () => {
         ) : cliente ? (
           <div className="grid grid-cols-1 gap-6">
             {/* Seção de informações do cliente */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold text-[#1092E8] mb-4">
                 Informações do Cliente
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Nome</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{cliente.nome || 'Não informado'}</p>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">Nome</p>
+                  <p className="font-medium text-gray-900">{cliente.nome || 'Não informado'}</p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">CPF/CNPJ</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{cliente.cpf_cnpj || 'Não informado'}</p>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">CPF/CNPJ</p>
+                  <p className="font-medium text-gray-900">{cliente.cpf_cnpj || 'Não informado'}</p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Telefone</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">Telefone</p>
+                  <p className="font-medium text-gray-900">
                     {cliente.fonewhats ? formatPhone(cliente.fonewhats) : 'Não informado'}
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{cliente.email || 'Não informado'}</p>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">Email</p>
+                  <p className="font-medium text-gray-900">{cliente.email || 'Não informado'}</p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Endereço</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">Endereço</p>
+                  <p className="font-medium text-gray-900">
                     {cliente.logradouro ? `${cliente.logradouro}, ${cliente.nrlogradouro || 'S/N'}` : 'Não informado'}
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-[#1092E8]">Status</p>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                     ${cliente.status === 'Ativo' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' : 
                     cliente.status === 'Inativo' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
@@ -302,31 +350,52 @@ const ClientesDetalhes: React.FC = () => {
             </div>
 
             {/* Seção de contratos */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-                Contratos
-              </h2>
-              <ContratoAccordion 
-                contratos={contratos} 
-                isLoading={loadingContratos} 
-              />
-            </div>
+            {loadingContratos ? (
+              <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center">
+                <p className="text-gray-500">Carregando contratos...</p>
+              </div>
+            ) : contratos.length > 0 ? (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-semibold text-[#1092E8] mb-4">
+                  Contratos
+                </h2>
+                <div className="space-y-4">
+                  <ContratoAccordion 
+                    contratos={contratos} 
+                    isLoading={false}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-semibold text-[#1092E8] mb-4">
+                  Contratos
+                </h2>
+                <p className="text-gray-500">Nenhum contrato encontrado para este cliente.</p>
+              </div>
+            )}
 
             {/* Seção de visitas e agendamentos */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-                Visitas e Agendamentos
-              </h2>
-              <VisitasAgendamentos 
-                visitas={visitas} 
-                agendamentos={agendamentos} 
-                isLoading={loadingVisitasAgendamentos} 
-              />
-            </div>
+            {loadingVisitasAgendamentos ? (
+              <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center">
+                <p className="text-gray-500">Carregando histórico...</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-semibold text-[#1092E8] mb-4">
+                  Histórico de Visitas e Agendamentos
+                </h2>
+                <VisitasAgendamentos 
+                  visitas={visitas} 
+                  agendamentos={agendamentos} 
+                  isLoading={false}
+                />
+              </div>
+            )}
           </div>
         ) : (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-yellow-700 dark:text-yellow-400">
-            Nenhum cliente encontrado com o ID especificado.
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-700">
+            <p>Nenhum cliente encontrado com o ID especificado.</p>
           </div>
         )}
       </div>

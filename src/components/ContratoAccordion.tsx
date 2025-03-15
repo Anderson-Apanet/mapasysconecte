@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { formatDate } from '../utils/formatDate';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -12,16 +12,21 @@ interface Titulo {
   valorpago?: number;
   nrdocumento?: string;
   formapgto?: string;
+  nossonumero?: string;
+  pago?: boolean;
 }
 
 interface Contrato {
   id: number;
   pppoe: string;
-  plano: {
+  plano?: {
     id: number;
     nome: string;
     valor: number;
+    radius?: string;
+    ativo?: boolean;
   };
+  id_plano?: number;
   status: string;
   created_at: string;
   data_instalacao?: string;
@@ -31,6 +36,7 @@ interface Contrato {
     id: number;
     nome: string;
   };
+  tipo?: string;
   titulos?: Titulo[];
 }
 
@@ -41,6 +47,11 @@ interface ContratoAccordionProps {
 
 const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoading }) => {
   const [expandedContratos, setExpandedContratos] = useState<number[]>([]);
+  
+  // Log para depuração
+  useEffect(() => {
+    console.log('Contratos recebidos em ContratoAccordion:', JSON.stringify(contratos, null, 2));
+  }, [contratos]);
 
   const toggleContrato = (contratoId: number) => {
     setExpandedContratos(prev => 
@@ -68,25 +79,6 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
       case 'liberado48':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
-    }
-  };
-
-  const getTituloStatusColor = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
-    
-    switch (status.toLowerCase()) {
-      case 'pago':
-      case 'baixado':
-        return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
-      case 'pendente':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100';
-      case 'vencido':
-      case 'atrasado':
-        return 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100';
-      case 'cancelado':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
     }
@@ -133,7 +125,7 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                   {contrato.pppoe || 'Sem PPPoE'}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Plano: {contrato.plano?.nome || 'Não informado'} - {formatCurrency(contrato.plano?.valor || 0)}
+                  <span className="font-medium text-[#1092E8]">Plano:</span> {contrato.plano?.nome || 'Não informado'} - {formatCurrency(contrato.plano?.valor || 0)}
                 </p>
               </div>
             </div>
@@ -164,6 +156,24 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="p-3 bg-white dark:bg-gray-800 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Plano</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {contrato.plano?.nome || 'Não informado'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Valor: {formatCurrency(contrato.plano?.valor || 0)}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Tipo de Contrato</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {contrato.tipo === 'bonificado' ? 'Cliente Bonificado' : 
+                       contrato.tipo === 'anual' ? 'Contrato Anual' : 
+                       contrato.tipo === 'anual_aluguel' ? 'Contrato Anual Aluguel' : 
+                       'Contrato Padrão'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg">
                     <p className="text-xs text-gray-500 dark:text-gray-400">Endereço</p>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {contrato.endereco || 'Não informado'}
@@ -181,6 +191,12 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                       {contrato.created_at ? formatDate(contrato.created_at) : 'Não informado'}
                     </p>
                   </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Data de Instalação</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {contrato.data_instalacao ? formatDate(contrato.data_instalacao) : 'Não informado'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -195,7 +211,7 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                       <thead className="bg-gray-100 dark:bg-gray-700">
                         <tr>
                           <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Documento
+                            Nosso Número
                           </th>
                           <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Vencimento
@@ -204,18 +220,23 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                             Valor
                           </th>
                           <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Pagamento
+                            Pago
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {contrato.titulos.map(titulo => (
+                        {contrato.titulos
+                          .slice()
+                          .sort((a, b) => {
+                            // Converter strings de data para objetos Date para comparação
+                            const dateA = new Date(a.vencimento);
+                            const dateB = new Date(b.vencimento);
+                            return dateA.getTime() - dateB.getTime(); // Ordem crescente
+                          })
+                          .map(titulo => (
                           <tr key={titulo.id}>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                              {titulo.nrdocumento || '-'}
+                              {titulo.nossonumero || '-'}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                               {titulo.vencimento ? formatDate(titulo.vencimento) : '-'}
@@ -224,20 +245,14 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                               {formatCurrency(titulo.valor || 0)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTituloStatusColor(titulo.status)}`}>
-                                {titulo.status || 'Não definido'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                              {titulo.data_pag ? (
-                                <div>
-                                  <div>{formatDate(titulo.data_pag)}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {titulo.formapgto || '-'} • {formatCurrency(titulo.valorpago || 0)}
-                                  </div>
-                                </div>
+                              {titulo.pago ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                                  Pago
+                                </span>
                               ) : (
-                                '-'
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100">
+                                  Pendente
+                                </span>
                               )}
                             </td>
                           </tr>
