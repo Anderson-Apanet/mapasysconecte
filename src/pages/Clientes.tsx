@@ -6,35 +6,36 @@ import {
   ChevronRightIcon,
   PlusIcon,
   UserGroupIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  DocumentTextIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import Layout from '../components/Layout';
 import { supabase } from '../utils/supabaseClient';
 import { Cliente } from '../types/cliente';
-import { Contrato } from '../types/contrato';
-import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { default as ClienteModal } from '../components/ClienteModal';
-import { default as ContractDetails } from '../components/ContractDetails';
-import { default as ClienteDetails } from '../components/ClienteDetails';
 import { useNavigate } from 'react-router-dom';
+import { default as ClienteModal } from '../components/ClienteModal';
+import { useDebounce } from '../hooks/useDebounce';
 
 const Clientes: React.FC = () => {
   const navigate = useNavigate();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [contratoSearchTerm, setContratoSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedContrato, setSelectedContrato] = useState<any>(null);
-  const [showContractDetails, setShowContractDetails] = useState(false);
-  const [showClienteDetails, setShowClienteDetails] = useState(false);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const itemsPerPage = 5;
 
+  // Usar o hook de debounce para os termos de busca
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  const debouncedContratoSearchTerm = useDebounce(contratoSearchTerm, 500);
+
   // Função para buscar clientes com paginação e busca no servidor
-  const fetchClientes = async (page: number, searchTerm: string = '') => {
+  const fetchClientes = async (page: number, searchTerm: string = '', contratoSearchTerm: string = '') => {
     try {
       setLoading(true);
       
@@ -48,156 +49,218 @@ const Clientes: React.FC = () => {
         query = query.or(`nome.ilike.%${searchTerm}%,fonewhats.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`);
       }
 
+      // Aplicar filtro de busca por contrato se houver termo de pesquisa para contrato
+      if (contratoSearchTerm) {
+        // Primeiro, buscar os IDs dos clientes que têm contratos correspondentes
+        const { data: contratosData, error: contratosError } = await supabase
+          .from('contratos')
+          .select('id_cliente')
+          .or(`pppoe.ilike.%${contratoSearchTerm}%,senha.ilike.%${contratoSearchTerm}%`);
+
+        if (contratosError) {
+          console.error('Erro ao buscar contratos:', contratosError);
+          return;
+        }
+
+        if (contratosData && contratosData.length > 0) {
+          // Extrair os IDs dos clientes dos contratos encontrados
+          const clienteIds = contratosData.map(contrato => contrato.id_cliente);
+          // Adicionar filtro para incluir apenas esses clientes
+          query = query.in('id', clienteIds);
+        } else {
+          // Se não encontrar nenhum contrato, retornar lista vazia
+          setClientes([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+      }
+
       const { count, error: countError } = await query;
 
-      if (countError) throw countError;
-      setTotalCount(count || 0);
+      if (countError) {
+        throw countError;
+      }
 
-      // Agora, busca os registros da página atual
-      let dataQuery = supabase
+      // Agora, vamos buscar os clientes para a página atual
+      let clientesQuery = supabase
         .from('clientes')
-        .select('*')
-        .order('data_cad_cliente', { ascending: false });
+        .select('*');
 
-      // Adiciona os mesmos filtros de busca
+      // Adiciona filtros de busca se houver termo de pesquisa
       if (searchTerm) {
-        dataQuery = dataQuery.or(`nome.ilike.%${searchTerm}%,fonewhats.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`);
+        clientesQuery = clientesQuery.or(`nome.ilike.%${searchTerm}%,fonewhats.ilike.%${searchTerm}%,cpf_cnpj.ilike.%${searchTerm}%`);
+      }
+
+      // Aplicar filtro de busca por contrato se houver termo de pesquisa para contrato
+      if (contratoSearchTerm) {
+        // Reutilizar os IDs dos clientes encontrados anteriormente
+        const { data: contratosData, error: contratosError } = await supabase
+          .from('contratos')
+          .select('id_cliente')
+          .or(`pppoe.ilike.%${contratoSearchTerm}%,senha.ilike.%${contratoSearchTerm}%`);
+
+        if (contratosError) {
+          console.error('Erro ao buscar contratos:', contratosError);
+          return;
+        }
+
+        if (contratosData && contratosData.length > 0) {
+          // Extrair os IDs dos clientes dos contratos encontrados
+          const clienteIds = contratosData.map(contrato => contrato.id_cliente);
+          // Adicionar filtro para incluir apenas esses clientes
+          clientesQuery = clientesQuery.in('id', clienteIds);
+        }
       }
 
       // Adiciona paginação
       const from = (page - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
-      
-      const { data, error } = await dataQuery
-        .range(from, to);
 
-      if (error) throw error;
+      const { data, error } = await clientesQuery
+        .range(from, to)
+        .order('nome');
+
+      if (error) {
+        throw error;
+      }
+
       setClientes(data || []);
-    } catch (error: any) {
-      console.error('Erro ao carregar clientes:', error);
-      toast.error('Erro ao carregar clientes: ' + error.message);
+      setTotalCount(count || 0);
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+      toast.error('Erro ao buscar clientes');
     } finally {
       setLoading(false);
     }
   };
 
-  // Efeito para carregar os clientes quando a página ou termo de busca mudar
   useEffect(() => {
-    fetchClientes(currentPage, searchTerm);
-  }, [currentPage, searchTerm]);
+    fetchClientes(currentPage);
+  }, [currentPage]);
 
-  // Funções de navegação
-  const goToNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  // Efeito para buscar quando os termos de busca com debounce mudarem
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchClientes(1, debouncedSearchTerm, debouncedContratoSearchTerm);
+  }, [debouncedSearchTerm, debouncedContratoSearchTerm]);
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setContratoSearchTerm('');
+    setCurrentPage(1);
+    fetchClientes(1, '', '');
   };
 
-  const goToPreviousPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 1));
-  };
-
-  // Cálculo do total de páginas
-  const totalPages = Math.ceil(totalCount / itemsPerPage);
-
-  // Handler para mudança no termo de busca com debounce
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    setCurrentPage(1); // Volta para a primeira página ao pesquisar
-  };
-
-  // Handler para abrir o modal com os detalhes do cliente
   const handleViewCliente = (cliente: Cliente) => {
     setSelectedCliente(cliente);
     setIsModalOpen(true);
   };
 
-  // Handler para visualizar detalhes do cliente
   const handleViewClienteDetails = (cliente: Cliente) => {
+    // Navegar para a página de detalhes do cliente
     navigate(`/clientes/${cliente.id}`);
   };
 
-  // Handler para fechar o modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedCliente(undefined);
+    setSelectedCliente(null);
   };
 
-  // Handler para salvar alterações do cliente
-  const handleSaveCliente = () => {
-    fetchClientes(currentPage, searchTerm);
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
 
-  // Função para atualizar o contrato após edição
-  const handleContratoUpdate = (updatedContrato: any) => {
-    setSelectedContrato(updatedContrato);
-  };
-
-  // Função para exibir detalhes do contrato
-  const handleShowContractDetails = (contrato: any) => {
-    setSelectedContrato(contrato);
-    setShowContractDetails(true);
-  };
-
-  const handleContractUpdate = () => {
-    // Recarregar os dados do cliente após atualização do contrato
-    fetchClientes(currentPage, searchTerm);
+  const goToNextPage = () => {
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   return (
     <Layout>
       <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="mb-8 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <UserGroupIcon className="h-8 w-8 text-white dark:text-white mr-2" />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent dark:from-yellow-300 dark:to-yellow-500">
-                Clientes
-              </h1>
-            </div>
-            <p className="text-white dark:text-white">
-              Gerenciamento de clientes e contratos
-            </p>
+        <div className="bg-white dark:bg-[#1E293B] rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-[#1976D2] dark:text-[#E1F5FE]">
+              <UserGroupIcon className="h-8 w-8 inline-block mr-2" />
+              Clientes
+            </h1>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-[#1976D2] hover:bg-[#0D47A1] text-white px-4 py-2 rounded-md flex items-center transition-colors duration-200"
+            >
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Novo Cliente
+            </button>
           </div>
-          
-          <div className="flex flex-col space-y-4 p-4">
-            {/* Card de Ações */}
-            <div className="bg-[#E1F5FE] dark:bg-[#0D47A1] rounded-lg shadow p-4 mb-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Ações
-                </h2>
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white bg-[#1976D2] hover:bg-[#0D47A1] transition-colors duration-200"
-                >
-                  <PlusIcon className="h-5 w-5 mr-2" />
-                  Adicionar Cliente
-                </button>
-              </div>
-            </div>
 
-            {/* Card de Filtros */}
-            <div className="bg-[#E1F5FE] dark:bg-[#0D47A1] rounded-lg shadow p-6 mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Filtros
-              </h2>
-              {/* Área de Pesquisa */}
-              <div className="mb-6">
-                <div className="relative">
+          {/* Filtros */}
+          <div className="mb-6">
+            <div className="flex flex-col md:flex-row md:items-end gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+                  <UserGroupIcon className="h-4 w-4 mr-1" />
+                  Cliente (nome, telefone ou CPF/CNPJ)
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
                   <input
                     type="text"
-                    placeholder="Pesquisar por nome, telefone ou CPF/CNPJ..."
                     value={searchTerm}
-                    onChange={handleSearchChange}
-                    className="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1976D2] focus:border-[#1976D2] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="focus:ring-[#1976D2] focus:border-[#1976D2] block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md dark:bg-[#334155] dark:text-white dark:border-gray-600"
+                    placeholder="Buscar por nome, telefone ou CPF/CNPJ"
                   />
-                  <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <MagnifyingGlassIcon
+                      className="h-5 w-5 text-gray-400"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Lista de Clientes */}
-              <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+                  <DocumentTextIcon className="h-4 w-4 mr-1" />
+                  Contrato (PPPoE ou senha)
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <input
+                    type="text"
+                    value={contratoSearchTerm}
+                    onChange={(e) => setContratoSearchTerm(e.target.value)}
+                    className="focus:ring-[#1976D2] focus:border-[#1976D2] block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md dark:bg-[#334155] dark:text-white dark:border-gray-600"
+                    placeholder="Buscar por PPPoE ou senha do contrato"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <MagnifyingGlassIcon
+                      className="h-5 w-5 text-gray-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                {(searchTerm || contratoSearchTerm) && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-500 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+                  >
+                    <XMarkIcon className="h-5 w-5 mr-2" />
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-[#1E293B] shadow overflow-hidden sm:rounded-lg">
+            <div className="overflow-x-auto">
+              <div className="align-middle inline-block min-w-full">
+                <div className="shadow overflow-hidden border-b border-gray-200 dark:border-gray-700 sm:rounded-lg">
                   <table className="min-w-full">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-700">
@@ -273,9 +336,9 @@ const Clientes: React.FC = () => {
                     </button>
                     <button
                       onClick={goToNextPage}
-                      disabled={currentPage >= totalPages}
+                      disabled={currentPage >= Math.ceil(totalCount / itemsPerPage)}
                       className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md 
-                        ${currentPage >= totalPages 
+                        ${currentPage >= Math.ceil(totalCount / itemsPerPage) 
                           ? 'text-gray-400 bg-gray-100' 
                           : 'text-white bg-[#1976D2] hover:bg-[#0D47A1]'} 
                         transition-colors duration-200`}
@@ -306,9 +369,9 @@ const Clientes: React.FC = () => {
                         </button>
                         <button
                           onClick={goToNextPage}
-                          disabled={currentPage >= totalPages}
+                          disabled={currentPage >= Math.ceil(totalCount / itemsPerPage)}
                           className={`relative inline-flex items-center px-2 py-2 rounded-r-md border text-sm font-medium 
-                            ${currentPage >= totalPages 
+                            ${currentPage >= Math.ceil(totalCount / itemsPerPage) 
                               ? 'text-gray-400 bg-gray-100 border-gray-300' 
                               : 'text-white bg-[#1976D2] hover:bg-[#0D47A1] border-[#1976D2]'} 
                             transition-colors duration-200`}
@@ -328,25 +391,11 @@ const Clientes: React.FC = () => {
             isOpen={isModalOpen}
             cliente={selectedCliente}
             onClose={handleCloseModal}
-            onSave={handleSaveCliente}
+            onSave={() => {
+              setIsModalOpen(false);
+              fetchClientes(currentPage, searchTerm, contratoSearchTerm);
+            }}
           />
-
-          {/* Detalhes do Contrato */}
-          {showContractDetails && (
-            <ContractDetails
-              contrato={selectedContrato}
-              onClose={() => setShowContractDetails(false)}
-              onUpdate={handleContratoUpdate}
-            />
-          )}
-
-          {/* Detalhes do Cliente */}
-          {showClienteDetails && (
-            <ClienteDetails
-              cliente={selectedCliente}
-              onClose={() => setShowClienteDetails(false)}
-            />
-          )}
         </div>
       </div>
     </Layout>
