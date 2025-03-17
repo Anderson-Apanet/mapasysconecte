@@ -1,10 +1,11 @@
-import React from 'react';
 import { Dialog } from '@headlessui/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { XMarkIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { Lancamento } from '../types/financeiro';
 import { gerarReciboTermico } from './ReciboTermico';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface VisualizarLancamentoModalProps {
   isOpen: boolean;
@@ -17,6 +18,82 @@ export default function VisualizarLancamentoModal({
   onClose,
   lancamento
 }: VisualizarLancamentoModalProps) {
+  const [lancamentoCompleto, setLancamentoCompleto] = useState<Lancamento | null>(null);
+
+  useEffect(() => {
+    if (isOpen && lancamento) {
+      // Buscar dados do título associado ao lançamento
+      const buscarDadosTitulo = async () => {
+        try {
+          console.log('Dados do lançamento:', lancamento);
+          
+          // Se tiver titulo_id, busca pelo id
+          if (lancamento.titulo_id) {
+            console.log('Buscando dados do título pelo ID:', lancamento.titulo_id);
+            
+            const { data: titulo, error } = await supabase
+              .from('titulos')
+              .select('*')
+              .eq('id', lancamento.titulo_id)
+              .single();
+            
+            if (error) {
+              console.error('Erro ao buscar título pelo ID:', error);
+              throw error;
+            }
+            
+            if (titulo) {
+              console.log('Título encontrado pelo ID:', titulo);
+              // Combinar os dados do título com os dados do lançamento
+              setLancamentoCompleto({
+                ...lancamento,
+                nossonumero: titulo.nossonumero,
+                vencimento: titulo.vencimento
+              });
+              return;
+            }
+          }
+          
+          // Se tiver titulobancario mas não encontrou pelo ID, busca pelo nossonumero
+          if (lancamento.titulobancario) {
+            console.log('Buscando dados do título pelo nossonumero:', lancamento.titulobancario);
+            
+            const { data: titulo, error } = await supabase
+              .from('titulos')
+              .select('*')
+              .eq('nossonumero', lancamento.titulobancario)
+              .single();
+            
+            if (error) {
+              console.error('Erro ao buscar título pelo nossonumero:', error);
+            } else if (titulo) {
+              console.log('Título encontrado pelo nossonumero:', titulo);
+              // Combinar os dados do título com os dados do lançamento
+              setLancamentoCompleto({
+                ...lancamento,
+                nossonumero: titulo.nossonumero,
+                vencimento: titulo.vencimento
+              });
+              return;
+            }
+          }
+          
+          // Se não encontrou o título ou não tem informações para buscar,
+          // usa o próprio lançamento
+          console.log('Usando dados do próprio lançamento');
+          setLancamentoCompleto(lancamento);
+        } catch (error) {
+          console.error('Erro ao buscar título:', error);
+          setLancamentoCompleto(lancamento);
+        }
+      };
+      
+      buscarDadosTitulo();
+    } else {
+      setLancamentoCompleto(null);
+    }
+  }, [isOpen, lancamento]);
+
   if (!lancamento) return null;
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -27,7 +104,8 @@ export default function VisualizarLancamentoModal({
     }).format(value);
   };
 
-  const formatDate = (date: string | Date) => {
+  const formatDate = (date: string | Date | undefined) => {
+    if (!date) return '';
     return format(new Date(date), "dd/MM/yyyy HH:mm", { locale: ptBR });
   };
 
@@ -49,10 +127,15 @@ export default function VisualizarLancamentoModal({
             <div className="flex space-x-2">
               <button
                 onClick={() => {
-                  if (lancamento) {
-                    gerarReciboTermico(lancamento).catch(error => {
-                      console.error('Erro ao gerar recibo:', error);
-                    });
+                  if (lancamentoCompleto) {
+                    console.log('Tentando gerar recibo para:', lancamentoCompleto);
+                    gerarReciboTermico(lancamentoCompleto)
+                      .then(() => {
+                        console.log('Recibo gerado com sucesso');
+                      })
+                      .catch(error => {
+                        console.error('Erro ao gerar recibo:', error);
+                      });
                   }
                 }}
                 className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -76,14 +159,14 @@ export default function VisualizarLancamentoModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Tipo</h3>
-                <p className={`text-lg font-semibold ${lancamento.tipopag === 'RECEITA' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {lancamento.tipopag}
+                <p className={`text-lg font-semibold ${lancamentoCompleto?.tipopag === 'RECEITA' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {lancamentoCompleto?.tipopag}
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Data do Pagamento</h3>
                 <p className="text-lg text-gray-900 dark:text-gray-100">
-                  {formatDate(lancamento.data_pagamento)}
+                  {formatDate(lancamentoCompleto?.data_pagamento)}
                 </p>
               </div>
             </div>
@@ -91,7 +174,7 @@ export default function VisualizarLancamentoModal({
             {/* Description */}
             <div>
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Descrição</h3>
-              <p className="text-lg text-gray-900 dark:text-gray-100">{lancamento.descricao}</p>
+              <p className="text-lg text-gray-900 dark:text-gray-100">{lancamentoCompleto?.descricao}</p>
             </div>
 
             {/* Financial Details */}
@@ -99,28 +182,28 @@ export default function VisualizarLancamentoModal({
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Valor Total</h3>
                 <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  {formatCurrency(lancamento.total)}
+                  {formatCurrency(lancamentoCompleto?.total)}
                 </p>
               </div>
-              {lancamento.tipopag === 'RECEITA' && (
+              {lancamentoCompleto?.tipopag === 'RECEITA' && (
                 <>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Desconto</h3>
                     <p className="text-lg text-gray-900 dark:text-gray-100">
-                      {formatCurrency(lancamento.desconto)}
-                      {lancamento.desconto_porcentagem > 0 && ` (${lancamento.desconto_porcentagem}%)`}
+                      {formatCurrency(lancamentoCompleto?.desconto)}
+                      {lancamentoCompleto?.desconto_porcentagem && lancamentoCompleto.desconto_porcentagem > 0 && ` (${lancamentoCompleto.desconto_porcentagem}%)`}
                     </p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Juros</h3>
                     <p className="text-lg text-gray-900 dark:text-gray-100">
-                      {formatCurrency(lancamento.juros)}
+                      {formatCurrency(lancamentoCompleto?.juros)}
                     </p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Multa</h3>
                     <p className="text-lg text-gray-900 dark:text-gray-100">
-                      {formatCurrency(lancamento.multa)}
+                      {formatCurrency(lancamentoCompleto?.multa)}
                     </p>
                   </div>
                 </>
@@ -128,37 +211,37 @@ export default function VisualizarLancamentoModal({
             </div>
 
             {/* Payment Details for Revenue */}
-            {lancamento.tipopag === 'RECEITA' && (
+            {lancamentoCompleto?.tipopag === 'RECEITA' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">PIX</h3>
                   <p className="text-lg text-gray-900 dark:text-gray-100">
-                    {formatCurrency(lancamento.entrada_pixsicredi)}
+                    {formatCurrency(lancamentoCompleto?.entrada_pixsicredi)}
                   </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Cartão de Crédito</h3>
                   <p className="text-lg text-gray-900 dark:text-gray-100">
-                    {formatCurrency(lancamento.entrada_cartaocredito)}
+                    {formatCurrency(lancamentoCompleto?.entrada_cartaocredito)}
                   </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Cartão de Débito</h3>
                   <p className="text-lg text-gray-900 dark:text-gray-100">
-                    {formatCurrency(lancamento.entrada_cartaodebito)}
+                    {formatCurrency(lancamentoCompleto?.entrada_cartaodebito)}
                   </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Dinheiro</h3>
                   <p className="text-lg text-gray-900 dark:text-gray-100">
-                    {formatCurrency(lancamento.entrada_dinheiro)}
+                    {formatCurrency(lancamentoCompleto?.entrada_dinheiro)}
                   </p>
                 </div>
-                {lancamento.troco > 0 && (
+                {lancamentoCompleto?.troco && lancamentoCompleto.troco > 0 && (
                   <div>
                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Troco</h3>
                     <p className="text-lg text-gray-900 dark:text-gray-100">
-                      {formatCurrency(lancamento.troco)}
+                      {formatCurrency(lancamentoCompleto.troco)}
                     </p>
                   </div>
                 )}
@@ -169,12 +252,22 @@ export default function VisualizarLancamentoModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Registrado por</h3>
-                <p className="text-lg text-gray-900 dark:text-gray-100">{lancamento.quemrecebeu}</p>
+                <p className="text-lg text-gray-900 dark:text-gray-100">{lancamentoCompleto?.quemrecebeu}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Data do Registro</h3>
                 <p className="text-lg text-gray-900 dark:text-gray-100">
-                  {formatDate(lancamento.data_cad_lancamento)}
+                  {formatDate(lancamentoCompleto?.data_cad_lancamento)}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Nº do Título</h3>
+                <p className="text-lg text-gray-900 dark:text-gray-100">{lancamentoCompleto?.nossonumero}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Vencimento</h3>
+                <p className="text-lg text-gray-900 dark:text-gray-100">
+                  {formatDate(lancamentoCompleto?.vencimento)}
                 </p>
               </div>
             </div>

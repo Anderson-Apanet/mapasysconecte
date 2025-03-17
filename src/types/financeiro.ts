@@ -88,6 +88,10 @@ export interface Titulo {
   valor: number;
   data_vencimento: string;
   status: string;
+  nossonumero: string;
+  vencimento: string;
+  pppoe?: string;
+  pago?: boolean;
 }
 
 // Interface para Formas de Pagamento
@@ -145,6 +149,7 @@ export interface Lancamento {
   descricao: string;
   total: number;
   tipo: typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES];
+  tipopag?: string; // Alias para tipo, usado em alguns componentes
   categoria?: string;
   formas_pagamento?: { [key: string]: number };
   status: string;
@@ -152,6 +157,25 @@ export interface Lancamento {
   contrato_id?: number;
   titulo_id?: number;
   attachments?: Attachment[];
+  // Campos adicionais para recibos e detalhes de pagamento
+  nossonumero?: string;
+  vencimento?: string;
+  titulobancario?: string; // Número do título bancário
+  desconto?: number;
+  desconto_porcentagem?: number;
+  juros?: number;
+  multa?: number;
+  troco?: number;
+  entrada_pixsicredi?: number;
+  entrada_cartaocredito?: number;
+  entrada_cartaodebito?: number;
+  entrada_dinheiro?: number;
+  quemrecebeu?: string;
+  cliente?: {
+    nome: string;
+    [key: string]: any;
+  };
+  valor?: number; // Usado em alguns componentes como alternativa a total
 }
 
 // Interface para filtros de lançamento

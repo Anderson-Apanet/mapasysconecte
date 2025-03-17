@@ -563,7 +563,11 @@ export default function NovoLancamentoModal({
         multa: selectedType === 'RECEITA' ? parseMoeda(multa) : 0,
         titulobancario: selectedType === 'RECEITA' ? selectedTitulo?.nossonumero || null : null,
         id_categoria: selectedType === 'DESPESA' ? categoria : null,
-        pago_boleto: false
+        pago_boleto: false,
+        // Adicionar os campos nossonumero e vencimento quando um título é selecionado
+        nossonumero: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.nossonumero : null,
+        vencimento: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.vencimento : null,
+        titulo_id: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.id : null
       };
 
       console.log('Dados do lançamento antes de salvar:', lancamentoData);

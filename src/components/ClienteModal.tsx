@@ -59,7 +59,7 @@ interface Bairro {
 interface ClienteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  cliente?: Cliente;
+  cliente: Cliente | null;
   onSave: () => void;
 }
 
