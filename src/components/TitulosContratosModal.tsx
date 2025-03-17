@@ -165,7 +165,8 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       // Preparar os dados para enviar ao webhook
       const webhookData = {
         pppoe: pppoe,
-        vencimento: titulo.vencimento
+        vencimento: titulo.vencimento,
+        nossonumero: titulo.nossonumero
       };
       
       console.log('Enviando dados para webhook de exclusão de título:', webhookData);
