@@ -78,20 +78,70 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
 
   const buscarTitulosLocais = async () => {
     if (!contrato || !contrato.id) {
-      console.warn('Contrato não fornecido');
+      console.warn('Contrato não fornecido ou sem ID válido:', contrato);
       return;
     }
 
+    console.log('Buscando títulos para o contrato:', {
+      id: contrato.id,
+      pppoe: pppoe
+    });
+
     setLoadingTitulosLocais(true);
     try {
-      const { data: titulos, error } = await supabase
+      // Buscar por id_contrato
+      const { data: titulosPorId, error: errorPorId } = await supabase
         .from('titulos')
         .select('*')
         .eq('id_contrato', contrato.id)
         .order('vencimento');
 
-      if (error) throw error;
-      setTitulosLocais(titulos || []);
+      if (errorPorId) {
+        console.error('Erro ao buscar títulos por id_contrato:', errorPorId);
+      } else {
+        console.log(`Encontrados ${titulosPorId?.length || 0} títulos por id_contrato`);
+      }
+
+      // Buscar também por contrato_id (campo alternativo)
+      const { data: titulosPorContratoId, error: errorPorContratoId } = await supabase
+        .from('titulos')
+        .select('*')
+        .eq('contrato_id', contrato.id)
+        .order('vencimento');
+
+      if (errorPorContratoId) {
+        console.error('Erro ao buscar títulos por contrato_id:', errorPorContratoId);
+      } else {
+        console.log(`Encontrados ${titulosPorContratoId?.length || 0} títulos por contrato_id`);
+      }
+
+      // Buscar também por pppoe
+      const { data: titulosPorPppoe, error: errorPorPppoe } = await supabase
+        .from('titulos')
+        .select('*')
+        .eq('pppoe', pppoe)
+        .order('vencimento');
+
+      if (errorPorPppoe) {
+        console.error('Erro ao buscar títulos por pppoe:', errorPorPppoe);
+      } else {
+        console.log(`Encontrados ${titulosPorPppoe?.length || 0} títulos por pppoe`);
+      }
+
+      // Combinar resultados (removendo duplicatas por ID)
+      const todosTitulos = [
+        ...(titulosPorId || []),
+        ...(titulosPorContratoId || []),
+        ...(titulosPorPppoe || [])
+      ];
+
+      // Remover duplicatas
+      const titulosUnicos = todosTitulos.filter((titulo, index, self) =>
+        index === self.findIndex((t) => t.id === titulo.id)
+      );
+
+      console.log(`Total de ${titulosUnicos.length} títulos únicos encontrados`);
+      setTitulosLocais(titulosUnicos);
     } catch (error) {
       console.error('Erro ao buscar títulos:', error);
       toast.error('Erro ao buscar títulos');
