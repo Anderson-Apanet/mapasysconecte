@@ -36,7 +36,7 @@ const Financeiro: React.FC = () => {
   const [showTitulosModal, setShowTitulosModal] = useState(false);
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [contractStatusFilter, setContractStatusFilter] = useState('atraso');
+  const [contractStatusFilter, setContractStatusFilter] = useState('Todos');
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -196,7 +196,7 @@ const Financeiro: React.FC = () => {
       }
       
       // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
         countQuery = countQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
@@ -233,7 +233,7 @@ const Financeiro: React.FC = () => {
       }
 
       // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
         dataQuery = dataQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
@@ -269,7 +269,7 @@ const Financeiro: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchContratos(1, '', 'atraso');
+    fetchContratos(1, '', 'Todos');
   }, []);
 
   useEffect(() => {
