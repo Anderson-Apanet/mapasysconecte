@@ -514,6 +514,19 @@ export default function NovoLancamentoModal({
         return;
       }
 
+      // Buscar o nome do usuário na tabela users
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('nome')
+        .eq('id_user', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Erro ao buscar informações do usuário:', userError);
+      }
+
+      const nomeUsuario = userData?.nome || user.email;
+
       // Determinar o valor correto baseado no tipo de lançamento
       let valorFinal = selectedType === 'RECEITA' ? 
         parseMoeda(valorTotal) : 
@@ -541,7 +554,7 @@ export default function NovoLancamentoModal({
         entrada_cartaodebito: selectedType === 'RECEITA' ? parseMoeda(formasPagamento.debito) : 0,
         entrada_dinheiro: selectedType === 'RECEITA' ? parseMoeda(formasPagamento.dinheiro) : 0,
         troco: selectedType === 'RECEITA' ? parseMoeda(troco) : 0,
-        quemrecebeu: user.email,
+        quemrecebeu: nomeUsuario,
         desconto: valorComDesconto && selectedType === 'RECEITA' ? (parseMoeda(valorTotal) - parseMoeda(valorComDesconto)) : 0,
         desconto_porcentagem: tipoDesconto === 'percentual' ? Number(desconto.replace('%', '')) : 0,
         titulo: selectedType === 'RECEITA' && selectedTitulo ? true : false,

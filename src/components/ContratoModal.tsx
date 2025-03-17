@@ -48,6 +48,8 @@ interface Contrato {
     cidade: string;
   } | null;
   cliente: string | null;
+  bonificado: boolean | null;
+  notafiscal: boolean | null;
 }
 
 interface ContratoModalProps {
@@ -88,6 +90,9 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   // Estado para controlar se o contrato é bonificado
   const [isBonificado, setIsBonificado] = useState(false);
 
+  // Estado para controlar se o contrato tem nota fiscal
+  const [isNotaFiscal, setIsNotaFiscal] = useState(false);
+
   // Estados para gerenciar a alteração de plano
   const [planos, setPlanos] = useState<any[]>([]);
   const [selectedPlanoId, setSelectedPlanoId] = useState<number | null>(null);
@@ -110,7 +115,8 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
       }
       
       // Verificar se o contrato é do tipo "Cliente Bonificado"
-      setIsBonificado(contrato.tipo === "Cliente Bonificado");
+      setIsBonificado(contrato.bonificado === true);
+      setIsNotaFiscal(contrato.notafiscal === true);
       
       // Definir o plano atual como selecionado
       if (contrato.planos?.id) {
@@ -757,6 +763,32 @@ Arroio do Sal, ${currentDate}
     }
   };
 
+  const handleNotaFiscalChange = async (checked: boolean) => {
+    if (!contratoAtual) return;
+    
+    try {
+      setIsNotaFiscal(checked);
+
+      const { error } = await supabase
+        .from('contratos')
+        .update({ notafiscal: checked })
+        .eq('id', contratoAtual.id);
+
+      if (error) throw error;
+
+      setContratoAtual({
+        ...contratoAtual,
+        notafiscal: checked
+      });
+
+      toast.success(`${checked ? 'Emissão de nota fiscal ativada' : 'Emissão de nota fiscal desativada'}`);
+    } catch (error) {
+      console.error('Erro ao atualizar status de nota fiscal:', error);
+      toast.error('Erro ao atualizar status de nota fiscal');
+      setIsNotaFiscal(!checked); // Reverter em caso de erro
+    }
+  };
+
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
@@ -1023,6 +1055,22 @@ Arroio do Sal, ${currentDate}
                     />
                     <label htmlFor="bonificado-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">
                       Marcar como Cliente Bonificado
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Nota Fiscal</p>
+                  <p className="text-sm font-medium mb-2">{contratoAtual?.notafiscal ? 'Sim' : 'Não'}</p>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="notafiscal-checkbox"
+                      checked={isNotaFiscal}
+                      onChange={(e) => handleNotaFiscalChange(e.target.checked)}
+                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="notafiscal-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Emitir Nota Fiscal
                     </label>
                   </div>
                 </div>
