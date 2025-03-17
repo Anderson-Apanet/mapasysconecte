@@ -403,7 +403,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
         filename: `contrato_${documentType}_${contrato.pppoe}.pdf`,
         image: { type: 'jpeg', quality: 1.0 },
         html2canvas: { 
-          scale: 2,
+          scale: 1.5, // Reduzido de 2 para 1.5 para ajudar a limitar o número de páginas
           useCORS: true,
           logging: false,
           windowWidth: 800,
@@ -427,20 +427,74 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
       // Mostrar indicador de carregamento com ID para poder removê-lo depois
       const toastId = toast.loading('Gerando PDF, aguarde...');
 
-      // Usar html2pdf com as opções melhoradas
-      html2pdf().from(styledContent).set(options).save()
-        .then(() => {
-          console.log('PDF generated successfully');
-          // Remover o toast de carregamento
-          toast.dismiss(toastId);
-          toast.success('PDF gerado com sucesso!');
-        })
-        .catch((error) => {
+      // Criar um elemento temporário para verificar o número de páginas
+      const tempElement = document.createElement('div');
+      tempElement.innerHTML = styledContent;
+      document.body.appendChild(tempElement);
+      
+      // Flag para controlar se o elemento já foi removido
+      let elementRemoved = false;
+      
+      // Função para remover o elemento com segurança
+      const safelyRemoveElement = () => {
+        if (!elementRemoved && tempElement.parentNode) {
+          try {
+            document.body.removeChild(tempElement);
+            elementRemoved = true;
+          } catch (e) {
+            console.log('Elemento já foi removido');
+          }
+        }
+      };
+
+      // Função para gerar o PDF com ajustes para limitar a 2 páginas
+      const generatePDF = (fontSize = 12, lineHeight = 1.5) => {
+        // Ajustar o CSS para controlar o tamanho do conteúdo
+        const adjustedContent = styledContent.replace(
+          'font-size: 12pt;',
+          `font-size: ${fontSize}pt;`
+        ).replace(
+          'line-height: 1.5;',
+          `line-height: ${lineHeight};`
+        );
+
+        // Usar html2pdf com as opções ajustadas
+        html2pdf().from(adjustedContent).set(options).toPdf().get('pdf').then((pdf) => {
+          // Verificar o número de páginas
+          const pageCount = pdf.internal.getNumberOfPages();
+          
+          if (pageCount > 2) {
+            // Se ainda tiver mais de 2 páginas, tentar reduzir mais
+            if (fontSize > 9) {
+              // Tentar com fonte menor
+              generatePDF(fontSize - 0.5, lineHeight - 0.05);
+            } else {
+              // Chegamos ao limite de redução, forçar apenas 2 páginas
+              while (pdf.internal.getNumberOfPages() > 2) {
+                pdf.deletePage(pdf.internal.getNumberOfPages());
+              }
+              pdf.save(`contrato_${documentType}_${contrato.pppoe}.pdf`);
+              safelyRemoveElement();
+              toast.dismiss(toastId);
+              toast.success('PDF gerado com sucesso (limitado a 2 páginas)');
+            }
+          } else {
+            // Está ok com 2 páginas ou menos
+            pdf.save(`contrato_${documentType}_${contrato.pppoe}.pdf`);
+            safelyRemoveElement();
+            toast.dismiss(toastId);
+            toast.success('PDF gerado com sucesso!');
+          }
+        }).catch((error) => {
           console.error('Error in PDF generation:', error);
-          // Remover o toast de carregamento em caso de erro
+          safelyRemoveElement();
           toast.dismiss(toastId);
           toast.error('Erro ao gerar o PDF');
         });
+      };
+
+      // Iniciar com os valores padrão
+      generatePDF();
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Erro ao gerar o PDF');
@@ -556,24 +610,23 @@ CPF/CNPJ: ${contractData.cpf}
 
 <p style="text-align: justify;">1.3. Desta forma, na hipótese de rescisão contratual antes de findo o prazo de fidelidade, o ASSINANTE pagará à PRESTADORA, a título de multa rescisória, a importância correspondente ao benefício que efetivamente usufruiu, proporcionalmente aos meses restantes do contrato, cujo valor será corrigido pelo IGP-M ou outro que eventualmente vier a substituí-lo.</p>
 
-<p style="text-align: center; font-size: 4.5px; font-weight: bold;">TABELA MULTA RESCISÃO ANTECIPADA</p>
+<p style="text-align: center; font-weight: bold;">TABELA MULTA RESCISÃO ANTECIPADA</p>
 <p style="text-align: justify;">Desconto proporcional mensal Mensalidade: R$ 50,00</p>
 <p style="text-align: justify;">Valor total dos benefícios concedidos: R$ 600,00</p>
 
-<div style="font-size: 4px;">
-PEDIDO DE CANCELAMENTO -------- VALOR TOTAL DA MULTA RESCISÓRIA
-Com 1 (um) mês de uso    -------- R$ 600,00
-Com 2 (dois) meses de uso  -------- R$ 550,00
-Com 3 (três) meses de uso  -------- R$ 500,00
-Com 4 (quatro) meses de uso ------- R$ 450,00
-Com 5 (cinco) meses de uso -------- R$ 400,00
-Com 6 (seis) meses de uso  -------- R$ 350,00
-Com 7 (sete) meses de uso  -------- R$ 300,00
-Com 8 (oito) meses de uso  -------- R$ 250,00
-Com 9 (nove) meses de uso  -------- R$ 200,00
-Com 10 (dez) meses de uso  -------- R$ 150,00
-Com 11 (onze) meses de uso -------- R$ 100,00
-Com 12 (doze) meses de uso ------- R$ 50,00</div>
+<p style="text-align: center; font-weight: bold;">PEDIDO DE CANCELAMENTO -------- VALOR TOTAL DA MULTA RESCISÓRIA</p>
+<p style="text-align: justify;">Com 1 (um) mês de uso -------- R$ 600,00</p>
+<p style="text-align: justify;">Com 2 (dois) meses de uso -------- R$ 550,00</p>
+<p style="text-align: justify;">Com 3 (três) meses de uso -------- R$ 500,00</p>
+<p style="text-align: justify;">Com 4 (quatro) meses de uso ------- R$ 450,00</p>
+<p style="text-align: justify;">Com 5 (cinco) meses de uso -------- R$ 400,00</p>
+<p style="text-align: justify;">Com 6 (seis) meses de uso -------- R$ 350,00</p>
+<p style="text-align: justify;">Com 7 (sete) meses de uso -------- R$ 300,00</p>
+<p style="text-align: justify;">Com 8 (oito) meses de uso -------- R$ 250,00</p>
+<p style="text-align: justify;">Com 9 (nove) meses de uso -------- R$ 200,00</p>
+<p style="text-align: justify;">Com 10 (dez) meses de uso -------- R$ 150,00</p>
+<p style="text-align: justify;">Com 11 (onze) meses de uso -------- R$ 100,00</p>
+<p style="text-align: justify;">Com 12 (doze) meses de uso ------- R$ 50,00</p>
 
 <p style="text-align: justify;">2. Não obstante, o ASSINANTE não estará sujeito ao pagamento da multa apenas nas hipóteses abaixo elencadas:</p>
 
@@ -616,7 +669,7 @@ CPF/CNPJ: ${contractData.cpf}
 <p style="text-align: justify; margin-top: 15px;">A empresa CONECTE TELECOM LTDA, inscrita no CNPJ nº 41.143.126.0001-00 e Inscrição Estadual nº 250/0020066, situada a Rua Paulista, 183/03, Centro de Arroio do Sal RS, representada pelo seu sócio Bernard Becker dos Santos, portador do CPF nº 012.484.840-02, informa que não prestará mais serviços de fornecimento de Internet à ${contractData.clientName}, portador(a) do CPF nº ${contractData.cpf} e RG nº ${contractData.rg} na cidade de ${contractData.city} a partir da data de ______________________</p>
 
 <p style="text-align: justify; margin-top: 15px;">MOTIVO DA RESCISÃO:</p>
-<p style="text-align: justify; margin-top: 10px;">_______________________________________________________________________________________</p>
+<p style="text-align: justify; margin: 2px 0;">_______________________________________________________________________________________</p>
 <p style="text-align: justify;">_______________________________________________________________________________________</p>
 <p style="text-align: justify;">_______________________________________________________________________________________</p>
 
@@ -656,8 +709,7 @@ Arroio do Sal, ${currentDate}
         .update({
           id_plano: selectedPlanoId
         })
-        .eq('id', contratoAtual.id)
-        .select('*, planos(*)');
+        .eq('id', contratoAtual.id);
 
       if (error) throw error;
 
