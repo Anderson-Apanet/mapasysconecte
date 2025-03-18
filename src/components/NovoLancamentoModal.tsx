@@ -50,7 +50,17 @@ export default function NovoLancamentoModal({
     valor: '',
     valor_numerico: 0,
     data_vencimento: '',
-    descricao: ''
+    descricao: '',
+    cliente_id: 0,
+    cliente_nome: '',
+    cliente_cpf_cnpj: '',
+    categoria_id: 0,
+    categoria_nome: '',
+    tipo: '',
+    parcelas: 1,
+    data_inicio: '',
+    data_fim: '',
+    recorrente: false,
   });
 
   const [descricao, setDescricao] = useState('');
@@ -563,14 +573,21 @@ export default function NovoLancamentoModal({
         multa: selectedType === 'RECEITA' ? parseMoeda(multa) : 0,
         titulobancario: selectedType === 'RECEITA' ? selectedTitulo?.nossonumero || null : null,
         id_categoria: selectedType === 'DESPESA' ? categoria : null,
-        pago_boleto: false,
-        // Adicionar os campos nossonumero e vencimento quando um título é selecionado
-        nossonumero: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.nossonumero : null,
-        vencimento: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.vencimento : null,
-        titulo_id: selectedType === 'RECEITA' && selectedTitulo ? selectedTitulo.id : null
+        pago_boleto: false
       };
 
       console.log('Dados do lançamento antes de salvar:', lancamentoData);
+
+      // Armazenar informações adicionais do título para uso no recibo
+      // Essas informações não serão salvas na tabela lancamentos, mas serão usadas
+      // pelo componente ReciboTermico para gerar o recibo
+      const tituloInfo = selectedType === 'RECEITA' && selectedTitulo ? {
+        nossonumero: selectedTitulo.nossonumero,
+        vencimento: selectedTitulo.vencimento,
+        titulo_id: selectedTitulo.id
+      } : null;
+
+      console.log('Informações adicionais do título para recibo:', tituloInfo);
 
       let result;
       if (lancamentoToEdit) {
@@ -631,8 +648,8 @@ export default function NovoLancamentoModal({
       valorTotal,
       descricao,
       formData,
-      parsedValor: parseMoeda(valor),
-      parsedValorTotal: parseMoeda(valorTotal)
+      caixaStatus,
+      selectedTitulo
     });
 
     if (!caixaStatus?.isOpen || !caixaStatus?.caixaAtual) {
@@ -767,6 +784,23 @@ export default function NovoLancamentoModal({
     setTipoDesconto('valor');
     setDesconto('');
     setValorComDesconto('R$ 0,00');
+    setFormData({
+      titulo_id: 0,
+      valor: '',
+      valor_numerico: 0,
+      data_vencimento: '',
+      descricao: '',
+      cliente_id: 0,
+      cliente_nome: '',
+      cliente_cpf_cnpj: '',
+      categoria_id: 0,
+      categoria_nome: '',
+      tipo: '',
+      parcelas: 1,
+      data_inicio: '',
+      data_fim: '',
+      recorrente: false,
+    });
     onClose();
   };
 
@@ -802,7 +836,17 @@ export default function NovoLancamentoModal({
         valor: '',
         valor_numerico: 0,
         data_vencimento: '',
-        descricao: ''
+        descricao: '',
+        cliente_id: 0,
+        cliente_nome: '',
+        cliente_cpf_cnpj: '',
+        categoria_id: 0,
+        categoria_nome: '',
+        tipo: '',
+        parcelas: 1,
+        data_inicio: '',
+        data_fim: '',
+        recorrente: false,
       });
       setMostrarDesconto(false);
       setTipoDesconto('valor');
