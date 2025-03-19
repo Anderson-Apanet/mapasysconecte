@@ -196,7 +196,7 @@ const Financeiro: React.FC = () => {
       }
       
       // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado' && status !== 'Bloqueado') {
         countQuery = countQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
@@ -233,7 +233,7 @@ const Financeiro: React.FC = () => {
       }
 
       // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
+      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado' && status !== 'Bloqueado') {
         dataQuery = dataQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
