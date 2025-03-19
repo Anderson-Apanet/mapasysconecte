@@ -330,41 +330,122 @@ export async function fetchUsers() {
 
 export async function updateEventDates(eventId: number, start: string, end: string) {
   try {
+    console.log('updateEventDates - Parâmetros recebidos:', { eventId, start, end });
+    console.log('updateEventDates - Tipo do ID:', typeof eventId);
+    
+    if (!eventId || isNaN(eventId)) {
+      console.error('updateEventDates - ID de evento inválido:', eventId);
+      return { data: null, error: new Error('ID de evento inválido') };
+    }
+    
+    if (!start || !end) {
+      console.error('updateEventDates - Datas inválidas:', { start, end });
+      return { data: null, error: new Error('Datas inválidas') };
+    }
+    
+    // Garantir que o ID seja um número
+    const numericId = Number(eventId);
+    
+    console.log('updateEventDates - Enviando requisição para o Supabase com ID:', numericId);
+    
     const { data, error } = await supabase
       .from('agenda')
       .update({
         datainicio: start,
         datafinal: end,
       })
-      .eq('id', eventId)
+      .eq('id', numericId)
       .select();
-
+    
     if (error) {
-      console.error('Erro ao atualizar datas do evento:', error);
-      throw error;
+      console.error('updateEventDates - Erro Supabase ao atualizar datas do evento:', error);
+      return { data: null, error };
     }
-
-    return data?.[0];
+    
+    console.log('updateEventDates - Resposta do Supabase:', data);
+    
+    return { data, error: null };
   } catch (error) {
-    console.error('Erro ao atualizar evento:', error);
-    throw error;
+    console.error('updateEventDates - Erro ao atualizar evento:', error);
+    if (error instanceof Error) {
+      console.error('updateEventDates - Mensagem de erro:', error.message);
+      console.error('updateEventDates - Stack trace:', error.stack);
+    }
+    return { data: null, error: error instanceof Error ? error : new Error('Erro desconhecido') };
   }
 }
 
-export const updateContratoStatus = async (pppoe: string, status: string) => {
+export async function updateContratoStatus(pppoe: string, status: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('contratos')
       .update({ status })
       .eq('pppoe', pppoe);
 
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Erro ao atualizar status do contrato:', error);
+      throw error;
+    }
+
+    return true;
   } catch (error) {
     console.error('Erro ao atualizar status do contrato:', error);
     throw error;
   }
-};
+}
+
+export async function deleteEvent(eventId: number): Promise<boolean> {
+  try {
+    console.log(`Iniciando processo de exclusão do evento ID: ${eventId}`);
+    console.log('Tipo do ID recebido:', typeof eventId);
+    
+    // Garantir que o ID seja um número
+    const numericId = Number(eventId);
+    
+    if (isNaN(numericId) || numericId <= 0) {
+      console.error('ID de evento inválido ou não numérico:', eventId);
+      return false;
+    }
+    
+    // Verificar se o evento existe antes de tentar excluir
+    console.log(`Verificando existência do evento ID: ${numericId}`);
+    const { data: existingEvent, error: checkError } = await supabase
+      .from('agenda')
+      .select('id, nome')
+      .eq('id', numericId)
+      .single();
+      
+    if (checkError) {
+      console.error('Erro ao verificar existência do evento:', checkError);
+      return false;
+    }
+    
+    if (!existingEvent) {
+      console.error(`Evento com ID ${numericId} não encontrado`);
+      return false;
+    }
+    
+    console.log(`Evento encontrado: ${JSON.stringify(existingEvent)}`);
+    console.log(`Prosseguindo com a exclusão do evento ID: ${numericId}`);
+    
+    // Executar a exclusão
+    const { error } = await supabase
+      .from('agenda')
+      .delete()
+      .eq('id', numericId);
+    
+    if (error) {
+      console.error('Erro ao excluir evento:', error);
+      return false;
+    }
+    
+    console.log(`Evento ID ${numericId} excluído com sucesso`);
+    return true;
+  } catch (error) {
+    console.error('Erro ao excluir evento:', error);
+    return false;
+  }
+}
 
 export function transformEvents(events) {
   if (!events || events.length === 0) {

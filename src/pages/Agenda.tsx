@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
@@ -8,8 +8,9 @@ import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { EventModal } from '../components/Agenda/EventModal';
 import { AgendaEvent } from '../types/agenda';
-import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates, updateContratoStatus } from '../services/agenda';
+import { fetchEvents, saveEvent, searchContratos, fetchUsers, transformEvents, updateEventDates, updateContratoStatus, deleteEvent } from '../services/agenda';
 import { debounce } from 'lodash';
+import { EventDropArg } from '@fullcalendar/core';
 
 export default function Agenda() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
@@ -33,14 +34,14 @@ export default function Agenda() {
     events: any[];
     position: {
       top: number;
-      left: number;
+      left: number
     }
   } | null>(null);
   const calendarRef = useRef<FullCalendar | null>(null);
   const lastFetchRef = useRef<{ start: string, end: string } | null>(null);
 
   const loadEvents = useCallback(async (info, successCallback, failureCallback) => {
-    // Verifica se já estamos carregando eventos
+    // Verifica se já existe um carregamento de eventos em andamento
     if (isLoadingEvents) {
       console.log('Já existe um carregamento de eventos em andamento. Ignorando nova requisição.');
       return;
@@ -199,61 +200,165 @@ export default function Agenda() {
       setIsModalOpen(false);
       
       // Atualiza o calendário com o novo evento
-      const calendarApi = calendarRef.current?.getApi();
-      if (calendarApi) {
-        // Obtém a visualização atual do calendário
-        const view = calendarApi.view;
-        // Obtém as datas de início e fim da visualização atual
-        const start = calendarApi.view.activeStart;
-        const end = calendarApi.view.activeEnd;
-        
-        // Recarrega os eventos para o período atual
-        try {
-          // Buscar eventos para o período atual
-          const events = await fetchEvents(start.toISOString(), end.toISOString());
-          // Transformar eventos para o formato do FullCalendar
-          const transformedEvents = await transformEvents(events);
-          // Atualiza os eventos no estado
-          setEvents(transformedEvents);
-          // Força o calendário a renderizar novamente
-          calendarApi.refetchEvents();
-        } catch (error) {
-          console.error('Erro ao recarregar eventos:', error);
-        }
+      if (calendarRef.current) {
+        calendarRef.current.getApi().refetchEvents();
       }
-
-      setSelectedEvent(null);
-      setNewEvent({
-        nome: '',
-        descricao: '',
-        horamarcada: true,
-        prioritario: false,
-        cor: '#3788d8',
-        responsaveis: []
-      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao salvar evento';
-      toast.error(message);
-      console.error('Erro:', error);
+      console.error('Erro ao salvar evento:', error);
+      toast.error('Erro ao salvar evento');
     }
   };
 
-  const handleEventDrop = async (dropInfo: any) => {
+  const handleDeleteEvent = async (eventId: number) => {
     try {
-      const eventId = parseInt(dropInfo.event.id);
-      const start = dropInfo.event.start.toISOString();
-      const end = dropInfo.event.end?.toISOString() || start;
-
-      await updateEventDates(eventId, start, end);
-      toast.success('Evento atualizado com sucesso!');
+      console.log('Iniciando exclusão do evento ID:', eventId);
+      console.log('Tipo do ID:', typeof eventId);
       
-      // Atualizar a lista de eventos
-      const dateInfo = dropInfo.view.getCurrentData().dateProfile;
-      await loadEvents(dropInfo.view.getCurrentData(), (events) => setEvents(events), (error) => console.error(error));
+      if (eventId === undefined || eventId === null) {
+        console.error('ID de evento não fornecido');
+        toast.error('ID de evento não fornecido');
+        return;
+      }
+      
+      // Garantir que o ID seja um número
+      const numericId = Number(eventId);
+      
+      if (isNaN(numericId)) {
+        console.error('ID de evento inválido (não é um número):', eventId);
+        toast.error('ID de evento inválido');
+        return;
+      }
+      
+      // Chamar a função de exclusão do serviço
+      console.log('Chamando serviço de exclusão para o ID:', numericId);
+      const result = await deleteEvent(numericId);
+      console.log('Resultado da exclusão:', result);
+      
+      if (result) {
+        // Exibir mensagem de sucesso
+        toast.success('Evento excluído com sucesso!');
+        
+        // Remover o evento da lista local de eventos
+        setEvents(prevEvents => prevEvents.filter(event => event.id !== numericId));
+        
+        // Atualiza o calendário removendo o evento
+        if (calendarRef.current) {
+          console.log('Atualizando calendário após exclusão');
+          
+          // Remover o evento diretamente da API do FullCalendar
+          const calendarApi = calendarRef.current.getApi();
+          const eventObj = calendarApi.getEventById(String(numericId));
+          if (eventObj) {
+            console.log('Removendo evento do calendário:', numericId);
+            eventObj.remove();
+          }
+          
+          // Forçar uma atualização completa do calendário
+          setTimeout(() => {
+            console.log('Recarregando todos os eventos do calendário');
+            calendarApi.refetchEvents();
+          }, 300);
+        }
+        
+        // Limpa o evento selecionado e fecha o modal
+        setSelectedEvent(null);
+        setNewEvent({
+          nome: '',
+          descricao: '',
+          datainicio: '',
+          datafinal: '',
+          horamarcada: true,
+          prioritario: false,
+          cor: '#3788d8',
+          responsaveis: []
+        });
+        
+        // Fechar o modal de edição
+        setIsModalOpen(false);
+      } else {
+        toast.error('Não foi possível excluir o evento');
+      }
     } catch (error) {
-      console.error('Erro ao atualizar evento:', error);
-      toast.error('Erro ao atualizar evento');
-      dropInfo.revert();
+      console.error('Erro ao excluir evento:', error);
+      toast.error('Erro ao excluir evento');
+    }
+  };
+
+  const handleEventDrop = async (dropInfo: EventDropArg) => {
+    const eventId = dropInfo.event.id;
+    
+    // Get the original event dates
+    const originalStartStr = dropInfo.oldEvent.startStr;
+    const originalEndStr = dropInfo.oldEvent.endStr;
+    
+    // Get the new date (only the date part)
+    const newDate = dropInfo.event.start;
+    
+    if (!newDate || !originalStartStr) {
+      console.error('Invalid dates');
+      toast.error('Error updating event: invalid dates');
+      dropInfo.revert(); // Revert the drag
+      return;
+    }
+    
+    try {
+      // Extract the date part from the new date (YYYY-MM-DD)
+      const newDateStr = newDate.toISOString().split('T')[0];
+      
+      // Extract the time parts from the original dates
+      let startTimeStr, endTimeStr;
+      
+      if (originalStartStr.includes('T')) {
+        // Format: "2025-03-27T16:00:00.000Z" or "2025-03-27T16:00:00-03:00"
+        startTimeStr = originalStartStr.split('T')[1].split('.')[0].split('-')[0].split('+')[0];
+        if (originalEndStr && originalEndStr.includes('T')) {
+          endTimeStr = originalEndStr.split('T')[1].split('.')[0].split('-')[0].split('+')[0];
+        } else {
+          // If no end time, use start time + 1 hour
+          const startHour = parseInt(startTimeStr.split(':')[0]);
+          const startMinutes = startTimeStr.split(':')[1];
+          const endHour = (startHour + 1) % 24;
+          endTimeStr = `${endHour.toString().padStart(2, '0')}:${startMinutes}:00`;
+        }
+      } else {
+        // Fallback if format is different
+        console.error('Unexpected date format:', originalStartStr);
+        toast.error('Error updating event: unexpected date format');
+        dropInfo.revert();
+        return;
+      }
+      
+      // Combine new date with original times
+      const startISOString = `${newDateStr}T${startTimeStr}`;
+      const endISOString = `${newDateStr}T${endTimeStr}`;
+      
+      console.log('Original start:', originalStartStr);
+      console.log('Original end:', originalEndStr);
+      console.log('New start:', startISOString);
+      console.log('New end:', endISOString);
+      
+      // Update in the database
+      const result = await updateEventDates(parseInt(eventId), startISOString, endISOString);
+      
+      if (result.error) {
+        console.error('Error updating event:', result.error);
+        toast.error('Error updating event. Please try again.');
+        dropInfo.revert(); // Revert the drag if there's an error
+        return;
+      }
+
+      // Successful update
+      toast.success('Event updated successfully!');
+      
+      // Refresh the calendar to ensure events are displayed in the correct positions
+      if (calendarRef.current) {
+        calendarRef.current.getApi().refetchEvents();
+      }
+      
+    } catch (error) {
+      console.error('Error updating event:', error);
+      toast.error('Error updating event. Please try again.');
+      dropInfo.revert(); // Revert the drag if there's an error
     }
   };
 
@@ -356,16 +461,17 @@ export default function Agenda() {
             <FullCalendar
               ref={calendarRef}
               plugins={[dayGridPlugin, listPlugin, interactionPlugin]}
+              initialView={currentViewType}
               headerToolbar={{
                 left: 'prev,next today',
                 center: 'title',
                 right: 'dayGridMonth,listWeek'
               }}
-              initialView="dayGridMonth"
+              height="auto"
               editable={true}
               selectable={true}
               selectMirror={true}
-              dayMaxEvents={false}
+              dayMaxEvents={true}
               weekends={true}
               locale={ptBrLocale}
               nowIndicator={true}
@@ -379,6 +485,9 @@ export default function Agenda() {
               select={handleDateSelect}
               eventClick={handleEventClick}
               eventDrop={handleEventDrop}
+              eventStartEditable={true}
+              eventDurationEditable={false}
+              droppable={true}
               moreLinkContent={({ num }) => `Ver mais (${num})`}
               moreLinkClick="popover"
               eventDisplay="block"
@@ -510,6 +619,7 @@ export default function Agenda() {
             event={newEvent}
             onEventChange={setNewEvent}
             onSave={handleSaveEvent}
+            onDelete={handleDeleteEvent}
             users={users}
             searchResults={searchResults}
             isSearching={isSearching}

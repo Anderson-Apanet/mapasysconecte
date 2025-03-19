@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Dialog } from '@headlessui/react';
 import { AgendaEvent } from '../../types/agenda';
 import { supabase } from '../../lib/supabase';
-import { toast } from 'react-toastify';
 
 // Função para buscar o nome do usuário pelo email
 const buscarNomeUsuario = async (email: string): Promise<string> => {
@@ -24,36 +22,6 @@ const buscarNomeUsuario = async (email: string): Promise<string> => {
     console.error('Erro ao buscar nome do usuário:', error);
     // Em caso de erro, retorna o email
     return email;
-  }
-};
-
-// Função para converter data ISO para formato local
-const formatToLocalDateTimeString = (isoString: string): string => {
-  // Verificar se a string já está no formato correto para input datetime-local
-  if (isoString.length === 16 && isoString.includes('T')) {
-    return isoString;
-  }
-  
-  try {
-    // Extrair apenas a data e hora sem considerar o timezone
-    // Formato esperado: "2025-03-28T16:00:00.000Z" -> "2025-03-28T16:00"
-    const parts = isoString.split('T');
-    if (parts.length !== 2) {
-      console.error('Formato de data inválido:', isoString);
-      return isoString;
-    }
-    
-    const datePart = parts[0]; // "2025-03-28"
-    const timePart = parts[1].split('.')[0].split('Z')[0]; // "16:00:00" (removendo milissegundos e Z)
-    
-    // Pegar apenas HH:MM do tempo
-    const timeHHMM = timePart.substring(0, 5); // "16:00"
-    
-    // Retornar no formato para input datetime-local (YYYY-MM-DDTHH:MM)
-    return `${datePart}T${timeHHMM}`;
-  } catch (error) {
-    console.error('Erro ao formatar data:', error);
-    return isoString;
   }
 };
 
@@ -82,26 +50,9 @@ export function EventModal({
   onSearchPPPoE,
   onDelete,
 }: EventModalProps) {
+  const isEditMode = Boolean(event?.id);
+  const [criadorNome, setCriadorNome] = useState<string>('');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [criadorNome, setCriadorNome] = useState('');
-  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
-
-  // Atualizar o ID do evento quando o evento mudar
-  useEffect(() => {
-    if (event?.id) {
-      const eventId = Number(event.id);
-      if (!isNaN(eventId)) {
-        console.log('ID do evento atualizado:', eventId);
-        setCurrentEventId(eventId);
-      } else {
-        console.error('ID do evento não é um número válido:', event.id);
-        setCurrentEventId(null);
-      }
-    } else {
-      setCurrentEventId(null);
-    }
-  }, [event?.id]);
 
   // Buscar o nome do criador quando o evento mudar
   useEffect(() => {
@@ -111,48 +62,6 @@ export function EventModal({
         .catch(error => console.error('Erro ao buscar nome do criador:', error));
     }
   }, [event?.criador]);
-
-  // Determina se é modo de edição (evento existente) ou criação (novo evento)
-  useEffect(() => {
-    setIsEditMode(!!event.id);
-  }, [event.id]);
-
-  // Função para lidar com a exclusão do evento
-  const handleDelete = () => {
-    try {
-      console.log('Confirmando exclusão do evento ID:', currentEventId);
-      console.log('Evento completo:', event);
-      console.log('Função onDelete existe?', typeof onDelete === 'function');
-      
-      if (!currentEventId) {
-        console.error('Tentativa de excluir evento sem ID');
-        toast.error('Não foi possível excluir o evento: ID não encontrado');
-        return;
-      }
-      
-      if (typeof onDelete !== 'function') {
-        console.error('Função onDelete não foi fornecida');
-        toast.error('Não foi possível excluir o evento: função de exclusão não disponível');
-        return;
-      }
-      
-      // Chama a função de exclusão passada como prop com o ID convertido para número
-      console.log('Chamando função onDelete com ID:', currentEventId);
-      onDelete(currentEventId);
-      
-      console.log('Função de exclusão chamada com sucesso para o ID:', currentEventId);
-      
-      // Fecha os modais
-      setShowDeleteConfirmation(false);
-      onClose();
-      
-      // Exibir mensagem de sucesso
-      toast.success('Solicitação de exclusão enviada com sucesso');
-    } catch (error) {
-      console.error('Erro ao tentar excluir evento:', error);
-      toast.error('Ocorreu um erro ao tentar excluir o evento');
-    }
-  };
 
   return (
     <>
@@ -305,25 +214,25 @@ export function EventModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Data Inicial
+                      Data
                     </label>
                     <input
-                      type="datetime-local"
+                      type="date"
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      value={event.datainicio ? formatToLocalDateTimeString(event.datainicio) : ''}
-                      onChange={(e) => onEventChange({ ...event, datainicio: e.target.value })}
+                      value={event.data || ''}
+                      onChange={(e) => onEventChange({ ...event, data: e.target.value })}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Data Final
+                      Hora
                     </label>
                     <input
-                      type="datetime-local"
+                      type="time"
                       className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      value={event.datafinal ? formatToLocalDateTimeString(event.datafinal) : ''}
-                      onChange={(e) => onEventChange({ ...event, datafinal: e.target.value })}
+                      value={event.hora || ''}
+                      onChange={(e) => onEventChange({ ...event, hora: e.target.value })}
                       required
                     />
                   </div>
@@ -363,12 +272,7 @@ export function EventModal({
                     <button
                       type="button"
                       className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Abrindo modal de confirmação');
-                        setShowDeleteConfirmation(true);
-                      }}
+                      onClick={() => setShowDeleteConfirmation(true)}
                     >
                       Excluir Evento
                     </button>
@@ -400,83 +304,37 @@ export function EventModal({
         </div>
       </Dialog>
 
-      {/* Modal de confirmação de exclusão usando Dialog do Headless UI */}
-      <Transition appear show={showDeleteConfirmation} as={Fragment}>
-        <Dialog as="div" className="relative z-[200]" onClose={() => setShowDeleteConfirmation(false)}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-50" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
+      {/* Modal de confirmação de exclusão */}
+      {showDeleteConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">Confirmar Exclusão</h3>
+            <p className="mb-6">Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-transparent rounded-md hover:bg-gray-200"
+                onClick={() => setShowDeleteConfirmation(false)}
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-medium leading-6 text-gray-900"
-                  >
-                    Confirmar Exclusão
-                  </Dialog.Title>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-500">
-                      Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.
-                    </p>
-                  </div>
-
-                  <div className="mt-4 flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-200 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
-                      onClick={() => setShowDeleteConfirmation(false)}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Botão Excluir clicado no modal de confirmação');
-                        console.log('ID do evento a ser excluído:', currentEventId);
-                        
-                        // Verificar se o ID do evento existe
-                        if (!currentEventId) {
-                          console.error('Tentativa de excluir evento sem ID no botão de confirmação');
-                          toast.error('Não foi possível excluir o evento: ID não encontrado');
-                          setShowDeleteConfirmation(false);
-                          return;
-                        }
-                        
-                        // Chamar a função de exclusão
-                        handleDelete();
-                      }}
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+                onClick={() => {
+                  if (event.id && onDelete) {
+                    onDelete(event.id);
+                  }
+                  setShowDeleteConfirmation(false);
+                  onClose();
+                }}
+              >
+                Excluir
+              </button>
             </div>
           </div>
-        </Dialog>
-      </Transition>
+        </div>
+      )}
     </>
   );
 }

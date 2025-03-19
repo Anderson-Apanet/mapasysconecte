@@ -119,7 +119,7 @@ const Clientes: React.FC = () => {
 
       const { data, error } = await clientesQuery
         .range(from, to)
-        .order('nome');
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
