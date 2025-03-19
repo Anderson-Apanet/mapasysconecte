@@ -693,6 +693,142 @@ const Financeiro: React.FC = () => {
     setCurrentPage(prev => Math.max(prev - 1, 1));
   };
 
+  const exportContratosCSV = async () => {
+    try {
+      setIsLoading(true);
+      let query = supabase
+        .from('contratos')
+        .select(`
+          pppoe,
+          dia_vencimento,
+          planos(nome),
+          clientes(nome)
+        `);
+
+      // Aplicar os mesmos filtros que estão sendo usados na visualização atual
+      if (searchTerm) {
+        query = query.ilike('pppoe', `%${searchTerm}%`);
+      }
+      
+      if (contractStatusFilter === 'atraso') {
+        // Usar a view de contratos em atraso
+        const { data, error } = await supabase
+          .from('contratosatraso')
+          .select(`
+            pppoe,
+            dia_vencimento,
+            planos(nome),
+            clientes(nome)
+          `)
+          .neq('status', 'Bloqueado')
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          downloadCSV(formatarDadosCSV(data));
+        } else {
+          toast.error('Nenhum dado encontrado para exportar');
+        }
+        
+        setIsLoading(false);
+        return;
+      } else if (contractStatusFilter === 'atraso15') {
+        // Usar a view de contratos em atraso > 15 dias
+        const { data, error } = await supabase
+          .from('contratosatrasodias')
+          .select(`
+            pppoe,
+            dia_vencimento,
+            planos(nome),
+            clientes(nome)
+          `)
+          .neq('status', 'Bloqueado')
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          downloadCSV(formatarDadosCSV(data));
+        } else {
+          toast.error('Nenhum dado encontrado para exportar');
+        }
+        
+        setIsLoading(false);
+        return;
+      } else if (contractStatusFilter === 'pendencia') {
+        query = query.eq('pendencia', true);
+      } else if (contractStatusFilter === 'Anual') {
+        query = query.eq('tipo', 'Anual');
+      } else if (contractStatusFilter === 'Anual_Aluguel') {
+        query = query.eq('tipo', 'Anual_Aluguel');
+      } else if (contractStatusFilter === 'Cliente Bonificado') {
+        query = query.eq('tipo', 'Cliente Bonificado');
+      } else if (contractStatusFilter && contractStatusFilter !== 'Todos') {
+        query = query.eq('status', contractStatusFilter);
+      } else if (contractStatusFilter === 'Todos') {
+        query = query.neq('status', 'Cancelado');
+      }
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        downloadCSV(formatarDadosCSV(data));
+      } else {
+        toast.error('Nenhum dado encontrado para exportar');
+      }
+    } catch (error) {
+      console.error('Erro ao exportar contratos:', error);
+      toast.error('Erro ao exportar contratos para CSV');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatarDadosCSV = (data: any[]) => {
+    // Cabeçalho do CSV
+    let csv = 'Nome do Cliente,PPPoE,Nome do Plano,Dia do Vencimento\n';
+    
+    // Adicionar cada linha de dados
+    data.forEach(item => {
+      const nome_cliente = item.clientes?.nome || 'N/A';
+      const pppoe = item.pppoe || 'N/A';
+      const nome_plano = item.planos?.nome || 'N/A';
+      const dia_vencimento = item.dia_vencimento || 'N/A';
+      
+      // Escapar vírgulas e aspas nos campos
+      const linha = [
+        `"${nome_cliente.replace(/"/g, '""')}"`,
+        `"${pppoe.replace(/"/g, '""')}"`,
+        `"${nome_plano.replace(/"/g, '""')}"`,
+        `"${dia_vencimento}"`
+      ].join(',');
+      
+      csv += linha + '\n';
+    });
+    
+    return csv;
+  };
+
+  const downloadCSV = (csv: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `contratos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Arquivo CSV gerado com sucesso!');
+  };
+
   return (
     <Layout>
       <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
@@ -783,6 +919,14 @@ const Financeiro: React.FC = () => {
                   <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {totalCount} resultados encontrados
                   </div>
+
+                  {/* Botão Exportar CSV */}
+                  <button
+                    onClick={exportContratosCSV}
+                    className="ml-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Exportar CSV
+                  </button>
 
                   {/* Botão Bloquear em Massa - Mostrar apenas quando o filtro for Atraso > 15 dias */}
                   {contractStatusFilter === 'atraso15' && (
