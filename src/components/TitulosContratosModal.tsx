@@ -14,7 +14,9 @@ import {
   PrinterIcon,
   CheckCircleIcon,
   DocumentArrowDownIcon,
-  ChatBubbleLeftRightIcon
+  ChatBubbleLeftRightIcon,
+  ReceiptRefundIcon,
+  DocumentIcon
 } from '@heroicons/react/24/outline';
 import { 
   findCustomerByCpfCnpj, 
@@ -40,7 +42,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [linhaDigitavel, setLinhaDigitavel] = useState('');
   const [loadingLinhaDigitavel, setLoadingLinhaDigitavel] = useState(false);
   const [showQrCode, setShowQrCode] = useState(false);
-  const [qrCodeImage, setQrCodeImage] = useState('');
+  const [qrCodeData, setQrCodeData] = useState('');
   const [loadingQrCode, setLoadingQrCode] = useState(false);
   const [showCriarTitulosModal, setShowCriarTitulosModal] = useState(false);
   const [dataInicialVencimento, setDataInicialVencimento] = useState('');
@@ -52,8 +54,12 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [isCriandoTitulos, setIsCriandoTitulos] = useState(false);
   const [tituloParaExcluir, setTituloParaExcluir] = useState<number | null>(null);
   const [showConfirmacaoExclusao, setShowConfirmacaoExclusao] = useState(false);
-  const [tituloSelecionadoParaExclusao, setTituloSelecionadoParaExclusao] = useState<any>(null);
+  const [tituloExclusao, setTituloExclusao] = useState<any>(null);
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<number | null>(null);
+  const [showConfirmacaoNotaFiscal, setShowConfirmacaoNotaFiscal] = useState(false);
+  const [tituloNotaFiscal, setTituloNotaFiscal] = useState<any>(null);
+  const [acaoNotaFiscal, setAcaoNotaFiscal] = useState<'gerarnf' | 'imprimirnf'>('gerarnf');
+  const [processandoNotaFiscal, setProcessandoNotaFiscal] = useState(false);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -102,19 +108,6 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
         console.log(`Encontrados ${titulosPorId?.length || 0} títulos por id_contrato`);
       }
 
-      // Buscar também por contrato_id (campo alternativo)
-      const { data: titulosPorContratoId, error: errorPorContratoId } = await supabase
-        .from('titulos')
-        .select('*')
-        .eq('contrato_id', contrato.id)
-        .order('vencimento');
-
-      if (errorPorContratoId) {
-        console.error('Erro ao buscar títulos por contrato_id:', errorPorContratoId);
-      } else {
-        console.log(`Encontrados ${titulosPorContratoId?.length || 0} títulos por contrato_id`);
-      }
-
       // Buscar também por pppoe
       const { data: titulosPorPppoe, error: errorPorPppoe } = await supabase
         .from('titulos')
@@ -131,7 +124,6 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       // Combinar resultados (removendo duplicatas por ID)
       const todosTitulos = [
         ...(titulosPorId || []),
-        ...(titulosPorContratoId || []),
         ...(titulosPorPppoe || [])
       ];
 
@@ -184,7 +176,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     try {
       setLoadingQrCode(true);
       const qrCode = await getPaymentPixQrCode(paymentId);
-      setQrCodeImage(qrCode);
+      setQrCodeData(qrCode);
       setShowQrCode(true);
     } catch (error: any) {
       toast.error('Erro ao buscar QR Code PIX: ' + error.message);
@@ -495,20 +487,20 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
 
   // Função para abrir o modal de confirmação de exclusão
   const abrirConfirmacaoExclusao = (titulo: any) => {
-    setTituloSelecionadoParaExclusao(titulo);
+    setTituloParaExcluir(titulo.id);
     setShowConfirmacaoExclusao(true);
+    setTituloExclusao(titulo);
   };
 
   // Função para fechar o modal de confirmação de exclusão
   const fecharConfirmacaoExclusao = () => {
     setShowConfirmacaoExclusao(false);
-    setTituloSelecionadoParaExclusao(null);
   };
 
   // Função para confirmar a exclusão do título
   const confirmarExclusaoTitulo = () => {
-    if (tituloSelecionadoParaExclusao) {
-      handleExcluirTitulo(tituloSelecionadoParaExclusao);
+    if (tituloExclusao) {
+      handleExcluirTitulo(tituloExclusao);
       fecharConfirmacaoExclusao();
     }
   };
@@ -562,6 +554,114 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       toast.error(`Erro ao enviar mensagem WhatsApp: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setEnviandoWhatsApp(null);
+    }
+  };
+
+  // Função para abrir o modal de confirmação de nota fiscal
+  const abrirConfirmacaoNotaFiscal = (titulo: any, acao: 'gerarnf' | 'imprimirnf') => {
+    setTituloNotaFiscal(titulo);
+    setAcaoNotaFiscal(acao);
+    setShowConfirmacaoNotaFiscal(true);
+  };
+
+  // Função para fechar o modal de confirmação de nota fiscal
+  const fecharConfirmacaoNotaFiscal = () => {
+    setShowConfirmacaoNotaFiscal(false);
+    setTituloNotaFiscal(null);
+    setProcessandoNotaFiscal(false);
+  };
+
+  // Função para processar a nota fiscal
+  const processarNotaFiscal = async () => {
+    if (!tituloNotaFiscal || !cliente) return;
+    
+    try {
+      setProcessandoNotaFiscal(true);
+      
+      // Buscar informações do plano
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('id', contrato.id_plano)
+        .single();
+      
+      if (planoError) {
+        throw new Error(`Erro ao buscar informações do plano: ${planoError.message}`);
+      }
+      
+      // Buscar informações do bairro
+      let nomeBairro = '';
+      if (cliente.id_bairro) {
+        const { data: bairroData, error: bairroError } = await supabase
+          .from('bairros')
+          .select('nome')
+          .eq('id', cliente.id_bairro)
+          .single();
+        
+        if (bairroError) {
+          console.error(`Erro ao buscar informações do bairro: ${bairroError.message}`);
+        } else {
+          nomeBairro = bairroData?.nome || '';
+        }
+      }
+      
+      // Preparar dados para enviar ao webhook
+      const webhookData = {
+        nome: cliente.nome,
+        plano: planoData?.nome || 'Plano não encontrado',
+        documento: cliente.cpf_cnpj,
+        valor: tituloNotaFiscal.valor,
+        vencimento: tituloNotaFiscal.vencimento,
+        endereco: cliente.logradouro,
+        nrendereco: cliente.nrlogradouro,
+        email: cliente.email || '',
+        fonewhats: cliente.fonewhats || '',
+        bairro: nomeBairro,
+        nossonumero: tituloNotaFiscal.nossonumero || '',
+        acao: acaoNotaFiscal
+      };
+      
+      console.log('Enviando dados para o webhook:', webhookData);
+      
+      // Enviar dados para o webhook
+      const response = await fetch('https://webhooks.apanet.tec.br/webhook/199276d1-6f18-4472-aca2-c43724202b82', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookData),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao enviar dados para o webhook: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('Resposta do webhook:', responseData);
+      
+      // Se for uma ação de gerar nota fiscal e a resposta incluir um ID de NF, atualizar o título
+      if (acaoNotaFiscal === 'gerarnf' && responseData.nfid) {
+        const { error: updateError } = await supabase
+          .from('titulos')
+          .update({ nfid: responseData.nfid })
+          .eq('id', tituloNotaFiscal.id);
+        
+        if (updateError) {
+          console.error('Erro ao atualizar título com nfid:', updateError);
+          toast.error(`Nota fiscal gerada, mas houve um erro ao atualizar o título: ${updateError.message}`);
+        } else {
+          // Recarregar títulos para atualizar a interface
+          buscarTitulosLocais();
+        }
+      }
+      
+      toast.success(acaoNotaFiscal === 'gerarnf' ? 'Nota fiscal gerada com sucesso!' : 'Nota fiscal enviada para impressão!');
+      fecharConfirmacaoNotaFiscal();
+      
+    } catch (error: any) {
+      console.error('Erro ao processar nota fiscal:', error);
+      toast.error(`Erro ao processar nota fiscal: ${error.message}`);
+      setProcessandoNotaFiscal(false);
     }
   };
 
@@ -713,6 +813,24 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                                       <DocumentArrowDownIcon className="h-5 w-5" />
                                     )}
                                   </button>
+                                  {contrato.notafiscal === true && (!titulo.nfid || titulo.nfid === '') && (
+                                    <button
+                                      title="Gerar Nota Fiscal"
+                                      className="text-blue-600 hover:text-blue-800"
+                                      onClick={() => abrirConfirmacaoNotaFiscal(titulo, 'gerarnf')}
+                                    >
+                                      <ReceiptRefundIcon className="h-5 w-5" />
+                                    </button>
+                                  )}
+                                  {contrato.notafiscal === true && titulo.nfurlpdf && (
+                                    <button
+                                      title="Imprimir Nota Fiscal"
+                                      className="text-purple-600 hover:text-purple-800"
+                                      onClick={() => window.open(titulo.nfurlpdf, '_blank')}
+                                    >
+                                      <DocumentIcon className="h-5 w-5" />
+                                    </button>
+                                  )}
                                   <button
                                     title="Excluir título"
                                     className="text-red-600 hover:text-red-800"
@@ -895,7 +1013,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                 </div>
               ) : (
                 <div className="text-center">
-                  <img src={qrCodeImage} alt="QR Code PIX" className="mx-auto mb-4" />
+                  <img src={qrCodeData} alt="QR Code PIX" className="mx-auto mb-4" />
                 </div>
               )}
             </div>
@@ -980,13 +1098,13 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   Você tem certeza que deseja excluir o título com as seguintes informações?
                 </p>
                 <div className="bg-gray-50 p-3 rounded-md">
-                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloSelecionadoParaExclusao?.vencimento ? new Date(tituloSelecionadoParaExclusao.vencimento + 'T00:00:00').toLocaleDateString('pt-BR', {
+                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloExclusao?.vencimento ? new Date(tituloExclusao.vencimento + 'T00:00:00').toLocaleDateString('pt-BR', {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric'
                   }) : ''}</p>
-                  <p className="text-sm text-gray-700"><span className="font-medium">Valor:</span> {tituloSelecionadoParaExclusao?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tituloSelecionadoParaExclusao.valor) : ''}</p>
-                  <p className="text-sm text-gray-700"><span className="font-medium">Status:</span> {tituloSelecionadoParaExclusao?.pago ? 'Pago' : 'Em Aberto'}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Valor:</span> {tituloExclusao?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tituloExclusao.valor) : ''}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Status:</span> {tituloExclusao?.pago ? 'Pago' : 'Em Aberto'}</p>
                 </div>
               </div>
               <div className="flex justify-end space-x-3">
@@ -1003,6 +1121,90 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
                   type="button"
                 >
                   Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de nota fiscal */}
+      {showConfirmacaoNotaFiscal && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            {/* Overlay para fechar o modal ao clicar fora dele */}
+            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => fecharConfirmacaoNotaFiscal()} aria-hidden="true"></div>
+            
+            {/* Conteúdo do modal */}
+            <div className="relative bg-white p-6 rounded-lg max-w-md w-full z-[10000] shadow-xl transform transition-all">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold" id="modal-title">
+                  {acaoNotaFiscal === 'gerarnf' ? 'Gerar Nota Fiscal' : 'Imprimir Nota Fiscal'}
+                </h3>
+                <button 
+                  onClick={() => fecharConfirmacaoNotaFiscal()} 
+                  className="text-gray-500 hover:text-gray-700"
+                  type="button"
+                  aria-label="Fechar"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-700">
+                      {acaoNotaFiscal === 'gerarnf' 
+                        ? 'Esta ação irá gerar uma nota fiscal para este título. Deseja continuar?' 
+                        : 'Esta ação irá imprimir uma nota fiscal para este título. Deseja continuar?'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-gray-600 text-sm mb-2">
+                  Você tem certeza que deseja {acaoNotaFiscal === 'gerarnf' ? 'gerar' : 'imprimir'} a nota fiscal para o título com as seguintes informações?
+                </p>
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <p className="text-sm text-gray-700"><span className="font-medium">Cliente:</span> {cliente?.nome || 'N/A'}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Documento:</span> {cliente?.cpf_cnpj || 'N/A'}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Vencimento:</span> {tituloNotaFiscal?.vencimento ? new Date(tituloNotaFiscal.vencimento + 'T00:00:00').toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }) : 'N/A'}</p>
+                  <p className="text-sm text-gray-700"><span className="font-medium">Valor:</span> {tituloNotaFiscal?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tituloNotaFiscal.valor) : 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => fecharConfirmacaoNotaFiscal()}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  type="button"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={processarNotaFiscal}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={processandoNotaFiscal}
+                >
+                  {processandoNotaFiscal ? (
+                    <>
+                      <ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      {acaoNotaFiscal === 'gerarnf' ? 'Gerar Nota Fiscal' : 'Imprimir Nota Fiscal'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
