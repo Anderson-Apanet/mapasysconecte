@@ -22,6 +22,7 @@ export const ROUTES = {
   ADM_VEICULOS: '/adm/veiculos',
   ADM_USERS: '/adm/usuarios',
   ADM_MESSAGES: '/adm/mensagens',
+  ADM_MESSAGE_HISTORY: '/adm/historico-mensagens',
   ADM_USER_TYPES: '/adm/tipos-usuarios',
   ADM_SETTINGS: '/adm/configuracoes'
 } as const;

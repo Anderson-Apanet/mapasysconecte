@@ -28,6 +28,10 @@ console.log('Rotas do Asaas importadas com sucesso');
 const radiusRouter = require('./routes/radius');
 console.log('Rotas do Radius importadas com sucesso');
 
+// Importar rotas de Mensagens
+const messagesRouter = require('./routes/messages');
+console.log('Rotas de Mensagens importadas com sucesso');
+
 // Função para criar conexão com o banco MySQL
 const createConnection = async () => {
     try {
@@ -72,6 +76,7 @@ async function startServer() {
     // Registrar rotas
     app.use('/api/asaas', asaasRouter);
     app.use('/api/support', radiusRouter);
+    app.use('/api/messages', messagesRouter);
 
     // Rota de teste para verificar se o servidor está funcionando
     app.get('/api/test', (req, res) => {
