@@ -297,19 +297,26 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
   }
 }
 
-export async function searchContratos(searchTerm: string): Promise<Array<{ id: number; pppoe: string; endereco: string }>> {
+export async function searchContratos(searchTerm: string): Promise<Array<{ id: number; pppoe: string; endereco: string; cliente_nome?: string }>> {
   if (!searchTerm) {
     return [];
   }
 
   const { data, error } = await supabase
     .from('contratos')
-    .select('id, pppoe, endereco')
+    .select('id, pppoe, endereco, clientes(nome)')
     .ilike('pppoe', `%${searchTerm}%`)
     .limit(10);
 
   if (error) throw error;
-  return data || [];
+  
+  // Formatar os dados para incluir o nome do cliente
+  return data?.map(contrato => ({
+    id: contrato.id,
+    pppoe: contrato.pppoe,
+    endereco: contrato.endereco,
+    cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado'
+  })) || [];
 }
 
 export async function fetchUsers() {

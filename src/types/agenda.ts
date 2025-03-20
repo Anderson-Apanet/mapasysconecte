@@ -14,6 +14,7 @@ export interface AgendaEvent {
   cancelado: boolean;
   pppoe: string;
   endereco?: string; // Campo opcional para o endereço do contrato
+  cliente_nome?: string; // Campo opcional para o nome do cliente
   data_cad_evento: string;
   criador: string;
   // Propriedades usadas pelo FullCalendar

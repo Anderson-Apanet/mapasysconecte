@@ -15,16 +15,20 @@ import { EventDropArg } from '@fullcalendar/core';
 export default function Agenda() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Partial<AgendaEvent>>({});
   const [newEvent, setNewEvent] = useState<Partial<AgendaEvent>>({
     nome: '',
     descricao: '',
-    horamarcada: true,
+    tipo_evento: 'Visita',
+    horamarcada: false,
     prioritario: false,
+    realizada: false,
+    parcial: false,
+    cancelado: false,
     cor: '#3788d8',
     responsaveis: []
   });
-  const [searchResults, setSearchResults] = useState<Array<{ id: number; pppoe: string; endereco: string }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{ id: number; pppoe: string; endereco: string; cliente_nome?: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<Array<{ id: number; nome: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -37,6 +41,7 @@ export default function Agenda() {
       left: number
     }
   } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const calendarRef = useRef<FullCalendar | null>(null);
   const lastFetchRef = useRef<{ start: string, end: string } | null>(null);
 
@@ -115,12 +120,18 @@ export default function Agenda() {
       if (event) {
         // Se o evento tem um PPPoE, buscar informações do contrato para obter o endereço
         let endereco = '';
+        let cliente_nome = '';
         if (event.pppoe) {
           try {
             const contratos = await searchContratos(event.pppoe);
             const contrato = contratos.find(c => c.pppoe === event.pppoe);
-            if (contrato && contrato.endereco) {
-              endereco = contrato.endereco;
+            if (contrato) {
+              if (contrato.endereco) {
+                endereco = contrato.endereco;
+              }
+              if (contrato.cliente_nome) {
+                cliente_nome = contrato.cliente_nome;
+              }
             }
           } catch (error) {
             console.error('Erro ao buscar informações do contrato:', error);
@@ -142,6 +153,7 @@ export default function Agenda() {
           cancelado: event.cancelado,
           pppoe: event.pppoe,
           endereco: endereco, // Adiciona o endereço do contrato
+          cliente_nome: cliente_nome, // Adiciona o nome do cliente
           cor: event.cor,
           criador: event.criador, // Adiciona o criador do evento
           data_cad_evento: event.data_cad_evento // Adiciona a data de criação do evento
@@ -164,7 +176,7 @@ export default function Agenda() {
     setNewEvent({
       nome: '',
       descricao: '',
-      horamarcada: true,
+      horamarcada: false,
       prioritario: false,
       cor: '#3788d8',
       responsaveis: []
@@ -265,9 +277,7 @@ export default function Agenda() {
         setNewEvent({
           nome: '',
           descricao: '',
-          datainicio: '',
-          datafinal: '',
-          horamarcada: true,
+          horamarcada: false,
           prioritario: false,
           cor: '#3788d8',
           responsaveis: []
@@ -392,12 +402,33 @@ export default function Agenda() {
     try {
       const results = await searchContratos(searchTerm);
       setSearchResults(results);
+      
+      // Se encontrou um contrato exato, atualiza o evento com o endereço e nome do cliente
+      if (results.length === 1 && results[0].pppoe === searchTerm) {
+        const contrato = results[0];
+        setNewEvent(prev => ({
+          ...prev,
+          endereco: contrato.endereco || '',
+          cliente_nome: contrato.cliente_nome || ''
+        }));
+      }
     } catch (error) {
       console.error('Erro ao buscar contratos:', error);
       toast.error('Erro ao buscar contratos');
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleSelectContrato = (contrato: any) => {
+    setNewEvent(prev => ({
+      ...prev,
+      pppoe: contrato.pppoe,
+      endereco: contrato.endereco || '',
+      cliente_nome: contrato.cliente_nome || ''
+    }));
+    setSearchResults([]);
+    setSearchTerm('');
   };
 
   // Usar debounce para evitar múltiplas chamadas em rápida sucessão
@@ -624,6 +655,7 @@ export default function Agenda() {
             searchResults={searchResults}
             isSearching={isSearching}
             onSearchPPPoE={debouncedSearch}
+            onSelectContrato={handleSelectContrato}
           />
         </div>
       </div>

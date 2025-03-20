@@ -64,9 +64,10 @@ interface EventModalProps {
   onEventChange: (event: Partial<AgendaEvent>) => void;
   onSave: () => void;
   users: Array<{ id: number; nome: string }>;
-  searchResults: Array<{ id: number; pppoe: string; endereco: string }>;
+  searchResults: Array<{ id: number; pppoe: string; endereco: string; cliente_nome?: string }>;
   isSearching: boolean;
   onSearchPPPoE: (term: string) => void;
+  onSelectContrato?: (contrato: { id: number; pppoe: string; endereco: string; cliente_nome?: string }) => void;
   onDelete?: (id: number) => void;
 }
 
@@ -80,6 +81,7 @@ export function EventModal({
   searchResults,
   isSearching,
   onSearchPPPoE,
+  onSelectContrato,
   onDelete,
 }: EventModalProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -225,7 +227,17 @@ export function EventModal({
                     {/* Campo de endereço somente leitura */}
                     {event.endereco && (
                       <div className="mt-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {event.cliente_nome && (
+                          <>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Nome do Cliente
+                            </label>
+                            <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300 font-semibold">
+                              {event.cliente_nome}
+                            </div>
+                          </>
+                        )}
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">
                           Endereço do Contrato
                         </label>
                         <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300">
@@ -249,6 +261,9 @@ export function EventModal({
                                 nome: event.tipo_evento === 'Visita' ? `Visita - ${pppoe}` : event.nome
                               });
                               onSearchPPPoE(''); // Limpa os resultados após selecionar
+                              if (onSelectContrato) {
+                                onSelectContrato(contrato);
+                              }
                             }}
                           >
                             <span className="text-gray-900 dark:text-white">{contrato.pppoe}</span>
