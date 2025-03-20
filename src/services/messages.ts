@@ -16,6 +16,9 @@ export interface MensagemEnviada {
   telefone: string;
   nome_cliente: string;
   mensagem_enviada: string;
+  tipos_mensagem?: {
+    nome: string;
+  };
 }
 
 // Buscar todos os tipos de mensagem
@@ -149,4 +152,46 @@ export const fetchMensagensEnviadasPorPPPoE = async (pppoe: string): Promise<Men
   }
 
   return data;
+};
+
+// Buscar todas as mensagens enviadas com paginação e filtros
+export const fetchTodasMensagensEnviadas = async (
+  page: number = 1, 
+  pageSize: number = 10,
+  filtros: {
+    tipoMensagem?: number;
+    nomeCliente?: string;
+  } = {}
+): Promise<{ mensagens: MensagemEnviada[], total: number }> => {
+  let query = supabase
+    .from('mensagens_enviadas')
+    .select('*, tipos_mensagem(nome)', { count: 'exact' });
+  
+  // Aplicar filtro por tipo de mensagem
+  if (filtros.tipoMensagem) {
+    query = query.eq('id_tipo_mensagem', filtros.tipoMensagem);
+  }
+  
+  // Aplicar filtro por nome do cliente (busca parcial, case insensitive)
+  if (filtros.nomeCliente && filtros.nomeCliente.trim() !== '') {
+    query = query.ilike('nome_cliente', `%${filtros.nomeCliente.trim()}%`);
+  }
+  
+  // Aplicar paginação
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  
+  const { data, error, count } = await query
+    .order('data_envio', { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    console.error('Erro ao buscar todas as mensagens enviadas:', error);
+    throw error;
+  }
+
+  return {
+    mensagens: data || [],
+    total: count || 0
+  };
 };
