@@ -56,12 +56,15 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
   const [showLiberar48Modal, setShowLiberar48Modal] = useState(false);
   const [showCancelarModal, setShowCancelarModal] = useState(false);
   const [showBloquearModal, setShowBloquearModal] = useState(false);
+  const [showEditarDiaVencimentoModal, setShowEditarDiaVencimentoModal] = useState(false);
+  const [diaVencimentoEditar, setDiaVencimentoEditar] = useState<number | null>(null);
 
   // Estados para controlar o loading das ações
   const [isLiberando, setIsLiberando] = useState(false);
   const [isLiberando48, setIsLiberando48] = useState(false);
   const [isCancelando, setIsCancelando] = useState(false);
   const [isBloqueando, setIsBloqueando] = useState(false);
+  const [isEditandoDiaVencimento, setIsEditandoDiaVencimento] = useState(false);
   
   // Log para depuração
   useEffect(() => {
@@ -87,6 +90,12 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
   const handleOpenBloquearModal = (contrato: Contrato) => {
     setSelectedContrato(contrato);
     setShowBloquearModal(true);
+  };
+
+  const handleOpenEditarDiaVencimentoModal = (contrato: Contrato) => {
+    setSelectedContrato(contrato);
+    setDiaVencimentoEditar(contrato.dia_vencimento || null);
+    setShowEditarDiaVencimentoModal(true);
   };
 
   // Handlers para ações
@@ -332,6 +341,90 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
     }
   };
 
+  const handleConfirmarEdicaoDiaVencimento = async () => {
+    if (!selectedContrato || diaVencimentoEditar === null) return;
+    
+    setIsEditandoDiaVencimento(true);
+    try {
+      // 1. Buscar os títulos não pagos do cliente para obter os nossonumero
+      const { data: titulos, error: fetchError } = await supabase
+        .from('titulos')
+        .select('nossonumero')
+        .eq('id_contrato', selectedContrato.id)
+        .neq('pago', true);
+
+      if (fetchError) {
+        console.error('Erro ao buscar títulos não pagos:', fetchError);
+        throw new Error('Erro ao buscar títulos não pagos');
+      }
+
+      // 2. Enviar os nossonumero para o webhook do n8n
+      if (titulos && titulos.length > 0) {
+        const nossonumeros = titulos.map(titulo => titulo.nossonumero).filter(Boolean);
+        
+        if (nossonumeros.length > 0) {
+          try {
+            const response = await fetch('https://webhooks.apanet.tec.br/webhook/c080be25-774a-4d74-836b-48c4753538a9', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ 
+                nossonumeros,
+                contrato_id: selectedContrato.id,
+                pppoe: selectedContrato.pppoe,
+                dia_vencimento_antigo: selectedContrato.dia_vencimento,
+                dia_vencimento_novo: diaVencimentoEditar
+              }),
+            });
+            
+            if (!response.ok) {
+              console.warn('Aviso: Webhook retornou status não-OK:', response.status);
+            }
+          } catch (webhookError) {
+            console.warn('Aviso: Erro ao enviar dados para webhook:', webhookError);
+            // Continuamos o processo mesmo se o webhook falhar
+          }
+        }
+      }
+
+      // 3. Excluir os títulos não pagos do cliente
+      const { error: deleteError } = await supabase
+        .from('titulos')
+        .delete()
+        .eq('id_contrato', selectedContrato.id)
+        .neq('pago', true);
+
+      if (deleteError) {
+        console.error('Erro ao excluir títulos não pagos:', deleteError);
+        throw new Error('Erro ao excluir títulos não pagos');
+      }
+
+      // 4. Atualizar o dia de vencimento do contrato
+      const { error: updateError } = await supabase
+        .from('contratos')
+        .update({ dia_vencimento: diaVencimentoEditar })
+        .eq('id', selectedContrato.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar dia de vencimento do contrato:', updateError);
+        throw new Error('Erro ao atualizar dia de vencimento do contrato');
+      }
+
+      toast.success('Dia de vencimento do contrato atualizado com sucesso!');
+      setShowEditarDiaVencimentoModal(false);
+      
+      // Atualizar a lista de contratos (recarregar a página)
+      window.location.reload();
+    } catch (error) {
+      console.error('Erro ao atualizar dia de vencimento do contrato:', error);
+      toast.error('Erro ao atualizar dia de vencimento do contrato');
+    } finally {
+      setIsEditandoDiaVencimento(false);
+      setSelectedContrato(null);
+    }
+  };
+
   const toggleContrato = (contratoId: number) => {
     setExpandedContratos(prev => 
       prev.includes(contratoId)
@@ -466,19 +559,21 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                   <div className="space-y-1 text-sm">
                     <p><span className="font-medium">ID:</span> {contrato.id}</p>
                     <p><span className="font-medium">Data de Início:</span> {formatDate(contrato.created_at)}</p>
-                    <p><span className="font-medium">Dia de Vencimento:</span> {contrato.dia_vencimento}</p>
+                    <p className="flex items-center">
+                      <span className="font-medium">Dia de Vencimento:</span>
+                      <span 
+                        className="ml-1 text-blue-600 hover:text-blue-800 cursor-pointer underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditarDiaVencimentoModal(contrato);
+                        }}
+                      >
+                        {contrato.dia_vencimento || 'Não definido'} (Editar)
+                      </span>
+                    </p>
                     <p><span className="font-medium">Valor:</span> {formatCurrency(contrato.plano?.valor || 0)}</p>
                     <p><span className="font-medium">Status:</span> <span className={getStatusColor(contrato.status || '')}>{contrato.status}</span></p>
                     <p><span className="font-medium">Tipo:</span> {contrato.tipo || 'Normal'}</p>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-medium mb-2">Detalhes do Cliente</h4>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Nome:</span> {contrato.pppoe}</p>
-                    <p><span className="font-medium">CPF/CNPJ:</span> {contrato.pppoe}</p>
-                    <p><span className="font-medium">Email:</span> {contrato.pppoe}</p>
-                    <p><span className="font-medium">Telefone:</span> {contrato.pppoe}</p>
                   </div>
                 </div>
               </div>
@@ -657,6 +752,62 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Bloqueando...
+                  </>
+                ) : (
+                  'Confirmar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal de Edição de Dia de Vencimento */}
+      {showEditarDiaVencimentoModal && selectedContrato && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">Editar Dia de Vencimento</h3>
+            <div className="mb-6 text-red-600 bg-red-50 p-3 rounded border border-red-200">
+              <p className="font-bold mb-2">Atenção!</p>
+              <p>
+                Ao alterar o dia de vencimento, todos os títulos não pagos deste cliente serão 
+                excluídos do sistema e do banco de dados. Você deverá gerar novos boletos na 
+                página Financeiro.
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Selecione o novo dia de vencimento:
+              </label>
+              <select
+                value={diaVencimentoEditar || ''}
+                onChange={(e) => setDiaVencimentoEditar(Number(e.target.value))}
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              >
+                <option value="" disabled>Selecione um dia</option>
+                <option value="10">Dia 10</option>
+                <option value="25">Dia 25</option>
+              </select>
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowEditarDiaVencimentoModal(false);
+                  setSelectedContrato(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarEdicaoDiaVencimento}
+                disabled={isEditandoDiaVencimento || diaVencimentoEditar === null}
+                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 flex items-center"
+              >
+                {isEditandoDiaVencimento ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Editando...
                   </>
                 ) : (
                   'Confirmar'
