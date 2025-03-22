@@ -427,7 +427,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
     const payload = {
       nome: cliente.nome,
       cpf_cnpj: cliente.cpf_cnpj,
-      valor: valorFinal,
+      valor: Number(valorFinal.toFixed(2)),
       idasaas: clienteIdasaas, // Usar o valor recuperado diretamente do banco
       billingType: "BOLETO",
       nextDueDate: dataInicialVencimento,
@@ -613,7 +613,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
         valor: tituloNotaFiscal.valor,
         vencimento: tituloNotaFiscal.vencimento,
         endereco: cliente.logradouro,
-        nrendereco: cliente.nrlogradouro,
+        nrlogradouro: cliente.nrlogradouro,
         email: cliente.email || '',
         fonewhats: cliente.fonewhats || '',
         bairro: nomeBairro,
