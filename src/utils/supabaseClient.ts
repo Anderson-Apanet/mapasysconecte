@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Valores padrão para produção
+// Valores padrão para produção com as chaves corretas do .env
 const DEFAULT_SUPABASE_URL = 'https://dieycvogftvfoncigvtl.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpZXljdm9nZnR2Zm9uY2lndnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY1NTc5MjAsImV4cCI6MjAzMjEzMzkyMH0.Zt9_OMSKkLRJNsrXKTLUJUYUvKXwWKOD1VwcfahTDZs';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpZXljdm9nZnR2Zm9uY2lndnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0ODU4NzUsImV4cCI6MjA1NjA2MTg3NX0.5StyYMsrRVhSkcHjR-V7vSgcqU5q0lYbyc9Q7kLvZIQ';
 
 // Verificar se estamos em ambiente de produção
 const isProd = import.meta.env.PROD;
