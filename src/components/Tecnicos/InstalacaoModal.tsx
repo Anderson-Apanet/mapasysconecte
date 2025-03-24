@@ -293,7 +293,7 @@ export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated
         const { error: contratoError } = await supabase
           .from('contratos')
           .update({ 
-            status: 'Instalado',
+            status: 'Ativo',
             data_instalacao: event.datainicio,
             contratoassinado: contratoAssinado
           })
