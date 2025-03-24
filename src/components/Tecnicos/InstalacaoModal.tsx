@@ -7,6 +7,7 @@ import Modal from '../Modal';
 import { Dialog } from '@headlessui/react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import { useGoogleMapsApi } from '../../utils/googleMapsLoader';
+import { getEmpresaIdContext } from '../../utils/supabaseClient';
 
 interface InstalacaoModalProps {
   isOpen: boolean;
@@ -224,6 +225,26 @@ export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated
     setIsSubmitting(true);
 
     try {
+      // Verificar se o usuário está autenticado
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Sessão expirada. Por favor, faça login novamente.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
+      }
+
+      // Obter o ID da empresa do contexto
+      const empresaId = getEmpresaIdContext();
+      if (!empresaId) {
+        toast.error('Empresa não selecionada. Por favor, faça login novamente.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
+      }
+
       // Busca o ID do contrato pelo PPPoE
       let contratoId = null;
       
@@ -250,13 +271,26 @@ export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated
           data_instalacao: event.datainicio,
           relato: observacao,
           acompanhante: acompanhante || null,
-          id_contrato: contratoId
+          id_contrato: contratoId,
+          empresa_id: empresaId, // Adicionar o ID da empresa
+          cto: cto || null,
+          porta_cto: portaCto || null
         })
         .select()
         .single();
 
       if (instalacaoError) {
         console.error('Erro ao registrar instalação:', instalacaoError);
+        
+        // Verificar se é um erro de autenticação
+        if (instalacaoError.message?.includes('JWT expired')) {
+          toast.error('Sua sessão expirou. Por favor, faça login novamente.');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+          return;
+        }
+        
         throw instalacaoError;
       }
 
