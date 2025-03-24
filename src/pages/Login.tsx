@@ -38,10 +38,12 @@ export default function Login() {
 
       if (userError) {
         console.error('Erro ao buscar usuário:', userError);
+        toast.error(`Erro ao buscar usuário: ${userError.message}`);
         return false;
       }
 
       if (!userData?.id_user) {
+        toast.error('Usuário não encontrado');
         return false;
       }
 
@@ -60,10 +62,12 @@ export default function Login() {
 
       if (userEmpresasError) {
         console.error('Erro ao buscar empresas do usuário:', userEmpresasError);
+        toast.error(`Erro ao buscar empresas: ${userEmpresasError.message}`);
         return false;
       }
 
       if (!userEmpresasData || userEmpresasData.length === 0) {
+        toast.error('Nenhuma empresa associada a este usuário');
         return false;
       }
       
@@ -84,10 +88,12 @@ export default function Login() {
       
       if (empresasDetalhesError) {
         console.error('Erro ao buscar detalhes das empresas:', empresasDetalhesError);
+        toast.error(`Erro ao buscar detalhes das empresas: ${empresasDetalhesError.message}`);
         return false;
       }
       
       if (!empresasDetalhes || empresasDetalhes.length === 0) {
+        toast.error('Não foi possível obter os detalhes das empresas');
         return false;
       }
       
@@ -108,6 +114,7 @@ export default function Login() {
       return true;
     } catch (error) {
       console.error('Erro ao verificar email:', error);
+      toast.error(`Erro ao verificar email: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       return false;
     } finally {
       setIsCheckingEmail(false);
