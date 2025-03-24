@@ -1,19 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Valores padrão para produção
+const DEFAULT_SUPABASE_URL = 'https://dieycvogftvfoncigvtl.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpZXljdm9nZnR2Zm9uY2lndnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY1NTc5MjAsImV4cCI6MjAzMjEzMzkyMH0.Zt9_OMSKkLRJNsrXKTLUJUYUvKXwWKOD1VwcfahTDZs';
+
 // Verificar se estamos em ambiente de produção
 const isProd = import.meta.env.PROD;
 
-// Obter as variáveis de ambiente do Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Obter as variáveis de ambiente do Supabase com fallback para valores padrão
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
-// Verificar se as variáveis de ambiente estão definidas
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Variáveis de ambiente do Supabase não estão definidas corretamente!');
-  console.error('URL:', supabaseUrl ? 'Definida' : 'Não definida');
-  console.error('Anon Key:', supabaseAnonKey ? 'Definida' : 'Não definida');
-}
-
+// Log de informações de configuração
 console.log('Ambiente:', isProd ? 'Produção' : 'Desenvolvimento');
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase Key:', supabaseAnonKey ? 'Configurada' : 'Não configurada');
