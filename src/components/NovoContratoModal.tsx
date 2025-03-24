@@ -64,8 +64,9 @@ export default function NovoContratoModal({
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const hour = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0'); // Adicionar minutos
     const firstName = clienteData.nome.split(' ')[0].toLowerCase();
-    return `${firstName}${year}${month}${day}${hour}`;
+    return `${firstName}${year}${month}${day}${hour}${minutes}`; // Incluir minutos no PPPoE
   };
 
   // Função para obter o endereço a partir das coordenadas
