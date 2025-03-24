@@ -1,6 +1,6 @@
-import { defineConfig, loadEnv } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -16,9 +16,6 @@ export default defineConfig(({ mode }) => {
       extensions: ['.js', '.jsx', '.ts', '.tsx']
     },
     define: {
-      'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || mode),
-      'process.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || ''),
-      'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || ''),
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || ''),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY || '')
     },
@@ -38,22 +35,23 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1000,
-      // Garantir que os arquivos JS sejam servidos com o MIME type correto
+      // Configurações para resolver problemas de MIME type
       assetsInlineLimit: 0, // Não inline nenhum arquivo
       sourcemap: isProd ? false : 'inline', // Sourcemaps apenas em desenvolvimento
       rollupOptions: {
         output: {
-          // Garantir que os nomes dos arquivos sejam previsíveis
+          // Configurações para garantir que os arquivos JS sejam servidos corretamente
+          format: 'es', // Usar formato ES modules
           entryFileNames: 'assets/[name].[hash].js',
           chunkFileNames: 'assets/[name].[hash].js',
           assetFileNames: 'assets/[name].[hash].[ext]',
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            ui: ['@material-tailwind/react', '@headlessui/react', '@heroicons/react'],
-            calendar: ['@fullcalendar/core', '@fullcalendar/daygrid', '@fullcalendar/timegrid', '@fullcalendar/list', '@fullcalendar/interaction']
-          }
+          // Desativar manualChunks para evitar problemas com MIME types
+          manualChunks: undefined
         }
-      }
+      },
+      // Configurações adicionais para resolver problemas de MIME type
+      target: 'es2015', // Usar ES2015 para melhor compatibilidade
+      minify: 'terser'
     },
     optimizeDeps: {
       include: ['react', 'react-dom']
