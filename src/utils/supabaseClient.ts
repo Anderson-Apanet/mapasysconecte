@@ -8,16 +8,8 @@ const PROD_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ
 const isProd = import.meta.env.PROD;
 
 // Usar variáveis de ambiente se disponíveis, caso contrário, usar valores padrão para produção
-let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || PROD_SUPABASE_URL;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || PROD_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || PROD_SUPABASE_ANON_KEY;
-
-// Usar um proxy CORS em produção para evitar problemas de DNS
-if (isProd) {
-  // Usar o serviço corsproxy.io como proxy
-  supabaseUrl = `https://corsproxy.io/?${encodeURIComponent(supabaseUrl)}`;
-  
-  console.log('Usando proxy CORS para Supabase:', supabaseUrl);
-}
 
 console.log('Ambiente:', isProd ? 'Produção' : 'Desenvolvimento');
 console.log('Supabase URL:', supabaseUrl);
@@ -26,7 +18,12 @@ console.log('Supabase Key:', supabaseAnonKey ? 'Configurada' : 'Não configurada
 // Verificar conectividade com o Supabase
 const checkSupabaseConnectivity = async () => {
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/`);
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`
+      }
+    });
     console.log('Conectividade com Supabase:', response.ok ? 'OK' : 'Falha');
     return response.ok;
   } catch (error) {
@@ -48,9 +45,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true
-  },
-  global: {
-    fetch: (...args) => fetch(...args)
   }
 });
 
