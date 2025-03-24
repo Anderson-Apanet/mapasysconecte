@@ -272,9 +272,7 @@ export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated
           relato: observacao,
           acompanhante: acompanhante || null,
           id_contrato: contratoId,
-          empresa_id: empresaId, // Adicionar o ID da empresa
-          cto: cto || null,
-          porta_cto: portaCto || null
+          empresa_id: empresaId // Adicionar o ID da empresa
         })
         .select()
         .single();
@@ -309,7 +307,8 @@ export default function InstalacaoModal({ isOpen, onClose, event, onEventUpdated
       if (responsaveisData && responsaveisData.length > 0) {
         const responsaveisInsert = responsaveisData.map(resp => ({
           instalacao_id: instalacao.id,
-          tecnico_id: resp.user_id
+          tecnico_id: resp.user_id,
+          empresa_id: empresaId // Adicionar o ID da empresa
         }));
 
         const { error: tecnicosError } = await supabase
