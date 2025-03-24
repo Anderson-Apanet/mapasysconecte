@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
       },
       // Configurações adicionais para resolver problemas de MIME type
       target: 'es2015', // Usar ES2015 para melhor compatibilidade
-      minify: 'terser'
+      minify: 'esbuild' // Usar esbuild em vez de terser
     },
     optimizeDeps: {
       include: ['react', 'react-dom']
