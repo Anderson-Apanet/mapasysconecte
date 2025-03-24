@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -35,6 +35,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useCardOrder } from '../hooks/useCardOrder';
 import { ROUTES } from '../constants/routes';
+import { getEmpresaColor } from '../utils/empresaColorEvent';
+import useAuth from '../hooks/useAuth';
 
 interface MenuItem {
   title: string;
@@ -180,6 +182,17 @@ const Home: React.FC = () => {
   const navigate = useNavigate();
   const [cards, setCards] = useCardOrder(initialMenuItems);
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const { empresaColor, empresaLogo } = useAuth();
+  const [bgColor, setBgColor] = useState(empresaColor);
+  const defaultLogo = "https://dieycvogftvfoncigvtl.supabase.co/storage/v1/object/public/imagens//logoconecte.jpg";
+  
+  // Atualizar a cor de fundo quando a cor da empresa mudar
+  useEffect(() => {
+    if (empresaColor) {
+      console.log('Home: Atualizando cor de fundo para:', empresaColor);
+      setBgColor(empresaColor);
+    }
+  }, [empresaColor]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -220,13 +233,13 @@ const Home: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1092E8] p-6">
+      <div className="min-h-screen p-6" style={{ backgroundColor: bgColor }}>
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center">
             <div className="mb-8">
               <img 
-                src="https://dieycvogftvfoncigvtl.supabase.co/storage/v1/object/public/imagens//logoconecte.jpg"
-                alt="Conecte Logo"
+                src={empresaLogo || defaultLogo}
+                alt="Logo da Empresa"
                 className="w-[135px] h-auto"
               />
             </div>
@@ -245,7 +258,7 @@ const Home: React.FC = () => {
                   {cards.map((card) => (
                     <SortableCard
                       key={card.title}
-                      card={card}
+                      card={{ ...card, color: empresaColor }}
                       onClick={() => handleCardClick(card.path)}
                     />
                   ))}

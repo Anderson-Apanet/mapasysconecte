@@ -19,6 +19,8 @@
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light dark;
+  /* Variável para a cor de fundo da empresa */
+  --empresa-cor-fundo: #1092E8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

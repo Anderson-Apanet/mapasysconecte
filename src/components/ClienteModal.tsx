@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
 import ContratoModal from './ContratoModal';
 import NovoContratoModal from './NovoContratoModal';
+import useAuth from '../hooks/useAuth';
 import {
   formatPhone,
   isValidEmail,
@@ -64,6 +65,9 @@ interface ClienteModalProps {
 }
 
 const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, onSave }) => {
+  const { userData } = useAuth();
+  const empresaId = userData?.empresa_id;
+  
   const [formData, setFormData] = useState<Omit<Cliente, 'id' | 'created_at' | 'bairro' | 'cidade'>>({
     nome: '',
     email: '',
@@ -233,7 +237,8 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
         datanas: formData.datanas || null,
         id_bairro: selectedBairro.id,
         status: formData.status || 'Pendente',
-        data_cad_cliente: cliente ? undefined : currentDate // Adiciona a data apenas para novos registros
+        data_cad_cliente: cliente ? undefined : currentDate, // Adiciona a data apenas para novos registros
+        empresa_id: empresaId // Adiciona o ID da empresa atual
       };
 
       if (cliente) {

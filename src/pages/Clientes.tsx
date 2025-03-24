@@ -11,6 +11,7 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import Layout from '../components/Layout';
+import EmpresaBackground from '../components/EmpresaBackground';
 import { supabase } from '../utils/supabaseClient';
 import { Cliente } from '../types/cliente';
 import toast from 'react-hot-toast';
@@ -182,7 +183,7 @@ const Clientes: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
+      <EmpresaBackground>
         <div className="bg-white dark:bg-[#1E293B] rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-[#1976D2] dark:text-[#E1F5FE]">
@@ -397,7 +398,7 @@ const Clientes: React.FC = () => {
             }}
           />
         </div>
-      </div>
+      </EmpresaBackground>
     </Layout>
   );
 };

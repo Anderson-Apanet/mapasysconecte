@@ -16,6 +16,7 @@ import {
   ArrowTrendingUpIcon
 } from '@heroicons/react/24/outline';
 import Layout from '../components/Layout';
+import EmpresaBackground from '../components/EmpresaBackground';
 import { supabase } from '../utils/supabaseClient';
 import { 
   Chart as ChartJS, 
@@ -398,7 +399,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-[#1092E8] dark:bg-[#1092E8] p-6">
+      <EmpresaBackground>
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8 text-center">
@@ -995,7 +996,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </EmpresaBackground>
     </Layout>
   );
 };

@@ -524,10 +524,10 @@ export default function NovoLancamentoModal({
         return;
       }
 
-      // Buscar o nome do usuário na tabela users
+      // Buscar o nome do usuário e o ID da empresa na tabela users
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('nome')
+        .select('nome, empresa_id')
         .eq('id_user', user.id)
         .single();
 
@@ -536,6 +536,9 @@ export default function NovoLancamentoModal({
       }
 
       const nomeUsuario = userData?.nome || user.email;
+      const empresaId = userData?.empresa_id;
+      
+      console.log('ID da empresa do usuário:', empresaId);
 
       // Determinar o valor correto baseado no tipo de lançamento
       let valorFinal = selectedType === 'RECEITA' ? 
@@ -573,7 +576,8 @@ export default function NovoLancamentoModal({
         multa: selectedType === 'RECEITA' ? parseMoeda(multa) : 0,
         titulobancario: selectedType === 'RECEITA' ? selectedTitulo?.nossonumero || null : null,
         id_categoria: selectedType === 'DESPESA' ? categoria : null,
-        pago_boleto: false
+        pago_boleto: false,
+        empresa_id: empresaId // Adiciona o ID da empresa do usuário
       };
 
       console.log('Dados do lançamento antes de salvar:', lancamentoData);

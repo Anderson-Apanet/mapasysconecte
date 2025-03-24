@@ -150,6 +150,21 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || 'sistema';
       
+      // Busca o ID da empresa do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('empresa_id')
+        .eq('email', userEmail)
+        .single();
+        
+      if (userError) {
+        console.error('Erro ao buscar empresa do usuário:', userError);
+        throw userError;
+      }
+      
+      const empresaId = userData?.empresa_id;
+      console.log('ID da empresa do usuário:', empresaId);
+      
       // Cria a data atual no formato ISO com o timezone local
       // Isso garante que a data seja salva com o horário correto de Brasília (UTC-3)
       const now = new Date();
@@ -184,7 +199,8 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           pppoe: event.pppoe,
           cor: event.cor,
           criador: userEmail,
-          data_cad_evento: currentDateTime
+          data_cad_evento: currentDateTime,
+          empresa_id: empresaId // Adiciona o ID da empresa do usuário
         })
         .select()
         .single();
@@ -204,7 +220,8 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
         if (responsaveisValidos.length > 0) {
           const responsaveisInsert = responsaveisValidos.map(resp => ({
             agenda_id: newEvent.id,
-            user_id: resp.id
+            user_id: resp.id,
+            empresa_id: empresaId // Adiciona o ID da empresa do usuário
           }));
 
           console.log('Dados preparados para inserção:', responsaveisInsert);
@@ -238,7 +255,7 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           cancelado: event.cancelado,
           pppoe: event.pppoe,
           cor: event.cor
-          // Não atualiza os campos criador e data_cad_evento para manter o registro original de criação
+          // Não atualiza os campos criador, data_cad_evento e empresa_id para manter o registro original
         })
         .eq('id', event.id)
         .select()
@@ -264,6 +281,25 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           throw new Error(`Erro ao remover responsáveis antigos: ${JSON.stringify(deleteError)}`);
         }
 
+        // Obtém o usuário atual do Supabase para buscar a empresa
+        const { data: { user } } = await supabase.auth.getUser();
+        const userEmail = user?.email || 'sistema';
+        
+        // Busca o ID da empresa do usuário
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('empresa_id')
+          .eq('email', userEmail)
+          .single();
+          
+        if (userError) {
+          console.error('Erro ao buscar empresa do usuário na atualização:', userError);
+          throw userError;
+        }
+        
+        const empresaId = userData?.empresa_id;
+        console.log('ID da empresa do usuário na atualização:', empresaId);
+
         // Se tem novos responsáveis, insere
         if (event.responsaveis.length > 0) {
           // Filtra apenas responsáveis válidos (com id)
@@ -272,7 +308,8 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           if (responsaveisValidos.length > 0) {
             const responsaveisInsert = responsaveisValidos.map(resp => ({
               agenda_id: event.id,
-              user_id: resp.id
+              user_id: resp.id,
+              empresa_id: empresaId // Adiciona o ID da empresa do usuário
             }));
 
             console.log('Dados preparados para inserção:', responsaveisInsert);

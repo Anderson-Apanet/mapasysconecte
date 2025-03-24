@@ -10,6 +10,7 @@ import { User } from '../types/user';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
 import MapWithMarker from './MapWithMarker';
+import useAuth from '../hooks/useAuth';
 
 interface NovoContratoModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export default function NovoContratoModal({
   clienteData,
 }: NovoContratoModalProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const { userData } = useAuth();
+  const empresaId = userData?.empresa_id;
 
   const { isLoaded } = useGoogleMapsApi();
 
@@ -231,6 +234,41 @@ export default function NovoContratoModal({
       const pppoe = generatePPPoE();
       const senha = pppoe.replace(/[^0-9]/g, '').split('').reverse().join('');
 
+      // Busca os dados do plano para obter o radius
+      const { data: planoData, error: planoError } = await supabase
+        .from('planos')
+        .select('radius')
+        .eq('id', plano)
+        .single();
+
+      if (planoError) {
+        console.error('Erro ao buscar dados do plano:', planoError);
+        throw planoError;
+      }
+
+      // Enviar PPPoE, senha e radius para o webhook do n8n
+      try {
+        const webhookResponse = await fetch('https://webhooks.apanet.tec.br/webhook/6bf92ad5-c43a-4e4c-a4e5-21436d9516af', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pppoe,
+            senha,
+            radius: planoData.radius || ''
+          }),
+        });
+
+        if (!webhookResponse.ok) {
+          throw new Error(`Erro ao enviar dados para o webhook: ${webhookResponse.statusText}`);
+        }
+      } catch (webhookError) {
+        console.error('Erro ao enviar dados para o webhook:', webhookError);
+        toast.error('Erro ao enviar dados para o webhook do n8n');
+        throw webhookError;
+      }
+
       const contratoData = {
         id_cliente: clienteData.id,
         id_plano: plano,
@@ -247,7 +285,8 @@ export default function NovoContratoModal({
         pendencia: false,
         locallat: selectedLocation.lat,
         locallon: selectedLocation.lng,
-        vendedor: vendedor || null
+        vendedor: vendedor || null,
+        empresa_id: empresaId // Adiciona o ID da empresa atual
       };
 
       console.log('Dados a serem salvos:', contratoData);
@@ -257,45 +296,6 @@ export default function NovoContratoModal({
         .insert([contratoData]);
 
       if (error) throw error;
-
-      // Busca os dados do plano para obter o radius
-      const { data: planoData, error: planoError } = await supabase
-        .from('planos')
-        .select('radius')
-        .eq('id', plano)
-        .single();
-
-      if (planoError) {
-        console.error('Erro ao buscar dados do plano:', planoError);
-      } else if (!planoData.radius) {
-        console.error('Plano não tem o campo radius definido');
-      } else {
-        // Adiciona as credenciais no banco radius
-        try {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-          const apiUrl = baseUrl.startsWith('http') ? `${baseUrl}/api` : baseUrl;
-          const response = await fetch(`${apiUrl}/support/add-contract-credentials`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              username: contratoData.pppoe,
-              password: contratoData.senha,
-              groupname: planoData.radius
-            }),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Erro ao adicionar credenciais no radius:', errorData);
-            toast.error('Erro ao adicionar credenciais no radius');
-          }
-        } catch (error) {
-          console.error('Erro ao adicionar credenciais no radius:', error);
-          toast.error('Erro ao adicionar credenciais no radius');
-        }
-      }
 
       toast.success('Contrato criado com sucesso!');
       onClose();

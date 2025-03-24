@@ -87,12 +87,28 @@ export default function GerenciamentoCaixa({ onStatusChange }: GerenciamentoCaix
 
       console.log('Abrindo caixa para o usuário:', session.user.id);
       
+      // Buscar o ID da empresa do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('empresa_id')
+        .eq('id_user', session.user.id)
+        .single();
+        
+      if (userError) {
+        console.error('Erro ao buscar empresa do usuário:', userError);
+        throw userError;
+      }
+      
+      const empresaId = userData?.empresa_id;
+      console.log('ID da empresa do usuário:', empresaId);
+      
       const { data: novoCaixa, error } = await supabase
         .from('caixas')
         .insert([
           {
             id_usuario: session.user.id,
             horario_abertura: new Date().toISOString(),
+            empresa_id: empresaId // Adiciona o ID da empresa do usuário
           }
         ])
         .select();
