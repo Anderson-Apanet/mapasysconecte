@@ -38,8 +38,15 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1000,
+      // Garantir que os arquivos JS sejam servidos com o MIME type correto
+      assetsInlineLimit: 0, // Não inline nenhum arquivo
+      sourcemap: isProd ? false : 'inline', // Sourcemaps apenas em desenvolvimento
       rollupOptions: {
         output: {
+          // Garantir que os nomes dos arquivos sejam previsíveis
+          entryFileNames: 'assets/[name].[hash].js',
+          chunkFileNames: 'assets/[name].[hash].js',
+          assetFileNames: 'assets/[name].[hash].[ext]',
           manualChunks: {
             vendor: ['react', 'react-dom'],
             ui: ['@material-tailwind/react', '@headlessui/react', '@heroicons/react'],
