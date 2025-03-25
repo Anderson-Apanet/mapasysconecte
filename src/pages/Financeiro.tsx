@@ -122,8 +122,8 @@ const Financeiro: React.FC = () => {
         if (contratosAtraso) {
           const contratosFormatados = contratosAtraso.map(contrato => ({
             ...contrato,
-            cliente_nome: contrato.clientes?.nome || contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.clientes?.idasaas || contrato.cliente_idasaas,
+            cliente_nome: contrato.clientes?.nome || 'Cliente não encontrado',
+            cliente_idasaas: contrato.clientes?.idasaas,
             plano: contrato.planos || null
           }));
 
@@ -135,53 +135,112 @@ const Financeiro: React.FC = () => {
         setIsLoading(false);
         return;
       } else if (status === 'atraso15') {
-        // Use the contratosatrasodias view for this filter
-        const { count, error: countError } = await supabase
-          .from('contratosatrasodias')
-          .select('*', { count: 'exact', head: true })
-          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .not('tipo', 'eq', 'Anual')
-          .not('tipo', 'eq', 'Anual_Aluguel')
-          .not('tipo', 'eq', 'Cliente Bonificado');
-
-        if (countError) throw countError;
-        console.log('Total de registros em atraso > 15 dias encontrados:', count);
-        setTotalCount(count || 0);
-
-        const from = (page - 1) * itemsPerPage;
-        const to = from + itemsPerPage - 1;
-        
-        const { data: contratosAtraso, error: contratosError } = await supabase
-          .from('contratosatrasodias')
-          .select(`
-            *,
-            planos(id, nome, radius),
-            clientes(id, nome, idasaas)
-          `)
-          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
-          .not('tipo', 'eq', 'Anual')
-          .not('tipo', 'eq', 'Anual_Aluguel')
-          .not('tipo', 'eq', 'Cliente Bonificado')
-          .order('pppoe', { ascending: true })
-          .range(from, to);
-
-        if (contratosError) throw contratosError;
-
-        if (contratosAtraso) {
-          const contratosFormatados = contratosAtraso.map(contrato => ({
+        try {
+          console.log('Buscando contratos em atraso > 15 dias...');
+          
+          // Data limite (15 dias atrás)
+          const dataLimite = new Date();
+          dataLimite.setDate(dataLimite.getDate() - 15);
+          const dataLimiteISO = dataLimite.toISOString();
+          
+          console.log('Data limite para títulos vencidos:', dataLimiteISO);
+          
+          // Buscar todos os contratos que não estão bloqueados ou cancelados e não são bonificados
+          // e que possuem títulos vencidos há mais de 15 dias e não pagos
+          const { data: contratos, error: contratosError } = await supabase
+            .from('contratos')
+            .select(`
+              id,
+              titulos!inner(id, vencimento, pago)
+            `)
+            .lte('titulos.vencimento', dataLimiteISO)
+            .not('status', 'in', '("Bloqueado","Cancelado")')
+            .not('tipo', 'eq', 'Cliente Bonificado');
+          
+          if (contratosError) {
+            console.error('Erro ao buscar contratos:', contratosError);
+            throw contratosError;
+          }
+          
+          // Filtrar manualmente os contratos que têm títulos não pagos
+          const idsContratosComTitulosNaoPagos = new Set();
+          
+          contratos?.forEach(contrato => {
+            const titulosNaoPagos = contrato.titulos.filter(
+              (titulo: any) => titulo.pago !== true
+            );
+            
+            if (titulosNaoPagos.length > 0) {
+              idsContratosComTitulosNaoPagos.add(contrato.id);
+            }
+          });
+          
+          const idsArray = Array.from(idsContratosComTitulosNaoPagos);
+          console.log(`Encontrados ${idsArray.length} contratos em atraso > 15 dias`);
+          
+          // Paginação manual
+          const totalCount = idsArray.length;
+          setTotalCount(totalCount);
+          
+          const from = (page - 1) * itemsPerPage;
+          const to = Math.min(from + itemsPerPage, totalCount);
+          const idsParaBuscar = idsArray.slice(from, to);
+          
+          if (idsParaBuscar.length === 0) {
+            console.log('Nenhum contrato em atraso > 15 dias encontrado na página atual.');
+            setContratos([]);
+            setIsLoading(false);
+            return;
+          }
+          
+          // Buscar os detalhes completos dos contratos
+          const { data: contratosCompletos, error: completosError } = await supabase
+            .from('contratos')
+            .select('*')
+            .in('id', idsParaBuscar)
+            .order('pppoe', { ascending: true });
+          
+          if (completosError) {
+            console.error('Erro ao buscar detalhes dos contratos:', completosError);
+            throw completosError;
+          }
+          
+          // Buscar informações adicionais dos clientes e planos
+          const clienteIds = contratosCompletos?.map(c => c.id_cliente).filter(Boolean) || [];
+          const planoIds = contratosCompletos?.map(c => c.id_plano).filter(Boolean) || [];
+          
+          const [clientesResponse, planosResponse] = await Promise.all([
+            supabase.from('clientes').select('id, nome, idasaas').in('id', clienteIds),
+            supabase.from('planos').select('id, nome, radius').in('id', planoIds)
+          ]);
+          
+          const clientesMap = (clientesResponse.data || []).reduce((acc: any, cliente) => {
+            acc[cliente.id] = cliente;
+            return acc;
+          }, {});
+          
+          const planosMap = (planosResponse.data || []).reduce((acc: any, plano) => {
+            acc[plano.id] = plano;
+            return acc;
+          }, {});
+          
+          // Formatar os contratos para exibição
+          const contratosFormatados = contratosCompletos?.map(contrato => ({
             ...contrato,
-            cliente_nome: contrato.clientes?.nome || contrato.cliente_nome || 'Cliente não encontrado',
-            cliente_idasaas: contrato.clientes?.idasaas || contrato.cliente_idasaas,
-            plano: contrato.planos || null
-          }));
-
+            cliente_nome: clientesMap[contrato.id_cliente]?.nome || 'Cliente não encontrado',
+            cliente_idasaas: clientesMap[contrato.id_cliente]?.idasaas,
+            plano: planosMap[contrato.id_plano] || null
+          })) || [];
+          
           setContratos(contratosFormatados);
-        } else {
-          setContratos([]);
+          setIsLoading(false);
+          return;
+        } catch (error: any) {
+          console.error('Erro ao buscar contratos em atraso > 15 dias:', error.message);
+          toast.error('Erro ao buscar contratos em atraso');
+          setIsLoading(false);
+          return;
         }
-        
-        setIsLoading(false);
-        return;
       } else if (status === 'pendencia') {
         countQuery = countQuery.eq('pendencia', true);
       } else if (status === 'Anual') {
@@ -629,54 +688,90 @@ const Financeiro: React.FC = () => {
         setShowBloquearEmMassaModal(false);
         fetchContratos(currentPage, searchTerm, contractStatusFilter);
       } else if (contractStatusFilter === 'atraso15') {
-        // Use the contratosatrasodias view for this filter
-        const { data: contratosAtraso, error: contratosError } = await supabase
-          .from('contratosatrasodias')
-          .select('*');
-        
-        console.log('Total de contratos em atraso > 15 dias encontrados via view:', contratosAtraso?.length || 0);
-        
-        if (contratosError) {
-          console.error('Erro ao buscar contratos em atraso > 15 dias:', contratosError);
-          toast.error('Erro ao buscar detalhes dos contratos');
+        try {
+          console.log('Bloqueando contratos em atraso > 15 dias...');
+          
+          // Data limite (15 dias atrás)
+          const dataLimite = new Date();
+          dataLimite.setDate(dataLimite.getDate() - 15);
+          const dataLimiteISO = dataLimite.toISOString();
+          
+          // Buscar todos os contratos que não estão bloqueados ou cancelados e não são bonificados
+          // e que possuem títulos vencidos há mais de 15 dias e não pagos
+          const { data: contratos, error: contratosError } = await supabase
+            .from('contratos')
+            .select(`
+              id,
+              pppoe,
+              id_plano,
+              titulos!inner(id, vencimento, pago)
+            `)
+            .lte('titulos.vencimento', dataLimiteISO)
+            .not('status', 'in', '("Bloqueado","Cancelado")')
+            .not('tipo', 'eq', 'Cliente Bonificado');
+          
+          if (contratosError) {
+            console.error('Erro ao buscar contratos em atraso > 15 dias:', contratosError);
+            toast.error('Erro ao buscar detalhes dos contratos');
+            setIsBloqueandoEmMassa(false);
+            return;
+          }
+          
+          // Filtrar manualmente os contratos que têm títulos não pagos
+          const contratosComTitulosNaoPagos = new Map();
+          
+          contratos?.forEach(contrato => {
+            const titulosNaoPagos = contrato.titulos.filter(
+              (titulo: any) => titulo.pago !== true
+            );
+            
+            if (titulosNaoPagos.length > 0 && !contratosComTitulosNaoPagos.has(contrato.id)) {
+              // Remover a propriedade titulos para evitar dados duplicados
+              const { titulos, ...contratoSemTitulos } = contrato;
+              contratosComTitulosNaoPagos.set(contrato.id, contratoSemTitulos);
+            }
+          });
+          
+          const contratosUnicos = Array.from(contratosComTitulosNaoPagos.values());
+          console.log(`Encontrados ${contratosUnicos.length} contratos em atraso > 15 dias para bloquear`);
+          
+          if (contratosUnicos.length === 0) {
+            toast.error('Não foram encontrados contratos válidos para bloquear');
+            setIsBloqueandoEmMassa(false);
+            return;
+          }
+          
+          // Extrair apenas os PPPoEs dos contratos (sem radius)
+          const pppoes = contratosUnicos.map(contrato => contrato.pppoe).filter(Boolean);
+          
+          console.log(`Enviando ${pppoes.length} PPPoEs para bloqueio em massa:`, pppoes);
+          
+          // Usar o webhook do n8n
+          const response = await fetch('https://webhooksn8nconecte.apanet.info/webhook/fbc34600-9d9c-4dcc-86ed-ae1b962a2f72', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pppoes: pppoes
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Resposta de erro do webhook:', errorText);
+            throw new Error('Erro ao bloquear contratos em massa');
+          }
+          
+          toast.success(`${pppoes.length} contratos bloqueados com sucesso!`);
+          setShowBloquearEmMassaModal(false);
+          fetchContratos(currentPage, searchTerm, contractStatusFilter);
+        } catch (error: any) {
+          console.error('Erro ao bloquear contratos em atraso > 15 dias:', error.message);
+          toast.error('Erro ao bloquear contratos em massa');
           setIsBloqueandoEmMassa(false);
           return;
         }
-        
-        if (!contratosAtraso || contratosAtraso.length === 0) {
-          toast.error('Não foram encontrados contratos válidos para bloquear');
-          setIsBloqueandoEmMassa(false);
-          return;
-        }
-        
-        // Log the structure of the first contract to debug
-        console.log('Estrutura do primeiro contrato:', JSON.stringify(contratosAtraso[0], null, 2));
-        
-        // Extract only PPPoEs from ALL contracts (no radius needed)
-        const pppoes = contratosAtraso.map(contrato => contrato.pppoe).filter(Boolean);
-        
-        console.log(`Enviando ${pppoes.length} PPPoEs para bloqueio em massa:`, pppoes);
-        
-        // Use the same n8n webhook URL but send only PPPoEs
-        const response = await fetch('https://webhooksn8nconecte.apanet.info/webhook/fbc34600-9d9c-4dcc-86ed-ae1b962a2f72', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            pppoes: pppoes
-          }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Resposta de erro do webhook:', errorText);
-          throw new Error('Erro ao bloquear contratos em massa');
-        }
-
-        toast.success(`${pppoes.length} contratos bloqueados com sucesso!`);
-        setShowBloquearEmMassaModal(false);
-        fetchContratos(currentPage, searchTerm, contractStatusFilter);
       }
     } catch (error) {
       console.error('Erro ao bloquear contratos em massa:', error);
@@ -737,30 +832,67 @@ const Financeiro: React.FC = () => {
         setIsLoading(false);
         return;
       } else if (contractStatusFilter === 'atraso15') {
-        // Usar a view de contratos em atraso > 15 dias
-        const { data, error } = await supabase
-          .from('contratosatrasodias')
-          .select(`
-            pppoe,
-            dia_vencimento,
-            planos(nome),
-            clientes(nome)
-          `)
-          .neq('status', 'Bloqueado')
-          .not('tipo', 'eq', 'Anual')
-          .not('tipo', 'eq', 'Anual_Aluguel')
-          .not('tipo', 'eq', 'Cliente Bonificado');
-
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          downloadCSV(formatarDadosCSV(data));
-        } else {
-          toast.error('Nenhum dado encontrado para exportar');
+        try {
+          console.log('Exportando contratos em atraso > 15 dias para CSV...');
+          
+          // Data limite (15 dias atrás)
+          const dataLimite = new Date();
+          dataLimite.setDate(dataLimite.getDate() - 15);
+          const dataLimiteISO = dataLimite.toISOString();
+          
+          // Buscar todos os contratos que não estão bloqueados ou cancelados e não são bonificados
+          // e que possuem títulos vencidos há mais de 15 dias e não pagos
+          const { data: contratos, error: contratosError } = await supabase
+            .from('contratos')
+            .select(`
+              id,
+              pppoe,
+              dia_vencimento,
+              planos(id, nome),
+              clientes(id, nome),
+              titulos!inner(id, vencimento, pago)
+            `)
+            .lte('titulos.vencimento', dataLimiteISO)
+            .not('status', 'in', '("Bloqueado","Cancelado")')
+            .not('tipo', 'eq', 'Cliente Bonificado');
+          
+          if (contratosError) {
+            console.error('Erro ao buscar contratos para CSV:', contratosError);
+            throw contratosError;
+          }
+          
+          // Filtrar manualmente os contratos que têm títulos não pagos
+          const contratosComTitulosNaoPagos = new Map();
+          
+          contratos?.forEach(contrato => {
+            const titulosNaoPagos = contrato.titulos.filter(
+              (titulo: any) => titulo.pago !== true
+            );
+            
+            if (titulosNaoPagos.length > 0 && !contratosComTitulosNaoPagos.has(contrato.id)) {
+              // Remover a propriedade titulos para o CSV
+              const { titulos, ...contratoSemTitulos } = contrato;
+              contratosComTitulosNaoPagos.set(contrato.id, contratoSemTitulos);
+            }
+          });
+          
+          const contratosUnicos = Array.from(contratosComTitulosNaoPagos.values());
+          console.log(`Exportando ${contratosUnicos.length} contratos em atraso > 15 dias para CSV`);
+          
+          if (contratosUnicos.length > 0) {
+            downloadCSV(formatarDadosCSV(contratosUnicos));
+          } else {
+            toast.error('Nenhum contrato em atraso > 15 dias encontrado para exportar');
+          }
+          
+          setIsLoading(false);
+          return;
+        } catch (error: any) {
+          console.error('Erro ao exportar contratos em atraso > 15 dias:', error.message);
+          toast.error('Erro ao exportar contratos em atraso > 15 dias');
+          setIsLoading(false);
+          return;
         }
-        
-        setIsLoading(false);
-        return;
       } else if (contractStatusFilter === 'pendencia') {
         query = query.eq('pendencia', true);
       } else if (contractStatusFilter === 'Anual') {
