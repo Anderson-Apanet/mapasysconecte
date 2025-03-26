@@ -177,7 +177,7 @@ export function EventModal({
                       onEventChange({ 
                         ...event, 
                         tipo_evento: tipo,
-                        pppoe: ['Visita', 'Instalação', 'Retirada'].includes(tipo) ? event.pppoe : ''
+                        pppoe: ['Visita', 'Instalação', 'Retirada', 'Troca de Endereço'].includes(tipo) ? event.pppoe : ''
                       });
                     }}
                     required
@@ -189,10 +189,11 @@ export function EventModal({
                     <option value="Retirada">Retirada</option>
                     <option value="Viabilidade">Viabilidade</option>
                     <option value="Lembrete">Lembrete</option>
+                    <option value="Troca de Endereço">Troca de Endereço</option>
                   </select>
                 </div>
 
-                {['Visita', 'Instalação', 'Retirada'].includes(event.tipo_evento || '') && (
+                {['Visita', 'Instalação', 'Retirada', 'Troca de Endereço'].includes(event.tipo_evento || '') && (
                   <div className="relative">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Contrato (PPPoE)
@@ -272,6 +273,57 @@ export function EventModal({
                       </div>
                     )}
                   </div>
+                )}
+
+                {event.tipo_evento === 'Instalação' && (
+                  <div className="mt-4">
+                    <div className="flex items-center">
+                      <input
+                        id="horamarcada"
+                        name="horamarcada"
+                        type="checkbox"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        checked={event.horamarcada || false}
+                        onChange={(e) => onEventChange({ ...event, horamarcada: e.target.checked })}
+                      />
+                      <label htmlFor="horamarcada" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                        Hora marcada
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {event.tipo_evento === 'Troca de Endereço' && (
+                  <>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Novo Endereço
+                      </label>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Digite o novo endereço"
+                        value={event.novoendereco || ''}
+                        onChange={(e) => onEventChange({ ...event, novoendereco: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <div className="flex items-center">
+                        <input
+                          id="horamarcada"
+                          name="horamarcada"
+                          type="checkbox"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          checked={event.horamarcada || false}
+                          onChange={(e) => onEventChange({ ...event, horamarcada: e.target.checked })}
+                        />
+                        <label htmlFor="horamarcada" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                          Hora marcada
+                        </label>
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div>
