@@ -138,7 +138,7 @@ const Financeiro: React.FC = () => {
         return;
       } else if (status === 'atraso15') {
         try {
-          console.log('Buscando contratos em atraso > 15 dias...');
+          console.log('Buscando contratos em atraso...');
           
           // Data limite (15 dias atrás)
           const dataLimite = new Date();
@@ -178,18 +178,18 @@ const Financeiro: React.FC = () => {
           });
           
           const idsArray = Array.from(idsContratosComTitulosNaoPagos);
-          console.log(`Encontrados ${idsArray.length} contratos em atraso > 15 dias`);
+          console.log(`Encontrados ${idsArray.length} contratos em atraso`);
           
           // Paginação manual
           const totalCount = idsArray.length;
           setTotalCount(totalCount);
           
           const from = (page - 1) * itemsPerPage;
-          const to = Math.min(from + itemsPerPage, totalCount);
+          const to = from + itemsPerPage - 1;
           const idsParaBuscar = idsArray.slice(from, to);
           
           if (idsParaBuscar.length === 0) {
-            console.log('Nenhum contrato em atraso > 15 dias encontrado na página atual.');
+            console.log('Nenhum contrato em atraso encontrado na página atual.');
             setContratos([]);
             setIsLoading(false);
             return;
@@ -238,7 +238,7 @@ const Financeiro: React.FC = () => {
           setIsLoading(false);
           return;
         } catch (error: any) {
-          console.error('Erro ao buscar contratos em atraso > 15 dias:', error.message);
+          console.error('Erro ao buscar contratos em atraso:', error.message);
           toast.error('Erro ao buscar contratos em atraso');
           setIsLoading(false);
           return;
@@ -251,14 +251,16 @@ const Financeiro: React.FC = () => {
         countQuery = countQuery.eq('tipo', 'Anual_Aluguel');
       } else if (status === 'Cliente Bonificado') {
         countQuery = countQuery.eq('tipo', 'Cliente Bonificado');
+      } else if (status === 'Cancelado') {
+        countQuery = countQuery.eq('status', status);
+      } else if (status === 'Bloqueado') {
+        countQuery = countQuery.eq('status', status);
       } else if (status && status !== 'Todos') {
         countQuery = countQuery.eq('status', status);
-      } else if (status === 'Todos') {
-        countQuery = countQuery.neq('status', 'Cancelado');
       }
       
-      // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado' && status !== 'Bloqueado') {
+      // Excluir tipos especiais para todos os filtros exceto "Todos", "Cancelado", "Bloqueado" e os filtros específicos para esses tipos
+      if (status !== 'Todos' && status !== 'Cancelado' && status !== 'Bloqueado' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
         countQuery = countQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
@@ -288,14 +290,16 @@ const Financeiro: React.FC = () => {
         dataQuery = dataQuery.eq('tipo', 'Anual_Aluguel');
       } else if (status === 'Cliente Bonificado') {
         dataQuery = dataQuery.eq('tipo', 'Cliente Bonificado');
+      } else if (status === 'Cancelado') {
+        dataQuery = dataQuery.eq('status', status);
+      } else if (status === 'Bloqueado') {
+        dataQuery = dataQuery.eq('status', status);
       } else if (status && status !== 'Todos') {
         dataQuery = dataQuery.eq('status', status);
-      } else if (status === 'Todos') {
-        dataQuery = dataQuery.neq('status', 'Cancelado');
       }
 
-      // Excluir tipos especiais para todos os filtros exceto "Todos" e os filtros específicos para esses tipos
-      if (status !== 'Todos' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado' && status !== 'Bloqueado') {
+      // Excluir tipos especiais para todos os filtros exceto "Todos", "Cancelado", "Bloqueado" e os filtros específicos para esses tipos
+      if (status !== 'Todos' && status !== 'Cancelado' && status !== 'Bloqueado' && status !== 'Ativo' && status !== 'Anual' && status !== 'Anual_Aluguel' && status !== 'Cliente Bonificado') {
         dataQuery = dataQuery
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
@@ -934,10 +938,20 @@ const Financeiro: React.FC = () => {
         query = query.eq('tipo', 'Anual_Aluguel');
       } else if (contractStatusFilter === 'Cliente Bonificado') {
         query = query.eq('tipo', 'Cliente Bonificado');
+      } else if (contractStatusFilter === 'Cancelado') {
+        query = query.eq('status', contractStatusFilter);
+      } else if (contractStatusFilter === 'Bloqueado') {
+        query = query.eq('status', contractStatusFilter);
       } else if (contractStatusFilter && contractStatusFilter !== 'Todos') {
         query = query.eq('status', contractStatusFilter);
-      } else if (contractStatusFilter === 'Todos') {
-        query = query.neq('status', 'Cancelado');
+      }
+
+      // Excluir tipos especiais para todos os filtros exceto "Todos", "Cancelado", "Bloqueado" e os filtros específicos para esses tipos
+      if (contractStatusFilter !== 'Todos' && contractStatusFilter !== 'Cancelado' && contractStatusFilter !== 'Bloqueado' && contractStatusFilter !== 'Ativo' && contractStatusFilter !== 'Anual' && contractStatusFilter !== 'Anual_Aluguel' && contractStatusFilter !== 'Cliente Bonificado') {
+        query = query
+          .not('tipo', 'eq', 'Anual')
+          .not('tipo', 'eq', 'Anual_Aluguel')
+          .not('tipo', 'eq', 'Cliente Bonificado');
       }
 
       const { data, error } = await query;
