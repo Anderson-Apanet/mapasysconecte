@@ -25,7 +25,8 @@ export async function fetchEvents(startDate?: Date | string | number, endDate?: 
           pppoe,
           cor,
           data_cad_evento,
-          criador
+          criador,
+          novoendereco
         `)
         .eq('id', startDate)
         .single();
@@ -63,7 +64,8 @@ export async function fetchEvents(startDate?: Date | string | number, endDate?: 
         pppoe,
         cor,
         data_cad_evento,
-        criador
+        criador,
+        novoendereco
       `);
     
     // Descobrimos que todos os eventos têm cancelado = null, então não filtramos por cancelado
@@ -200,7 +202,8 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           cor: event.cor,
           criador: userEmail,
           data_cad_evento: currentDateTime,
-          empresa_id: empresaId // Adiciona o ID da empresa do usuário
+          empresa_id: empresaId, // Adiciona o ID da empresa do usuário
+          novoendereco: event.novoendereco // Adiciona o novo endereço para eventos de Troca de Endereço
         })
         .select()
         .single();
@@ -254,7 +257,8 @@ export async function saveEvent(event: Partial<AgendaEvent>, existingEvent?: Age
           parcial: event.parcial,
           cancelado: event.cancelado,
           pppoe: event.pppoe,
-          cor: event.cor
+          cor: event.cor,
+          novoendereco: event.novoendereco // Adiciona o campo novoendereco ao atualizar um evento existente
           // Não atualiza os campos criador, data_cad_evento e empresa_id para manter o registro original
         })
         .eq('id', event.id)
@@ -599,7 +603,9 @@ export function transformEvents(events) {
             cancelado: event.cancelado,
             pppoe: event.pppoe,
             responsaveis: event.responsaveis || [], // Array vazio se não houver responsáveis
-            criador: event.criador
+            criador: event.criador,
+            novoendereco: event.novoendereco, // Adicionando o campo novoendereco às propriedades estendidas
+            endereco: event.endereco // Incluindo também o endereço original
           }
         };
 

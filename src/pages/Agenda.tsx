@@ -157,7 +157,8 @@ export default function Agenda() {
           cliente_nome: cliente_nome, // Adiciona o nome do cliente
           cor: event.cor,
           criador: event.criador, // Adiciona o criador do evento
-          data_cad_evento: event.data_cad_evento // Adiciona a data de criação do evento
+          data_cad_evento: event.data_cad_evento, // Adiciona a data de criação do evento
+          novoendereco: event.novoendereco // Adiciona o novo endereço para eventos de Troca de Endereço
         };
 
         console.log('Dados do evento formatados:', eventData);

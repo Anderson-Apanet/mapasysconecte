@@ -7,7 +7,7 @@ import { supabase } from '../utils/supabaseClient';
 import InstalacaoModal from '../components/Tecnicos/InstalacaoModal';
 import VisitaModal from '../components/Agenda/VisitaModal';
 import { Dialog } from '@headlessui/react';
-import { AgendaEvent } from '../types/Agenda';
+import { AgendaEvent } from '../types/agenda';
 import { toast } from 'react-hot-toast';
 import EmpresaBackground from '../components/EmpresaBackground';
 
@@ -33,8 +33,8 @@ interface EventCardProps {
   compact?: boolean;
 }
 
-interface Tecnico {
-  id: string;
+interface TecnicoUser {
+  id_user: string;
   nome: string;
   email: string;
 }
@@ -46,7 +46,7 @@ interface VisitaInfo {
   acompanhante: string | null;
   id_agenda: number;
   id_contrato: number | null;
-  tecnicos: Tecnico[];
+  tecnicos: TecnicoUser[];
 }
 
 interface InstalacaoInfo {
@@ -56,7 +56,7 @@ interface InstalacaoInfo {
   acompanhante: string | null;
   id_agenda: number;
   id_contrato: number | null;
-  tecnicos: Tecnico[];
+  tecnicos: TecnicoUser[];
 }
 
 const EventCard: React.FC<EventCardProps> = ({
@@ -94,7 +94,7 @@ const EventCard: React.FC<EventCardProps> = ({
       </p>
     )}
 
-    {(event.tipo_evento === 'Instalação' || event.tipo_evento === 'Visita') && event.pppoe && (
+    {(event.tipo_evento === 'Instalação' || event.tipo_evento === 'Visita' || event.tipo_evento === 'Troca de Endereço') && event.pppoe && (
       <div className="space-y-2">
         <div className="flex items-center space-x-2">
           <span className="text-xs px-2 py-1 bg-sky-50 text-sky-700 rounded-full">
@@ -123,6 +123,18 @@ const EventCard: React.FC<EventCardProps> = ({
             </span>
           </div>
         )}
+
+        {event.tipo_evento === 'Troca de Endereço' && event.novoendereco && !compact && (
+          <div className="flex items-center text-sm text-green-600 mt-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            <span className="font-medium">
+              Novo Endereço: {event.novoendereco}
+            </span>
+          </div>
+        )}
       </div>
     )}
   </div>
@@ -148,7 +160,9 @@ export default function Tecnicos() {
   // Memoize funções que não precisam ser recriadas a cada render
   const fetchUserName = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      
       if (session?.user) {
         const { data, error } = await supabase
           .from('users')
@@ -170,21 +184,28 @@ export default function Tecnicos() {
     }
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await supabase.auth.signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error);
-      toast.error('Erro ao fazer logout');
-    }
-  }, [navigate]);
-
   const fetchEvents = useCallback(async (start: Date, end: Date) => {
     try {
       const { data, error } = await supabase
         .from('agenda')
-        .select('*')
+        .select(`
+          id,
+          nome,
+          descricao,
+          datainicio,
+          datafinal,
+          cor,
+          tipo_evento,
+          horamarcada,
+          prioritario,
+          realizada,
+          parcial,
+          cancelado,
+          pppoe,
+          novoendereco,
+          data_cad_evento,
+          criador
+        `)
         .gte('datainicio', start.toISOString())
         .lte('datainicio', end.toISOString())
         .order('datainicio', { ascending: true });
@@ -252,7 +273,10 @@ export default function Tecnicos() {
       if (Array.isArray(data)) {
         const sortedEvents = data.sort((a, b) => 
           new Date(a.datainicio).getTime() - new Date(b.datainicio).getTime()
-        );
+        ).map(event => ({
+          ...event,
+          responsaveis: [] // Inicializando o campo responsaveis como um array vazio
+        }));
         setEvents(sortedEvents);
         fetchContratosDetalhes(sortedEvents);
       } else {
@@ -278,7 +302,10 @@ export default function Tecnicos() {
       if (Array.isArray(data)) {
         const sortedEvents = data.sort((a, b) => 
           new Date(a.datainicio).getTime() - new Date(b.datainicio).getTime()
-        );
+        ).map(event => ({
+          ...event,
+          responsaveis: [] // Inicializando o campo responsaveis como um array vazio
+        }));
         setEvents(sortedEvents);
         fetchContratosDetalhes(sortedEvents);
       } else {
@@ -361,7 +388,7 @@ export default function Tecnicos() {
             }
 
             // Se encontrou técnicos, busca os detalhes deles
-            let tecnicos = [];
+            let tecnicos: TecnicoUser[] = [];
             if (tecnicosData && tecnicosData.length > 0) {
               const tecnicoIds = tecnicosData.map(t => t.tecnico_id);
               console.log('IDs dos técnicos encontrados:', tecnicoIds);
@@ -375,7 +402,7 @@ export default function Tecnicos() {
               if (usersError) {
                 console.error('Erro ao buscar detalhes dos técnicos:', usersError);
               } else if (usersData) {
-                tecnicos = usersData;
+                tecnicos = usersData as TecnicoUser[];
                 console.log('Detalhes dos técnicos:', tecnicos);
               }
             }
@@ -419,7 +446,7 @@ export default function Tecnicos() {
             }
 
             // Se encontrou técnicos, busca os detalhes deles
-            let tecnicos = [];
+            let tecnicos: TecnicoUser[] = [];
             if (tecnicosData && tecnicosData.length > 0) {
               const tecnicoIds = tecnicosData.map(t => t.tecnico_id);
               console.log('IDs dos técnicos encontrados:', tecnicoIds);
@@ -433,7 +460,7 @@ export default function Tecnicos() {
               if (usersError) {
                 console.error('Erro ao buscar detalhes dos técnicos:', usersError);
               } else if (usersData) {
-                tecnicos = usersData;
+                tecnicos = usersData as TecnicoUser[];
                 console.log('Detalhes dos técnicos:', tecnicos);
               }
             }
@@ -452,6 +479,64 @@ export default function Tecnicos() {
             console.warn('Nenhuma visita encontrada para o evento:', event);
             toast.error('Não foi possível encontrar os detalhes da visita');
           }
+        } else if (event.tipo_evento === 'Troca de Endereço') {
+          // Buscar instalação
+          const { data: instalacao, error: instalacaoError } = await supabase
+            .from('instalacao')
+            .select('*')
+            .eq('id_agenda', event.id)
+            .maybeSingle();
+
+          if (instalacaoError) {
+            console.error('Erro ao buscar instalação:', instalacaoError);
+            throw instalacaoError;
+          }
+
+          if (instalacao) {
+            // Buscar técnicos que executaram a instalação
+            const { data: tecnicosData, error: tecnicosError } = await supabase
+              .from('instalacao_tecnicos')
+              .select('tecnico_id')
+              .eq('instalacao_id', instalacao.id);
+
+            if (tecnicosError) {
+              console.error('Erro ao buscar técnicos:', tecnicosError);
+            }
+
+            // Se encontrou técnicos, busca os detalhes deles
+            let tecnicos: TecnicoUser[] = [];
+            if (tecnicosData && tecnicosData.length > 0) {
+              const tecnicoIds = tecnicosData.map(t => t.tecnico_id);
+              console.log('IDs dos técnicos encontrados:', tecnicoIds);
+
+              // Buscar detalhes dos usuários
+              const { data: usersData, error: usersError } = await supabase
+                .from('users')
+                .select('id_user, nome, email')
+                .in('id_user', tecnicoIds);
+
+              if (usersError) {
+                console.error('Erro ao buscar detalhes dos técnicos:', usersError);
+              } else if (usersData) {
+                tecnicos = usersData as TecnicoUser[];
+                console.log('Detalhes dos técnicos:', tecnicos);
+              }
+            }
+
+            setSelectedInstalacaoInfo({
+              id: instalacao.id,
+              data_instalacao: instalacao.data_instalacao,
+              relato: instalacao.relato,
+              acompanhante: instalacao.acompanhante,
+              id_agenda: instalacao.id_agenda,
+              id_contrato: instalacao.id_contrato,
+              tecnicos: tecnicos
+            });
+            setIsInfoModalOpen(true);
+          } else {
+            console.warn('Nenhuma instalação encontrada para o evento:', event);
+            toast.error('Não foi possível encontrar os detalhes da instalação');
+          }
         }
       } catch (error) {
         console.error('Erro ao buscar informações:', error);
@@ -462,6 +547,8 @@ export default function Tecnicos() {
         setIsInstalacaoModalOpen(true);
       } else if (event.tipo_evento === 'Visita') {
         setIsVisitaModalOpen(true);
+      } else if (event.tipo_evento === 'Troca de Endereço') {
+        setIsInstalacaoModalOpen(true);
       }
     }
   }, []);
@@ -547,7 +634,7 @@ export default function Tecnicos() {
   useEffect(() => {
     let mounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, _session) => {
       if (!mounted) return;
 
       if (event === 'SIGNED_IN') {
@@ -889,7 +976,7 @@ export default function Tecnicos() {
                         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
                         <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                           {selectedInstalacaoInfo.tecnicos.map(tecnico => (
-                            <li key={tecnico.id}>{tecnico.nome}</li>
+                            <li key={tecnico.id_user}>{tecnico.nome}</li>
                           ))}
                         </ul>
                       </div>
@@ -929,7 +1016,7 @@ export default function Tecnicos() {
                         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Técnicos</h3>
                         <ul className="list-disc pl-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                           {selectedVisitaInfo.tecnicos.map(tecnico => (
-                            <li key={tecnico.id}>{tecnico.nome}</li>
+                            <li key={tecnico.id_user}>{tecnico.nome}</li>
                           ))}
                         </ul>
                       </div>
