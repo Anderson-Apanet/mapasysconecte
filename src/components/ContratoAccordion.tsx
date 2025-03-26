@@ -4,6 +4,7 @@ import { formatDate } from '../utils/formatDate';
 import { formatCurrency } from '../utils/formatCurrency';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
+import useAuth from '../hooks/useAuth';
 
 interface Titulo {
   id: number;
@@ -49,6 +50,7 @@ interface ContratoAccordionProps {
 
 const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoading }) => {
   const [expandedContratos, setExpandedContratos] = useState<number[]>([]);
+  const { userData } = useAuth();
   
   // Estados para os modais de ação
   const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
@@ -128,6 +130,11 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
     
     setIsLiberando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Liberando contrato com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -136,7 +143,8 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'liberar'
+          acao: 'liberar',
+          id_empresa: empresaId
         }),
       });
 
@@ -192,6 +200,11 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
     
     setIsLiberando48(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Liberando contrato por 48h com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -200,7 +213,8 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'liberar48h'
+          acao: 'liberar48h',
+          id_empresa: empresaId
         }),
       });
 
@@ -244,6 +258,11 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
     
     setIsCancelando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Cancelando contrato com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -252,7 +271,8 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'cancelar'
+          acao: 'cancelar',
+          id_empresa: empresaId
         }),
       });
 
@@ -307,6 +327,11 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
     
     setIsBloqueando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Bloqueando contrato com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -315,7 +340,8 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'Bloquear'
+          acao: 'Bloquear',
+          id_empresa: empresaId
         }),
       });
 

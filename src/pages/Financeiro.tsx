@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
+import useAuth from '../hooks/useAuth';
 import { Contrato } from '../types/contrato';
 import Layout from '../components/Layout';
 import EmpresaBackground from '../components/EmpresaBackground';
@@ -31,6 +32,8 @@ interface ContratoExtended extends Contrato {
 }
 
 const Financeiro: React.FC = () => {
+  const { userData } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
   // Estados para contratos e títulos
   const [contratos, setContratos] = useState<ContratoExtended[]>([]);
   const [selectedContrato, setSelectedContrato] = useState<ContratoExtended | null>(null);
@@ -38,7 +41,6 @@ const Financeiro: React.FC = () => {
   const [selectedPPPoE, setSelectedPPPoE] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [contractStatusFilter, setContractStatusFilter] = useState('Todos');
-  const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
@@ -400,10 +402,15 @@ const Financeiro: React.FC = () => {
     
     setIsLiberando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Liberando contrato com ID da empresa:', empresaId);
       console.log('Enviando dados para liberar cliente:', {
         pppoe: selectedContrato.pppoe,
         radius,
-        acao: 'liberar'
+        acao: 'liberar',
+        id_empresa: empresaId
       });
       
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
@@ -414,7 +421,8 @@ const Financeiro: React.FC = () => {
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'liberar'
+          acao: 'liberar',
+          id_empresa: empresaId
         }),
       });
 
@@ -458,6 +466,11 @@ const Financeiro: React.FC = () => {
     
     setIsLiberando48(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Liberando contrato por 48h com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -466,7 +479,8 @@ const Financeiro: React.FC = () => {
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'liberar48h'
+          acao: 'liberar48h',
+          id_empresa: empresaId
         }),
       });
 
@@ -512,10 +526,15 @@ const Financeiro: React.FC = () => {
     
     setIsCancelando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Cancelando contrato com ID da empresa:', empresaId);
       console.log('Enviando dados para cancelar contrato:', {
         pppoe: selectedContrato.pppoe,
         radius,
-        acao: 'cancelar'
+        acao: 'cancelar',
+        id_empresa: empresaId
       });
       
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
@@ -526,7 +545,8 @@ const Financeiro: React.FC = () => {
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'cancelar'
+          acao: 'cancelar',
+          id_empresa: empresaId
         }),
       });
 
@@ -581,6 +601,11 @@ const Financeiro: React.FC = () => {
     
     setIsBloqueando(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Bloqueando contrato com ID da empresa:', empresaId);
+      
       const response = await fetch('https://webhooks.apanet.tec.br/webhook/4a6e5ee5-fc47-4d97-b503-9a6fab1bbb4e', {
         method: 'POST',
         headers: {
@@ -589,7 +614,8 @@ const Financeiro: React.FC = () => {
         body: JSON.stringify({
           pppoe: selectedContrato.pppoe,
           radius,
-          acao: 'Bloquear'
+          acao: 'Bloquear',
+          id_empresa: empresaId
         }),
       });
 
@@ -612,6 +638,11 @@ const Financeiro: React.FC = () => {
   const handleConfirmarBloqueioEmMassa = async () => {
     setIsBloqueandoEmMassa(true);
     try {
+      // Obter o ID da empresa do usuário logado
+      const empresaId = userData?.empresa?.id;
+      
+      console.log('Bloqueando contratos em massa com ID da empresa:', empresaId);
+      
       if (contractStatusFilter === 'atraso') {
         // Use the contratosatraso view for this filter - get ALL contracts, not just the current page
         const { data: contratosAtraso, error: contratosError } = await supabase
@@ -674,10 +705,11 @@ const Financeiro: React.FC = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contratos: blockedContracts
+            contratos: blockedContracts,
+            id_empresa: empresaId
           }),
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Resposta de erro do webhook:', errorText);
@@ -753,7 +785,8 @@ const Financeiro: React.FC = () => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              pppoes: pppoes
+              pppoes: pppoes,
+              id_empresa: empresaId
             }),
           });
           
@@ -816,7 +849,7 @@ const Financeiro: React.FC = () => {
             planos(nome),
             clientes(nome)
           `)
-          .neq('status', 'Bloqueado')
+          .neq('status', 'Bloqueado') // Excluir contratos já bloqueados
           .not('tipo', 'eq', 'Anual')
           .not('tipo', 'eq', 'Anual_Aluguel')
           .not('tipo', 'eq', 'Cliente Bonificado');
