@@ -68,7 +68,13 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
   
   // Log para depuração
   useEffect(() => {
-    console.log('Contratos recebidos em ContratoAccordion:', JSON.stringify(contratos, null, 2));
+    console.log('Contratos recebidos em ContratoAccordion:', contratos);
+    // Verificar a estrutura do plano em cada contrato
+    contratos.forEach(contrato => {
+      console.log(`Contrato ${contrato.id} - PPPoE: ${contrato.pppoe}`);
+      console.log('Plano:', contrato.plano);
+      console.log('ID Plano:', contrato.id_plano);
+    });
   }, [contratos]);
 
   // Handlers para abrir modais
@@ -483,7 +489,7 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
               <div className="text-sm text-gray-500">
                 <span>PPPoE: {contrato.pppoe || 'N/A'}</span>
                 <span className="mx-2">•</span>
-                <span>Plano: {contrato.plano?.nome || 'N/A'}</span>
+                <span>Plano: {contrato.plano?.nome || (contrato.id_plano ? 'Carregando...' : 'N/A')}</span>
                 <span className="mx-2">•</span>
                 <span>Status: <span className={`font-semibold ${getStatusColor(contrato.status || '')}`}>{contrato.status || 'N/A'}</span></span>
               </div>
@@ -592,7 +598,9 @@ const ContratoAccordion: React.FC<ContratoAccordionProps> = ({ contratos, isLoad
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {contrato.titulos.map((titulo) => (
+                        {[...contrato.titulos]
+                          .sort((a, b) => new Date(a.vencimento).getTime() - new Date(b.vencimento).getTime())
+                          .map((titulo) => (
                           <tr key={titulo.id}>
                             <td className="px-4 py-2 whitespace-nowrap text-sm">{titulo.id}</td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm">{formatDate(titulo.vencimento)}</td>
