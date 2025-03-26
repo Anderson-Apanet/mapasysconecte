@@ -552,7 +552,7 @@ export default function NovoLancamentoModal({
 
       // Preparar dados do lançamento
       const lancamentoData = {
-        id: lancamentoToEdit?.id || Date.now(), // Gerar um ID único baseado no timestamp atual
+        ...(lancamentoToEdit?.id ? { id: lancamentoToEdit.id } : {}), // Manter ID apenas ao editar
         id_caixa: caixaStatus.caixaAtual.id,
         data_pagamento: dataPagamento ? new Date(dataPagamento) : new Date(),
         descricao: formData.descricao || descricao,
