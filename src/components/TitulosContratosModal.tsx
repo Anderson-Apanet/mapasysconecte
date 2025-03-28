@@ -60,6 +60,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
   const [tituloNotaFiscal, setTituloNotaFiscal] = useState<any>(null);
   const [acaoNotaFiscal, setAcaoNotaFiscal] = useState<'gerarnf' | 'imprimirnf'>('gerarnf');
   const [processandoNotaFiscal, setProcessandoNotaFiscal] = useState(false);
+  const [empresaId, setEmpresaId] = useState<number | null>(null);
 
   // Função para formatar a data mínima (hoje) no formato YYYY-MM-DD
   const getDataMinima = () => {
@@ -153,6 +154,36 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       setDataInicialVencimento(getDataInicialPadrao());
     }
   }, [showCriarTitulosModal, contrato?.dia_vencimento]);
+
+  // Obter o ID da empresa do usuário logado
+  useEffect(() => {
+    const fetchEmpresaId = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('empresa_id')
+            .eq('id_user', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error('Erro ao buscar ID da empresa:', error);
+            return;
+          }
+          
+          if (userData?.empresa_id) {
+            console.log('ID da empresa do usuário:', userData.empresa_id);
+            setEmpresaId(userData.empresa_id);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao obter ID da empresa:', error);
+      }
+    };
+    
+    fetchEmpresaId();
+  }, []);
 
   const handleVerLinhaDigitavel = async (paymentId: string) => {
     try {
@@ -442,7 +473,8 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       logradouro: cliente.logradouro,
       nrlogradouro: cliente.nrlogradouro,
       cep: cliente.cep,
-      bairro: cliente.bairro?.nome
+      bairro: cliente.bairro?.nome,
+      id_empresa: empresaId // Adicionar o ID da empresa do usuário logado
     };
 
     try {
