@@ -310,7 +310,8 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
 
       // Enviar os parcelamentos_id para o N8N
       const requestBody = {
-        parcelamentos_id: parcelamentosIds
+        parcelamentos_id: parcelamentosIds,
+        id_empresa: empresaId // Adicionar o ID da empresa do usuário logado
       };
       console.log('Enviando requisição para N8N:', requestBody);
 
@@ -382,9 +383,10 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
         console.error('Erro ao processar PDF:', error);
         toast.error(`Erro ao processar o PDF do carnê: ${error.message}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao gerar carnê:', error);
-      toast.error(error.message || 'Erro ao gerar o carnê');
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao gerar o carnê';
+      toast.error(errorMessage);
     } finally {
       // Limpa a URL do objeto após um breve delay
       if (pdfUrl) {
@@ -474,6 +476,7 @@ export const TitulosContratosModal: React.FC<TitulosContratosModalProps> = ({ is
       nrlogradouro: cliente.nrlogradouro,
       cep: cliente.cep,
       bairro: cliente.bairro?.nome,
+      nossonumero: tituloNotaFiscal?.nossonumero || '',
       id_empresa: empresaId // Adicionar o ID da empresa do usuário logado
     };
 
