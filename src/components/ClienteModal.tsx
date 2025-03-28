@@ -39,6 +39,7 @@ interface Contrato {
   ultparcela: string | null;
   vendedor: string | null;
   data_cad_contrato: string | null;
+  empresa_id: number | null;
   planos: {
     id: number;
     nome: string;
@@ -305,6 +306,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({ isOpen, onClose, cliente, o
           ultparcela,
           vendedor,
           data_cad_contrato,
+          empresa_id,
           planos (
             id,
             nome,

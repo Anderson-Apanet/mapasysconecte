@@ -36,6 +36,7 @@ interface Contrato {
   id_legado: string | null;
   id_cliente: number | null;
   id_bairro: number | null;
+  empresa_id: number | null;
   planos: {
     id: number;
     nome: string;
@@ -93,6 +94,23 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   // Estado para controlar se o contrato tem nota fiscal
   const [isNotaFiscal, setIsNotaFiscal] = useState(false);
 
+  // Estado para armazenar os dados da empresa do usuário logado
+  const [empresaData, setEmpresaData] = useState<{
+    id: number;
+    nome: string;
+    cnpj: string;
+    endereco: string;
+    bairro: string;
+    cidade: string;
+    cep: string;
+    fonewhats: string;
+    email: string;
+    estado: string;
+    inscricaoEstadual?: string;
+    socio?: string;
+    cpfSocio?: string;
+  } | null>(null);
+
   // Estados para gerenciar a alteração de plano
   const [planos, setPlanos] = useState<any[]>([]);
   const [selectedPlanoId, setSelectedPlanoId] = useState<number | null>(null);
@@ -125,10 +143,12 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
     }
   }, [contrato]);
   
-  // Carregar planos disponíveis quando o modal for aberto
+  // Efeito para carregar os dados da empresa quando o modal é aberto
   useEffect(() => {
     if (isOpen) {
+      console.log('Modal aberto, objeto completo do contrato:', contratoAtual);
       fetchPlanos();
+      fetchEmpresaData();
     }
   }, [isOpen]);
   
@@ -155,6 +175,75 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
     } finally {
       setLoadingPlanos(false);
     }
+  };
+
+  // Função para buscar os dados da empresa do usuário logado
+  const fetchEmpresaData = async () => {
+    try {
+      console.log('Iniciando busca de dados da empresa...');
+      
+      // Obter o ID da empresa diretamente do contrato atual
+      if (!contratoAtual || !contratoAtual.empresa_id) {
+        console.error('Contrato não possui empresa_id associada');
+        return;
+      }
+      
+      const empresaId = contratoAtual.empresa_id;
+      console.log('ID da empresa do contrato:', empresaId);
+      
+      // Buscar os dados da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', empresaId)
+        .single();
+      
+      if (empresaError || !empresaData) {
+        console.error('Erro ao buscar dados da empresa:', empresaError);
+        return;
+      }
+      
+      console.log('Dados da empresa obtidos:', empresaData);
+      
+      // Formatar o CNPJ
+      const cnpjFormatado = formatarCNPJ(empresaData.cnpj);
+      
+      // Armazenar os dados da empresa no estado
+      setEmpresaData({
+        id: empresaData.id,
+        nome: empresaData.nome || '',
+        cnpj: cnpjFormatado,
+        endereco: empresaData.endereco || '',
+        bairro: empresaData.bairro || '',
+        cidade: empresaData.cidade || '',
+        cep: empresaData.cep || '',
+        fonewhats: empresaData.fonewhats || '',
+        email: empresaData.email || '',
+        estado: empresaData.estado || '',
+        inscricaoEstadual: empresaData.inscricaoEstadual || '',
+        socio: empresaData.socio || '',
+        cpfSocio: empresaData.cpfSocio || ''
+      });
+    } catch (error) {
+      console.error('Erro ao buscar dados da empresa:', error);
+    }
+  };
+  
+  // Função para formatar CNPJ (XX.XXX.XXX/XXXX-XX)
+  const formatarCNPJ = (cnpj: string) => {
+    // Remover caracteres não numéricos
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+    
+    // Verificar se tem o tamanho correto
+    if (cnpjLimpo.length !== 14) {
+      return cnpj; // Retorna o original se não tiver o formato esperado
+    }
+    
+    // Aplicar a formatação
+    return cnpjLimpo.replace(
+      /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
+      '$1.$2.$3/$4-$5'
+    );
   };
 
   const searchBairros = async (searchTerm: string) => {
@@ -247,7 +336,13 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
     setShowBairrosList(false);
   };
 
-  const handleOpenDocument = (type: 'adesao' | 'permanencia' | 'rescisao') => {
+  const handleOpenDocument = async (type: 'adesao' | 'permanencia' | 'rescisao') => {
+    // Buscar os dados da empresa antes de abrir o editor de documento
+    await fetchEmpresaData();
+    
+    // Verificar se os dados da empresa foram carregados
+    console.log('Dados da empresa antes de abrir o documento:', empresaData);
+    
     setDocumentType(type);
     setShowDocumentEditor(true);
   };
@@ -507,7 +602,7 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
     rg: cliente?.rg || '',
     address: contratoAtual?.endereco || '',
     city: contratoAtual?.bairros?.cidade || '',
-    state: 'RS',
+    state: contratoAtual?.bairros?.estado || 'RS',
     cep: cliente?.cep || '',
     email: cliente?.email || '',
     phone: cliente?.fonewhats || '',
@@ -521,20 +616,22 @@ const ContratoModal: React.FC<ContratoModalProps> = ({
   const generateAdesaoTemplate = (contractData: any) => {
     const currentDate = new Date().toLocaleDateString('pt-BR');
     
+    console.log('Gerando template de adesão com dados da empresa:', empresaData);
+    
     return `<div style="font-family: 'Times New Roman', Times, serif; font-size: 4px; line-height: 1; text-align: justify;">
 <h2 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">TERMO DE ADESÃO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO MULTIMÍDIA, SERVIÇO DE VALOR ADICIONADO, LOCAÇÃO E OUTRAS AVENÇAS</h2>
 <p style="text-align: justify;">Por este instrumento particular, o ASSINANTE abaixo qualificado contrata e adere ao Serviço da PRESTADORA:</p>
-<h2 style="font-size: 4.5px; margin: 2px 0; font-weight: bold;">DADOS DA PRESTADORA</h2>
+<h2 style="font-size: 4.5px; margin: 2px 0; font-weight: bold;">QUALIFICAÇÃO DA PRESTADORA</h2>
 <p style="text-align: justify;">
-Nome Empresarial: CONECTE TELECOM LTDA
-CNPJ: 41.143.126/0001-00
-Endereço: Rua Paulista, nº 183, Sala 03
-Bairro: Centro
-Cidade: Arroio do Sal
-Estado: Rio Grande do Sul
-CEP: 95585-000
-Telefone: (51) 99759-7259, disponibilizado o recebimento de ligações a cobrar
-E-mail: conecte@seconecte.net</p>
+Nome Empresarial: ${empresaData?.nome}
+CNPJ: ${empresaData?.cnpj}
+Endereço: ${empresaData?.endereco}
+Bairro: ${empresaData?.bairro}
+Cidade: ${empresaData?.cidade}
+Estado: ${empresaData?.estado}
+CEP: ${empresaData?.cep}
+Telefone: ${empresaData?.fonewhats}, disponibilizado o recebimento de ligações a cobrar
+E-mail: ${empresaData?.email}</p>
 <h2 style="font-size: 4.5px; margin: 2px 0; font-weight: bold;">QUALIFICAÇÃO DO ASSINANTE</h2>
 <p style="text-align: justify;">
 Nome: ${contractData.clientName}
@@ -543,7 +640,7 @@ RG/ID: ${contractData.rg}
 Endereço: ${contractData.address}
 Bairro: ${contratoAtual?.bairros?.nome || '-'}
 Cidade: ${contractData.city}
-Estado: Rio Grande do Sul
+Estado: ${contractData.state}
 CEP: ${contractData.cep}
 Telefone: ${contractData.phone}
 E-mail: ${contractData.email}</p>
@@ -580,10 +677,10 @@ Forma de Pagamento: ( )Boleto Bancário ( )Débito Automático Banco XXXX</p>
 <p style="text-align: justify;">A adesão ao presente Contrato importa na ciência e anuência do ASSINANTE de que o uso de seus dados pessoais (nome, telefone, e-mail) pela PRESTADORA é condição primordial para o fornecimento dos serviços, nos moldes do §3°, do art. 9° da Lei 13.709/18, ao mesmo passo que se aplica ao endereço IP do ASSINANTE, especialmente por se tratar de gestão de dado pessoal decorrente de cumprimento de obrigação legal e regulatória.</p>
 <p style="text-align: justify;">E por estar de acordo com as cláusulas do presente termo e do CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO MULTIMÍDIA, SERVIÇO DE VALOR ADICIONADO, LOCAÇÃO E OUTRAS AVENÇAS, parte integrante deste Termo de Adesão, o ASSINANTE aposta sua assinatura abaixo ou o aceita eletronicamente, para que surta todos os seus efeitos legais.</p>
 <p style="text-align: justify;">A cópia integral do CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE COMUNICAÇÃO MULTIMÍDIA, SERVIÇO DE VALOR ADICIONADO, LOCAÇÃO E OUTRAS AVENÇAS pode ser obtida no Cartório de Registro de Títulos e Documentos da Comarca de Arroio do Sal/RS.</p>
-<div style="margin-top: 10px; text-align: center; font-size: 4px;">Arroio do Sal, ${currentDate}</div>
+<div style="margin-top: 10px; text-align: center; font-size: 4px;">${empresaData?.cidade}, ${currentDate}</div>
 <div style="margin-top: 15px; text-align: center; font-size: 4px;">
 _______________________________________________<br>
-CONECTE TELECOM LTDA<br><br>
+${empresaData?.nome}<br><br>
 _______________________________________________<br>
 ${contractData.clientName}<br>
 CPF/CNPJ: ${contractData.cpf}
@@ -598,8 +695,7 @@ CPF/CNPJ: ${contractData.cpf}
 <h2 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">CONTRATO DE PERMANÊNCIA</h2>
 <p style="text-align: center; font-size: 4px; margin: 2px 0;">(Vinculado ao Contrato de Prestação de Serviços e ao Termo de Adesão celebrado entre a PRESTADORA e o ASSINANTE)</p>
 
-<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contratoAtual?.bairros?.nome || '-'}, na Cidade de Arroio do Sal do Estado de Rio Grande do Sul, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por CONECTE TELECOM LTDA, nome fantasia CONECTE TELECOM, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. 41.143.126/0001-00, com sede na Rua Paulista, nº 183, Sala 03, Bairro Centro, CEP: 95585-000, na cidade Arroio do Sal, Estado de Rio Grande do Sul, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
-
+<p style="text-align: justify;">Por este instrumento, ${contractData.clientName}, inscrito no RG de nº${contractData.rg}, e no CPF sob o nº ${contractData.cpf}, residente e domiciliado na ${contractData.address}, ${contractData.city} - ${contractData.state}, ${contractData.cep}, Brasil, Bairro ${contratoAtual?.bairros?.nome || '-'}, na Cidade de ${contractData.city} do Estado de ${contractData.state}, denominado ASSINANTE, que contratou o Serviço de Comunicação Multimídia, Serviço de Valor Adicionado, Locação e Outras Avenças, ofertado por ${empresaData?.nome || ''}, nome fantasia ${empresaData?.nome || ''}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº. ${empresaData?.cnpj || ''}, com sede na ${empresaData?.endereco || ''}, Bairro ${empresaData?.bairro || ''}, CEP: ${empresaData?.cep || ''}, na cidade ${empresaData?.cidade || ''} do Estado de ${empresaData?.estado || ''}, autorizada pela Anatel para explorar o Serviço de Comunicação Multimídia pelo Ato nº. 3423 de 14 de maio de 2021, na modalidade avulsa ou conjunta, ora formalizam os benefícios concedidos, mediante compromisso de fidelização.</p>
 <p style="text-align: justify;">1. O ASSINANTE, ao contratar os serviços prestados pela PRESTADORA nas modalidades por ela ofertadas, expressa sua aceitação e se compromete a permanecer como cliente da PRESTADORA pelo prazo de 12 (doze) meses, a contar da data de contratação dos serviços, tendo em vista o recebimento dos benefícios descritos neste instrumento.</p>
 
 <p style="text-align: justify;">1.1 Os serviços ora adquiridos pelo ASSINANTE, seja na modalidade avulsa ou na conjunta, são ofertados com preços mais vantajosos em relação aos valores integrais dos serviços, justamente em face da fidelidade aqui pactuada, conforme consta do item abaixo transcrito.</p>
@@ -647,11 +743,11 @@ CPF/CNPJ: ${contractData.cpf}
 <p style="text-align: justify;">7. Fica, desde já, eleito o Foro do domicílio do Assinante como o competente para dirimir qualquer conflito ou controvérsia oriunda deste Termo, em detrimento de quaisquer outros, por mais especiais ou privilegiados que sejam.</p>
 
 <div class="signature-page">
-<div style="margin-top: 10px; text-align: center; font-size: 4px;">Arroio do Sal, ${currentDate}</div>
+<div style="margin-top: 10px; text-align: center; font-size: 4px;">${empresaData?.cidade}, ${currentDate}</div>
 
 <div style="margin-top: 15px; text-align: center; font-size: 4px;">
 <div class="signature-line"></div>
-CONECTE TELECOM LTDA<br><br>
+${empresaData?.nome}<br><br>
 <div class="signature-line"></div>
 ${contractData.clientName}<br>
 CPF/CNPJ: ${contractData.cpf}
@@ -666,7 +762,7 @@ CPF/CNPJ: ${contractData.cpf}
     return `<div style="font-family: 'Times New Roman', Times, serif; font-size: 4px; line-height: 1; text-align: justify;">
 <h2 style="text-align: center; font-size: 5px; margin: 2px 0; font-weight: bold;">RESCISÃO DE CONTRATO</h2>
 
-<p style="text-align: justify; margin-top: 15px;">A empresa CONECTE TELECOM LTDA, inscrita no CNPJ nº 41.143.126.0001-00 e Inscrição Estadual nº 250/0020066, situada a Rua Paulista, 183/03, Centro de Arroio do Sal RS, representada pelo seu sócio Bernard Becker dos Santos, portador do CPF nº 012.484.840-02, informa que não prestará mais serviços de fornecimento de Internet à ${contractData.clientName}, portador(a) do CPF nº ${contractData.cpf} e RG nº ${contractData.rg} na cidade de ${contractData.city} a partir da data de ______________________</p>
+<p style="text-align: justify; margin-top: 15px;">A empresa ${empresaData?.nome}, inscrita no CNPJ nº ${empresaData?.cnpj} e Inscrição Estadual nº ${empresaData?.inscricaoEstadual}, situada a ${empresaData?.endereco}, ${empresaData?.bairro} de ${empresaData?.cidade} ${empresaData?.estado}, representada pelo seu sócio ${empresaData?.socio}, portador do CPF nº ${empresaData?.cpfSocio}, informa que não prestará mais serviços de fornecimento de Internet à ${contractData.clientName}, portador(a) do CPF nº ${contractData.cpf} e RG nº ${contractData.rg} na cidade de ${contractData.city} a partir da data de ______________________</p>
 
 <p style="text-align: justify; margin-top: 15px;">MOTIVO DA RESCISÃO:</p>
 <p style="text-align: justify; margin: 2px 0;">_______________________________________________________________________________________</p>
@@ -681,11 +777,11 @@ ${contractData.clientName}
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
 <div class="signature-line"></div>
-CONECTE TELECOM
+${empresaData?.nome}
 </div>
 
 <div style="margin-top: 25px; text-align: center; font-size: 4px;">
-Arroio do Sal, ${currentDate}
+${empresaData?.cidade}, ${currentDate}
 </div>
 </div>
 </div>`;
@@ -723,12 +819,47 @@ Arroio do Sal, ${currentDate}
         
         // Enviar notificação para o webhook (n8n)
         try {
+          // Garantir que temos o pppoe do contrato
+          let pppoe = contratoAtual.pppoe;
+          
+          // Se não temos o PPPoE no objeto atual, buscar do banco de dados
+          if (!pppoe) {
+            console.log('PPPoE não encontrado no objeto do contrato, buscando do banco de dados...');
+            try {
+              const { data: contratoData, error: contratoError } = await supabase
+                .from('contratos')
+                .select('pppoe')
+                .eq('id', contratoAtual.id)
+                .single();
+                
+              if (contratoError) {
+                console.error('Erro ao buscar PPPoE do contrato:', contratoError);
+              } else if (contratoData && contratoData.pppoe) {
+                console.log('PPPoE encontrado no banco de dados:', contratoData.pppoe);
+                pppoe = contratoData.pppoe;
+              } else {
+                console.error('PPPoE não encontrado no banco de dados');
+                toast.warning('Aviso: PPPoE não encontrado no contrato');
+              }
+            } catch (fetchError) {
+              console.error('Erro ao buscar PPPoE do contrato:', fetchError);
+            }
+          }
+          
+          // Garantir que temos o radius do plano
+          if (!selectedPlano.radius) {
+            console.error('Radius não encontrado no plano:', selectedPlano);
+            toast.warning('Aviso: Radius não encontrado no plano selecionado');
+          }
+          
           const webhookData = {
-            pppoe: contratoAtual.pppoe,
-            acao: "trocarplano",
-            radius: selectedPlano.radius
+            pppoe: pppoe,
+            radius: selectedPlano.radius,
+            acao: "trocarplano"
           };
           
+          console.log('Dados do contrato:', contratoAtual);
+          console.log('Dados do plano selecionado:', selectedPlano);
           console.log('Enviando notificação de troca de plano:', webhookData);
           
           // Verificar se temos todos os dados necessários
@@ -745,17 +876,30 @@ Arroio do Sal, ${currentDate}
               body: JSON.stringify(webhookData)
             });
             
-            if (response.ok) {
-              console.log('Notificação de troca de plano enviada com sucesso');
-              toast.success('Plano atualizado e notificação enviada ao N8N com sucesso!');
-            } else {
-              const errorText = await response.text();
-              console.error('Erro ao enviar notificação de troca de plano. Status:', response.status, 'Resposta:', errorText);
-              toast.warning('Plano atualizado, mas houve um erro ao enviar a notificação para o N8N');
+            // Log da resposta completa
+            console.log('Resposta do webhook - Status:', response.status);
+            
+            // Clonar a resposta antes de consumir o corpo
+            const responseClone = response.clone();
+            
+            try {
+              const responseText = await responseClone.text();
+              console.log('Resposta do webhook - Corpo:', responseText);
+              
+              if (response.ok) {
+                console.log('Notificação de troca de plano enviada com sucesso');
+                toast.success('Plano atualizado e notificação enviada ao N8N com sucesso!');
+              } else {
+                console.error('Erro ao enviar notificação de troca de plano. Status:', response.status, 'Resposta:', responseText);
+                toast.warning('Plano atualizado, mas houve um erro ao enviar a notificação para o N8N');
+              }
+            } catch (responseError) {
+              console.error('Erro ao processar resposta do webhook:', responseError);
+              toast.warning('Plano atualizado, mas houve um erro ao processar a resposta do N8N');
             }
           }
-        } catch (webhookError) {
-          console.error('Erro ao enviar notificação para webhook:', webhookError);
+        } catch (error) {
+          console.error('Erro ao enviar notificação para webhook:', error);
           toast.warning('Plano atualizado, mas houve um erro ao enviar a notificação para o N8N');
           // Não vamos interromper o fluxo se o webhook falhar
         }
