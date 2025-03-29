@@ -257,7 +257,8 @@ export default function NovoContratoModal({
           body: JSON.stringify({
             pppoe,
             senha,
-            radius: planoData.radius || ''
+            radius: planoData.radius || '',
+            empresa_id: empresaId // Adicionando o ID da empresa do usuário logado
           }),
         });
 
